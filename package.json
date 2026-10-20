@@ -1,0 +1,11 @@
+{
+  "name": "shorts-factory-api",
+  "version": "1.0.0",
+  "description": "Motor cloud de renderizado SVG a MP4 para YouTube Shorts",
+  "scripts": {
+    "render": "node render.js"
+  },
+  "dependencies": {
+    "puppeteer": "^22.0.0"
+  }
+}
