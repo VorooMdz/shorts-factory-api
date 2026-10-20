@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado nivel pro...');
+  console.log('🚀 Iniciando motor de renderizado dinámico por bloques...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -17,7 +17,7 @@ async function main() {
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
 
-  // Procesar escenas y preparar bloques de texto visuales
+  // Procesar escenas y dividir subtítulos en chunks cortos (máximo 4 palabras) para máximo dinamismo
   const escenasProcesadas = escenas.map((esc, idx) => {
     let svgInterno = '';
 
@@ -34,16 +34,38 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, esc.texto_2 || '')
       .replace(/\{\{TEXTO_3\}\}/g, esc.texto_3 || '');
 
-    // Limpiar subtítulo y formatear marcas de color de forma limpia
-    let subtituloHtml = (esc.subtitulo || '')
-      .replace(/\*\*(.*?)\*\*/g, '<span class="highlight-red">$1</span>')
-      .replace(/\*(.*?)\*/g, '<span class="highlight-yellow">$1</span>');
+    // Dividir el subtítulo en fragmentos cortitos de 3-4 palabras
+    const palabrasCrudas = (esc.subtitulo || '').split(' ');
+    const chunkSize = 3; // Bloques pequeños y rápidos estilo viral
+    const subChunks = [];
+    for (let i = 0; i < palabrasCrudas.length; i += chunkSize) {
+      subChunks.push(palabrasCrudas.slice(i, i + chunkSize).join(' '));
+    }
+
+    const duracionEscena = esc.fin - esc.inicio;
+    const tiempoPorChunk = duracionEscena / subChunks.length;
+
+    const subCaptions = subChunks.map((chunkText, cIdx) => {
+      const sInicio = esc.inicio + (cIdx * tiempoPorChunk);
+      const sFin = (cIdx === subChunks.length - 1) ? esc.fin : sInicio + tiempoPorChunk;
+      
+      const htmlText = chunkText
+        .replace(/\*\*(.*?)\*\*/g, '<span class="highlight-red">$1</span>')
+        .replace(/\*(.*?)\*/g, '<span class="highlight-yellow">$1</span>');
+
+      return {
+        id: cIdx,
+        inicio: sInicio,
+        fin: sFin,
+        html: htmlText
+      };
+    });
 
     return {
       ...esc,
       id: idx,
       svgInterno,
-      subtituloHtml,
+      subCaptions,
       plano: esc.plano || 'general'
     };
   });
@@ -83,12 +105,11 @@ async function main() {
         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       }
       
-      /* Contenedor de Escenas con Animación de Entrada Elástica */
       .scene {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
         padding-bottom: 240px; opacity: 0; transform: scale(0.7);
-        transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
       .scene.active-scene {
         opacity: 1; transform: scale(1);
@@ -103,7 +124,7 @@ async function main() {
       .stroke-yellow { stroke: #ffd000; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
       .draw { stroke-dasharray: 800; stroke-dashoffset: 800; }
 
-      /* Subtítulos Estilo Vídeo Viral (Grandes, Centrados y con Rebote) */
+      /* Subtítulos dinámicos de alto impacto */
       .captions-box {
         position: absolute; bottom: 140px; left: 5%; width: 90%;
         text-align: center; z-index: 25; height: 180px;
@@ -111,11 +132,11 @@ async function main() {
       }
       .caption {
         display: none;
-        font-size: 50px; font-weight: 900; color: #ffffff;
+        font-size: 52px; font-weight: 900; color: #ffffff;
         text-transform: uppercase; line-height: 1.25;
         text-shadow: 0 10px 30px rgba(0,0,0,0.95), 0 5px 0 #000;
         max-width: 680px;
-        animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
       }
       .caption.active-caption {
         display: block;
@@ -124,7 +145,7 @@ async function main() {
       .highlight-yellow { color: #ffd000; text-shadow: 0 0 25px rgba(255, 208, 0, 0.9), 0 5px 0 #000; }
 
       @keyframes popIn {
-        0% { transform: scale(0.85); opacity: 0; }
+        0% { transform: scale(0.8); opacity: 0; }
         100% { transform: scale(1); opacity: 1; }
       }
     </style>
@@ -144,12 +165,16 @@ async function main() {
 
     <div class="captions-box">
       ${escenasProcesadas.map(e => `
-        <div class="caption" id="cap-${e.id}">${e.subtituloHtml}</div>
+        <div id="caps-scene-${e.id}">
+          ${e.subCaptions.map(sub => `
+            <div class="caption" id="sub-${e.id}-${sub.id}">${sub.html}</div>
+          `).join('')}
+        </div>
       `).join('')}
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin })))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions })))};
       const duracionTotal = ${duracionTotal};
 
       window.setFrameTime = function(t) {
@@ -157,21 +182,25 @@ async function main() {
 
         escenas.forEach(e => {
           const sc = document.getElementById('scene-' + e.id);
-          const cp = document.getElementById('cap-' + e.id);
 
           if (t >= e.inicio && t < e.fin) {
             const localT = t - e.inicio;
-            
             sc.classList.add('active-scene');
-            cp.classList.add('active-caption');
 
-            // Animación de trazo SVG progresiva y fluida
-            const drawProgress = Math.min(1, localT / 0.6);
+            e.subCaptions.forEach(sub => {
+              const subEl = document.getElementById('sub-' + e.id + '-' + sub.id);
+              if (t >= sub.inicio && t < sub.fin) {
+                subEl.classList.add('active-caption');
+              } else {
+                subEl.classList.remove('active-caption');
+              }
+            });
+
+            const drawProgress = Math.min(1, localT / 0.5);
             sc.querySelectorAll('.draw').forEach(el => {
               el.style.strokeDashoffset = 800 * (1 - drawProgress);
             });
 
-            // Animación de flotación y pulso orgánico muy dinámico
             const floatOffset = Math.sin(localT * 7) * 12;
             sc.querySelectorAll('.float').forEach(el => {
               el.style.transform = 'translateY(' + floatOffset + 'px)';
@@ -185,7 +214,10 @@ async function main() {
             });
           } else {
             sc.classList.remove('active-scene');
-            cp.classList.remove('active-caption');
+            e.subCaptions.forEach(sub => {
+              const subEl = document.getElementById('sub-' + e.id + '-' + sub.id);
+              if (subEl) subEl.classList.remove('active-caption');
+            });
           }
         });
       };
