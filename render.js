@@ -4,13 +4,11 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado avanzado...');
+  console.log('🚀 Iniciando motor de renderizado ultra-dinámico...');
 
-  // 1. Leer el catálogo de piezas y los datos enviados por n8n
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
 
-  // 2. Guardar el audio Base64 de ElevenLabs como archivo MP3 físico
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
 
@@ -19,7 +17,7 @@ async function main() {
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
 
-  // 3. Ensamblar el SVG de cada escena combinando las piezas de catalogo.json
+  // Procesar escenas y estructurar palabras de forma limpia
   const escenasProcesadas = escenas.map((esc, idx) => {
     let svgInterno = '';
 
@@ -36,109 +34,112 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, esc.texto_2 || '')
       .replace(/\{\{TEXTO_3\}\}/g, esc.texto_3 || '');
 
-    // Procesar subtítulos palabra por palabra manteniendo espacios reales
     const textoLimpio = (esc.subtitulo || '')
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\*(.*?)\*/g, '$1');
     
     const palabras = textoLimpio.split(' ');
     let subtituloHtml = palabras.map((palabra, pIdx) => {
-      let claseColor = '';
-      if ((esc.subtitulo || '').includes(`**${palabra}**`)) claseColor = ' hl-red';
-      else if ((esc.subtitulo || '').includes(`*${palabra}*`)) claseColor = ' hl-yellow';
+      let claseColor = 'hl-white';
+      if ((esc.subtitulo || '').includes(`**${palabra}**`)) claseColor = 'hl-red';
+      else if ((esc.subtitulo || '').includes(`*${palabra}*`)) claseColor = 'hl-yellow';
       
-      return `<span class="word${claseColor}" data-word-idx="${pIdx}">${palabra}</span>&nbsp;`;
-    }).join('');
+      return `<span class="word ${claseColor}" data-word-idx="${pIdx}">${palabra}</span>`;
+    }).join(' ');
 
     return {
       ...esc,
       id: idx,
       svgInterno,
       subtituloHtml,
+      palabrasArray: palabras,
       totalPalabras: palabras.length,
-      plano: esc.plano || 'general',
-      color_acento: esc.color_acento || '#ff2a5f'
+      plano: esc.plano || 'general'
     };
   });
 
-  // 4. Generar plantilla HTML con transiciones fluidas y diseño dinámico
   const htmlContent = `
   <!DOCTYPE html>
   <html lang="es">
   <head>
     <meta charset="UTF-8">
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap');
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         width: 720px; height: 1280px;
-        background: radial-gradient(circle at center, #181822 0%, #0a0a0f 100%);
+        background: radial-gradient(circle at center, #14141c 0%, #07070a 100%);
         font-family: 'Montserrat', sans-serif;
         overflow: hidden; position: relative;
       }
       .grid-bg {
         position: absolute; inset: 0;
         background-image: 
-          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-        background-size: 45px 45px;
+          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+        background-size: 50px 50px;
       }
       .progress-bar {
-        position: absolute; top: 0; left: 0; height: 10px;
-        background: #ff2a5f; width: 0%; z-index: 30;
+        position: absolute; top: 0; left: 0; height: 12px;
+        background: linear-gradient(90deg, #ff2a5f, #ffd000); width: 0%; z-index: 30;
+        box-shadow: 0 0 15px rgba(255, 42, 95, 0.8);
       }
       .top-tag {
-        position: absolute; top: 65px; left: 50%; transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.07); color: #b0b0c0;
-        font-size: 20px; font-weight: 800; padding: 10px 26px;
+        position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.08); color: #d0d0e0;
+        font-size: 22px; font-weight: 900; padding: 12px 28px;
         border-radius: 40px; letter-spacing: 2px; text-transform: uppercase;
-        border: 1px solid rgba(255,255,255,0.12); white-space: nowrap;
+        border: 2px solid rgba(255,255,255,0.15); white-space: nowrap;
       }
       .scene {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
-        padding-bottom: 220px; opacity: 0; transform: scale(0.95);
-        transition: opacity 0.25s ease, transform 0.25s ease;
+        padding-bottom: 260px; opacity: 0; transform: scale(0.85);
+        transition: opacity 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
       .scene.active-scene {
         opacity: 1; transform: scale(1);
       }
-      svg { width: 540px; height: 648px; overflow: visible; }
+      svg { width: 560px; height: 670px; overflow: visible; }
       .plano-primer_plano svg { transform: scale(1.55) translateY(55px); }
       .plano-medio svg { transform: scale(1.22) translateY(20px); }
       .plano-general svg { transform: scale(1); }
 
-      .stroke-white { stroke: #ffffff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-      .stroke-red { stroke: #ff2a5f; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 10px rgba(255, 42, 95, 0.6)); }
-      .stroke-yellow { stroke: #ffd000; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 10px rgba(255, 208, 0, 0.55)); }
+      .stroke-white { stroke: #ffffff; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+      .stroke-red { stroke: #ff2a5f; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 12px rgba(255, 42, 95, 0.8)); }
+      .stroke-yellow { stroke: #ffd000; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 12px rgba(255, 208, 0, 0.8)); }
       .draw { stroke-dasharray: 700; stroke-dashoffset: 700; }
 
+      /* Contenedor de Subtítulos Estilo Viral Dinámico */
       .captions-box {
-        position: absolute; bottom: 140px; left: 5%; width: 90%;
-        text-align: center; z-index: 25;
+        position: absolute; bottom: 120px; left: 5%; width: 90%;
+        text-align: center; z-index: 25; height: 160px;
+        display: flex; align-items: center; justify-content: center;
       }
-      .caption {
-        font-size: 42px; font-weight: 900; color: #ffffff;
-        text-transform: uppercase; line-height: 1.3;
-        text-shadow: 0 6px 20px rgba(0,0,0,0.95), 0 4px 0 #000;
+      .caption-group {
         display: none;
+        font-size: 52px; font-weight: 900; text-transform: uppercase;
+        line-height: 1.2; text-shadow: 0 8px 25px rgba(0,0,0,0.9), 0 4px 0 #000;
+        max-width: 680px; word-spacing: 8px;
       }
-      .caption.active-caption {
-        display: block;
+      .caption-group.active-caption {
+        display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
       }
-      /* Estilo karaoke dinámico y limpio */
+      
+      /* Animación individual por palabra (Efecto Pop Viral) */
       .word {
-        opacity: 0.3;
         display: inline-block;
-        transition: opacity 0.1s ease, transform 0.1s ease, color 0.1s ease;
+        opacity: 0.15;
+        transform: scale(0.8);
+        transition: opacity 0.08s ease, transform 0.08s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.08s ease;
       }
       .word.active {
         opacity: 1;
-        transform: scale(1.06);
-        color: #ffffff;
+        transform: scale(1.12);
       }
-      .word.hl-red.active { color: #ff2a5f; text-shadow: 0 0 15px rgba(255, 42, 95, 0.8); }
-      .word.hl-yellow.active { color: #ffd000; text-shadow: 0 0 15px rgba(255, 208, 0, 0.8); }
+      .word.hl-white.active { color: #ffffff; }
+      .word.hl-red.active { color: #ff2a5f; text-shadow: 0 0 20px rgba(255, 42, 95, 0.9), 0 4px 0 #000; }
+      .word.hl-yellow.active { color: #ffd000; text-shadow: 0 0 20px rgba(255, 208, 0, 0.9), 0 4px 0 #000; }
     </style>
   </head>
   <body>
@@ -156,12 +157,12 @@ async function main() {
 
     <div class="captions-box">
       ${escenasProcesadas.map(e => `
-        <div class="caption" id="cap-${e.id}">${e.subtituloHtml}</div>
+        <div class="caption-group" id="cap-${e.id}">${e.subtituloHtml}</div>
       `).join('')}
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, totalPalabras: e.totalPalabras })))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, totalPalabras: e.totalPalabras }))};
       const duracionTotal = ${duracionTotal};
 
       window.setFrameTime = function(t) {
@@ -178,29 +179,31 @@ async function main() {
             sc.classList.add('active-scene');
             cp.classList.add('active-caption');
 
+            // Sincronización precisa palabra a palabra (estilo Reels/Shorts)
             const palabrasNodes = cp.querySelectorAll('.word');
             const tiempoPorPalabra = duracionEscena / e.totalPalabras;
             const palabraActivaIdx = Math.floor(localT / tiempoPorPalabra);
 
             palabrasNodes.forEach((wNode, wIdx) => {
-              if (wIdx <= palabraActivaIdx) {
+              // Ventana dinámica: muestra la palabra activa y las muy recientes para legibilidad
+              if (wIdx === palabraActivaIdx || (wIdx >= palabraActivaIdx - 2 && wIdx <= palabraActivaIdx)) {
                 wNode.classList.add('active');
               } else {
                 wNode.classList.remove('active');
               }
             });
 
-            const drawProgress = Math.min(1, localT / 0.9);
+            const drawProgress = Math.min(1, localT / 0.8);
             sc.querySelectorAll('.draw').forEach(el => {
               el.style.strokeDashoffset = 700 * (1 - drawProgress);
             });
 
-            const floatOffset = Math.sin(localT * 5) * 8;
+            const floatOffset = Math.sin(localT * 6) * 10;
             sc.querySelectorAll('.float').forEach(el => {
               el.style.transform = 'translateY(' + floatOffset + 'px)';
             });
 
-            const pulseScale = 1 + Math.sin(localT * 8) * 0.1;
+            const pulseScale = 1 + Math.sin(localT * 10) * 0.12;
             sc.querySelectorAll('.pulse').forEach(el => {
               el.style.transformOrigin = 'center';
               el.style.transformBox = 'fill-box';
