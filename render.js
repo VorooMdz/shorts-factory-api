@@ -162,7 +162,7 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, totalPalabras: e.totalPalabras }))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, totalPalabras: e.totalPalabras })))};
       const duracionTotal = ${duracionTotal};
 
       window.setFrameTime = function(t) {
@@ -179,13 +179,11 @@ async function main() {
             sc.classList.add('active-scene');
             cp.classList.add('active-caption');
 
-            // Sincronización precisa palabra a palabra (estilo Reels/Shorts)
             const palabrasNodes = cp.querySelectorAll('.word');
             const tiempoPorPalabra = duracionEscena / e.totalPalabras;
             const palabraActivaIdx = Math.floor(localT / tiempoPorPalabra);
 
             palabrasNodes.forEach((wNode, wIdx) => {
-              // Ventana dinámica: muestra la palabra activa y las muy recientes para legibilidad
               if (wIdx === palabraActivaIdx || (wIdx >= palabraActivaIdx - 2 && wIdx <= palabraActivaIdx)) {
                 wNode.classList.add('active');
               } else {
