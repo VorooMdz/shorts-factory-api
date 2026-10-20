@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con subtítulos adelantados...');
+  console.log('🚀 Iniciando motor de renderizado con subtítulos adelantados (0.55s)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -46,8 +46,8 @@ async function main() {
     const tiempoPorChunk = duracionEscena / subChunks.length;
 
     const subCaptions = subChunks.map((chunkText, cIdx) => {
-      // Aplicamos el adelanto de 0.35 segundos
-      const offset = 0.35;
+      // Aplicamos el nuevo desfase de 0.55 segundos
+      const offset = 0.55;
       const sInicio = Math.max(0, esc.inicio + (cIdx * tiempoPorChunk) - offset);
       const sFin = (cIdx === subChunks.length - 1) ? esc.fin + 0.5 - offset : sInicio + tiempoPorChunk;
       
@@ -177,7 +177,7 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions })))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions }))};
       const duracionTotal = ${duracionTotal};
 
       window.setFrameTime = function(t) {
