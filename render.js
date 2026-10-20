@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = fn = require('path');
+const path = require('path');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
@@ -13,7 +13,6 @@ async function main() {
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
 
   const escenas = payload.escenas || [];
-  // Añadimos un pequeño margen extra de 1.5 segundos al final para que la última frase no se corte nunca
   const duracionBase = payload.duracion_total || (escenas.length > 0 ? escenas[escenas.length - 1].fin : 15);
   const duracionTotal = duracionBase + 1.5;
   const fps = 30;
@@ -35,7 +34,6 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, esc.texto_2 || '')
       .replace(/\{\{TEXTO_3\}\}/g, esc.texto_3 || '');
 
-    // Dividir el texto plano manteniendo las palabras clave intactas para formatearlas
     const textoOriginal = esc.subtitulo || '';
     const palabrasCrudas = textoOriginal.split(' ');
     const chunkSize = 3; 
@@ -51,11 +49,9 @@ async function main() {
       const sInicio = esc.inicio + (cIdx * tiempoPorChunk);
       const sFin = (cIdx === subChunks.length - 1) ? esc.fin + 0.3 : sInicio + tiempoPorChunk;
       
-      // Aplicar formato de colores correctamente en cada bloque troceado
       const htmlText = chunkText
         .replace(/\*\*(.*?)\*\*/g, '<span class="highlight-red">$1</span>')
         .replace(/\*(.*?)\*/g, '<span class="highlight-yellow">$1</span>')
-        // Limpiar asteriscos sueltos si el bloque los cortó a medias
         .replace(/\*\*/g, '')
         .replace(/\*/g, '');
 
@@ -179,7 +175,7 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions }))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions })))};
       const duracionTotal = ${duracionTotal};
 
       window.setFrameTime = function(t) {
