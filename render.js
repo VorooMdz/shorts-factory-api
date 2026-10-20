@@ -157,3 +157,93 @@ async function main() {
     <div class="captions-box">
       ${escenasProcesadas.map(e => `
         <div class="caption" id="cap-${e.id}">${e.subtituloHtml}</div>
+      `).join('')}
+    </div>
+
+    <script>
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, totalPalabras: e.totalPalabras })))};
+      const duracionTotal = ${duracionTotal};
+
+      window.setFrameTime = function(t) {
+        document.getElementById('pbar').style.width = Math.min(100, (t / duracionTotal) * 100) + '%';
+
+        escenas.forEach(e => {
+          const sc = document.getElementById('scene-' + e.id);
+          const cp = document.getElementById('cap-' + e.id);
+
+          if (t >= e.inicio && t < e.fin) {
+            const localT = t - e.inicio;
+            const duracionEscena = e.fin - e.inicio;
+            
+            sc.classList.add('active-scene');
+            cp.classList.add('active-caption');
+
+            const palabrasNodes = cp.querySelectorAll('.word');
+            const tiempoPorPalabra = duracionEscena / e.totalPalabras;
+            const palabraActivaIdx = Math.floor(localT / tiempoPorPalabra);
+
+            palabrasNodes.forEach((wNode, wIdx) => {
+              if (wIdx <= palabraActivaIdx) {
+                wNode.classList.add('active');
+              } else {
+                wNode.classList.remove('active');
+              }
+            });
+
+            const drawProgress = Math.min(1, localT / 0.9);
+            sc.querySelectorAll('.draw').forEach(el => {
+              el.style.strokeDashoffset = 700 * (1 - drawProgress);
+            });
+
+            const floatOffset = Math.sin(localT * 5) * 8;
+            sc.querySelectorAll('.float').forEach(el => {
+              el.style.transform = 'translateY(' + floatOffset + 'px)';
+            });
+
+            const pulseScale = 1 + Math.sin(localT * 8) * 0.1;
+            sc.querySelectorAll('.pulse').forEach(el => {
+              el.style.transformOrigin = 'center';
+              el.style.transformBox = 'fill-box';
+              el.style.transform = 'scale(' + pulseScale + ')';
+            });
+          } else {
+            sc.classList.remove('active-scene');
+            cp.classList.remove('active-caption');
+          }
+        });
+      };
+    </script>
+  </body>
+  </html>`;
+
+  fs.writeFileSync('index.html', htmlContent);
+  if (!fs.existsSync('frames')) fs.mkdirSync('frames');
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 720, height: 1280 });
+  await page.goto('file://' + path.resolve('index.html'), { waitUntil: 'networkidle0' });
+
+  console.log('🎬 Grabando ' + totalFrames + ' fotogramas...');
+  for (let i = 0; i < totalFrames; i++) {
+    const currentTime = i / fps;
+    await page.evaluate((t) => window.setFrameTime(t), currentTime);
+    const frameNum = String(i).padStart(5, '0');
+    await page.screenshot({ path: `frames/frame_${frameNum}.jpg`, type: 'jpeg', quality: 92 });
+  }
+
+  await browser.close();
+
+  console.log('🔊 Ensamblando MP4 con FFmpeg...');
+  execSync('ffmpeg -y -framerate 30 -i frames/frame_%05d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest output.mp4', { stdio: 'inherit' });
+
+  console.log('✅ ¡Vídeo output.mp4 generado con éxito!');
+}
+
+main().catch(err => {
+  console.error('❌ Error en el renderizado:', err);
+  process.exit(1);
+});
