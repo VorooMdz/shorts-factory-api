@@ -46,7 +46,6 @@ async function main() {
     const tiempoPorChunk = duracionEscena / subChunks.length;
 
     const subCaptions = subChunks.map((chunkText, cIdx) => {
-      // Aplicamos el nuevo desfase de 0.55 segundos
       const offset = 0.55;
       const sInicio = Math.max(0, esc.inicio + (cIdx * tiempoPorChunk) - offset);
       const sFin = (cIdx === subChunks.length - 1) ? esc.fin + 0.5 - offset : sInicio + tiempoPorChunk;
@@ -177,7 +176,7 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions }))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions })))};
       const duracionTotal = ${duracionTotal};
 
       window.setFrameTime = function(t) {
