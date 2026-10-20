@@ -1,0 +1,50 @@
+name: Render Short YouTube
+
+on:
+  workflow_dispatch:
+    inputs:
+      payload_json:
+        description: 'JSON con las escenas y audio de n8n'
+        required: true
+      telegram_chat_id:
+        description: 'Tu Chat ID de Telegram'
+        required: true
+      telegram_token:
+        description: 'El Token de tu Bot de Telegram'
+        required: true
+
+jobs:
+  build-video:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 3. Instalar herramientas de sistema (FFmpeg y dependencias de Puppeteer)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libgbm-dev
+
+      - name: 4. Instalar dependencias del proyecto
+        run: npm install
+
+      - name: 5. Guardar payload recibido desde n8n
+        run: echo '${{ github.event.inputs.payload_json }}' > payload.json
+
+      - name: 6. Ejecutar motor de renderizado (render.js)
+        run: npm run render
+
+      - name: 7. Enviar vídeo .mp4 final a tu Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ github.event.inputs.telegram_token }}
+          TELEGRAM_CHAT_ID: ${{ github.event.inputs.telegram_chat_id }}
+        run: |
+          curl -v -F chat_id="$TELEGRAM_CHAT_ID" \
+               -F video=@output.mp4 \
+               -F caption="🎬 ¡Short renderizado con éxito en la nube! Revisa si te gusta o pídelo de nuevo." \
+               "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendVideo"
