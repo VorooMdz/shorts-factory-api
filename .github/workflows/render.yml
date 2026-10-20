@@ -38,7 +38,11 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          curl -v -F chat_id="$TELEGRAM_CHAT_ID" \
+          # Limpiamos cualquier salto de línea o espacio invisible en los secrets
+          CLEAN_TOKEN=$(echo "$TELEGRAM_TOKEN" | tr -d '[:space:]')
+          CLEAN_CHAT_ID=$(echo "$TELEGRAM_CHAT_ID" | tr -d '[:space:]')
+
+          curl -v -F chat_id="$CLEAN_CHAT_ID" \
                -F video=@output.mp4 \
                -F caption="🎬 ¡Short renderizado con éxito en la nube! Revisa si te gusta o pídelo de nuevo." \
-               "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendVideo"
+               "https://api.telegram.org/bot$CLEAN_TOKEN/sendVideo"
