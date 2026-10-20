@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado ultra-dinámico...');
+  console.log('🚀 Iniciando motor de renderizado nivel pro...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -17,7 +17,7 @@ async function main() {
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
 
-  // Procesar escenas y estructurar palabras de forma limpia
+  // Procesar escenas y preparar bloques de texto visuales
   const escenasProcesadas = escenas.map((esc, idx) => {
     let svgInterno = '';
 
@@ -34,26 +34,16 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, esc.texto_2 || '')
       .replace(/\{\{TEXTO_3\}\}/g, esc.texto_3 || '');
 
-    const textoLimpio = (esc.subtitulo || '')
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1');
-    
-    const palabras = textoLimpio.split(' ');
-    let subtituloHtml = palabras.map((palabra, pIdx) => {
-      let claseColor = 'hl-white';
-      if ((esc.subtitulo || '').includes(`**${palabra}**`)) claseColor = 'hl-red';
-      else if ((esc.subtitulo || '').includes(`*${palabra}*`)) claseColor = 'hl-yellow';
-      
-      return `<span class="word ${claseColor}" data-word-idx="${pIdx}">${palabra}</span>`;
-    }).join(' ');
+    // Limpiar subtítulo y formatear marcas de color de forma limpia
+    let subtituloHtml = (esc.subtitulo || '')
+      .replace(/\*\*(.*?)\*\*/g, '<span class="highlight-red">$1</span>')
+      .replace(/\*(.*?)\*/g, '<span class="highlight-yellow">$1</span>');
 
     return {
       ...esc,
       id: idx,
       svgInterno,
       subtituloHtml,
-      palabrasArray: palabras,
-      totalPalabras: palabras.length,
       plano: esc.plano || 'general'
     };
   });
@@ -68,78 +58,75 @@ async function main() {
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         width: 720px; height: 1280px;
-        background: radial-gradient(circle at center, #14141c 0%, #07070a 100%);
+        background: radial-gradient(circle at center, #1b1b2f 0%, #08080d 100%);
         font-family: 'Montserrat', sans-serif;
         overflow: hidden; position: relative;
       }
       .grid-bg {
         position: absolute; inset: 0;
         background-image: 
-          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-        background-size: 50px 50px;
+          linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 60px 60px;
       }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 12px;
         background: linear-gradient(90deg, #ff2a5f, #ffd000); width: 0%; z-index: 30;
-        box-shadow: 0 0 15px rgba(255, 42, 95, 0.8);
+        box-shadow: 0 0 20px rgba(255, 42, 95, 0.9);
       }
       .top-tag {
-        position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.08); color: #d0d0e0;
-        font-size: 22px; font-weight: 900; padding: 12px 28px;
+        position: absolute; top: 65px; left: 50%; transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.1); color: #e0e0f0;
+        font-size: 22px; font-weight: 900; padding: 12px 30px;
         border-radius: 40px; letter-spacing: 2px; text-transform: uppercase;
-        border: 2px solid rgba(255,255,255,0.15); white-space: nowrap;
+        border: 2px solid rgba(255,255,255,0.2); white-space: nowrap;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       }
+      
+      /* Contenedor de Escenas con Animación de Entrada Elástica */
       .scene {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
-        padding-bottom: 260px; opacity: 0; transform: scale(0.85);
-        transition: opacity 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        padding-bottom: 240px; opacity: 0; transform: scale(0.7);
+        transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
       .scene.active-scene {
         opacity: 1; transform: scale(1);
       }
-      svg { width: 560px; height: 670px; overflow: visible; }
+      svg { width: 580px; height: 680px; overflow: visible; }
       .plano-primer_plano svg { transform: scale(1.55) translateY(55px); }
       .plano-medio svg { transform: scale(1.22) translateY(20px); }
       .plano-general svg { transform: scale(1); }
 
       .stroke-white { stroke: #ffffff; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-      .stroke-red { stroke: #ff2a5f; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 12px rgba(255, 42, 95, 0.8)); }
-      .stroke-yellow { stroke: #ffd000; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 12px rgba(255, 208, 0, 0.8)); }
-      .draw { stroke-dasharray: 700; stroke-dashoffset: 700; }
+      .stroke-red { stroke: #ff2a5f; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
+      .stroke-yellow { stroke: #ffd000; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
+      .draw { stroke-dasharray: 800; stroke-dashoffset: 800; }
 
-      /* Contenedor de Subtítulos Estilo Viral Dinámico */
+      /* Subtítulos Estilo Vídeo Viral (Grandes, Centrados y con Rebote) */
       .captions-box {
-        position: absolute; bottom: 120px; left: 5%; width: 90%;
-        text-align: center; z-index: 25; height: 160px;
+        position: absolute; bottom: 140px; left: 5%; width: 90%;
+        text-align: center; z-index: 25; height: 180px;
         display: flex; align-items: center; justify-content: center;
       }
-      .caption-group {
+      .caption {
         display: none;
-        font-size: 52px; font-weight: 900; text-transform: uppercase;
-        line-height: 1.2; text-shadow: 0 8px 25px rgba(0,0,0,0.9), 0 4px 0 #000;
-        max-width: 680px; word-spacing: 8px;
+        font-size: 50px; font-weight: 900; color: #ffffff;
+        text-transform: uppercase; line-height: 1.25;
+        text-shadow: 0 10px 30px rgba(0,0,0,0.95), 0 5px 0 #000;
+        max-width: 680px;
+        animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
       }
-      .caption-group.active-caption {
-        display: flex; flex-wrap: wrap; justify-content: center; gap: 12px;
+      .caption.active-caption {
+        display: block;
       }
-      
-      /* Animación individual por palabra (Efecto Pop Viral) */
-      .word {
-        display: inline-block;
-        opacity: 0.15;
-        transform: scale(0.8);
-        transition: opacity 0.08s ease, transform 0.08s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.08s ease;
+      .highlight-red { color: #ff2a5f; text-shadow: 0 0 25px rgba(255, 42, 95, 0.9), 0 5px 0 #000; }
+      .highlight-yellow { color: #ffd000; text-shadow: 0 0 25px rgba(255, 208, 0, 0.9), 0 5px 0 #000; }
+
+      @keyframes popIn {
+        0% { transform: scale(0.85); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
       }
-      .word.active {
-        opacity: 1;
-        transform: scale(1.12);
-      }
-      .word.hl-white.active { color: #ffffff; }
-      .word.hl-red.active { color: #ff2a5f; text-shadow: 0 0 20px rgba(255, 42, 95, 0.9), 0 4px 0 #000; }
-      .word.hl-yellow.active { color: #ffd000; text-shadow: 0 0 20px rgba(255, 208, 0, 0.9), 0 4px 0 #000; }
     </style>
   </head>
   <body>
@@ -157,12 +144,12 @@ async function main() {
 
     <div class="captions-box">
       ${escenasProcesadas.map(e => `
-        <div class="caption-group" id="cap-${e.id}">${e.subtituloHtml}</div>
+        <div class="caption" id="cap-${e.id}">${e.subtituloHtml}</div>
       `).join('')}
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, totalPalabras: e.totalPalabras })))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin })))};
       const duracionTotal = ${duracionTotal};
 
       window.setFrameTime = function(t) {
@@ -174,34 +161,23 @@ async function main() {
 
           if (t >= e.inicio && t < e.fin) {
             const localT = t - e.inicio;
-            const duracionEscena = e.fin - e.inicio;
             
             sc.classList.add('active-scene');
             cp.classList.add('active-caption');
 
-            const palabrasNodes = cp.querySelectorAll('.word');
-            const tiempoPorPalabra = duracionEscena / e.totalPalabras;
-            const palabraActivaIdx = Math.floor(localT / tiempoPorPalabra);
-
-            palabrasNodes.forEach((wNode, wIdx) => {
-              if (wIdx === palabraActivaIdx || (wIdx >= palabraActivaIdx - 2 && wIdx <= palabraActivaIdx)) {
-                wNode.classList.add('active');
-              } else {
-                wNode.classList.remove('active');
-              }
-            });
-
-            const drawProgress = Math.min(1, localT / 0.8);
+            // Animación de trazo SVG progresiva y fluida
+            const drawProgress = Math.min(1, localT / 0.6);
             sc.querySelectorAll('.draw').forEach(el => {
-              el.style.strokeDashoffset = 700 * (1 - drawProgress);
+              el.style.strokeDashoffset = 800 * (1 - drawProgress);
             });
 
-            const floatOffset = Math.sin(localT * 6) * 10;
+            // Animación de flotación y pulso orgánico muy dinámico
+            const floatOffset = Math.sin(localT * 7) * 12;
             sc.querySelectorAll('.float').forEach(el => {
               el.style.transform = 'translateY(' + floatOffset + 'px)';
             });
 
-            const pulseScale = 1 + Math.sin(localT * 10) * 0.12;
+            const pulseScale = 1 + Math.sin(localT * 12) * 0.15;
             sc.querySelectorAll('.pulse').forEach(el => {
               el.style.transformOrigin = 'center';
               el.style.transformBox = 'fill-box';
