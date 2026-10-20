@@ -34,7 +34,7 @@ jobs:
         run: npm install
 
       - name: 5. Guardar payload recibido desde n8n
-        run: echo '${{ github.event.inputs.payload_json }}' > payload.json
+        run: curl -s -L "${{ github.event.inputs.payload_json }}" > payload.json
 
       - name: 6. Ejecutar motor de renderizado (render.js)
         run: npm run render
