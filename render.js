@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con subtítulos adelantados (0.55s)...');
+  console.log('🚀 Iniciando motor de renderizado con animaciones avanzadas...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -112,7 +112,7 @@ async function main() {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
         padding-bottom: 240px; opacity: 0; transform: scale(0.6);
-        transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
       .scene.active-scene {
         opacity: 1; transform: scale(1);
@@ -122,10 +122,11 @@ async function main() {
       .plano-medio svg { transform: scale(1.22) translateY(20px); }
       .plano-general svg { transform: scale(1); }
 
+      /* Estilos para trazos animados estilo Whiteboard */
       .stroke-white { stroke: #ffffff; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; }
       .stroke-red { stroke: #ff2a5f; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
       .stroke-yellow { stroke: #ffd000; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
-      .draw { stroke-dasharray: 800; stroke-dashoffset: 800; }
+      .draw { stroke-dasharray: 900; stroke-dashoffset: 900; }
 
       .captions-box {
         position: absolute; bottom: 130px; left: 5%; width: 90%;
@@ -198,17 +199,19 @@ async function main() {
               }
             });
 
-            const drawProgress = Math.min(1, localT / 0.4);
+            // Animación de trazo progresivo más fluida y vistosa (efecto dibujo)
+            const drawProgress = Math.min(1, localT / 0.7);
             sc.querySelectorAll('.draw').forEach(el => {
-              el.style.strokeDashoffset = 800 * (1 - drawProgress);
+              el.style.strokeDashoffset = 900 * (1 - drawProgress);
             });
 
-            const floatOffset = Math.sin(localT * 8) * 14;
+            // Dinamismo gráfico orgánico (flotación y pulso vivos)
+            const floatOffset = Math.sin(localT * 6) * 14;
             sc.querySelectorAll('.float').forEach(el => {
               el.style.transform = 'translateY(' + floatOffset + 'px)';
             });
 
-            const pulseScale = 1 + Math.sin(localT * 14) * 0.18;
+            const pulseScale = 1 + Math.sin(localT * 10) * 0.15;
             sc.querySelectorAll('.pulse').forEach(el => {
               el.style.transformOrigin = 'center';
               el.style.transformBox = 'fill-box';
