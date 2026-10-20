@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado optimizado final...');
+  console.log('🚀 Iniciando motor de renderizado con subtítulos adelantados...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -14,7 +14,7 @@ async function main() {
 
   const escenas = payload.escenas || [];
   const duracionBase = payload.duracion_total || (escenas.length > 0 ? escenas[escenas.length - 1].fin : 15);
-  const duracionTotal = duracionBase + 1.5;
+  const duracionTotal = duracionBase + 2.0;
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
 
@@ -42,12 +42,14 @@ async function main() {
       subChunks.push(palabrasCrudas.slice(i, i + chunkSize).join(' '));
     }
 
-    const duracionEscena = esc.fin - esc.inicio;
+    const duracionEscena = (esc.fin - esc.inicio);
     const tiempoPorChunk = duracionEscena / subChunks.length;
 
     const subCaptions = subChunks.map((chunkText, cIdx) => {
-      const sInicio = esc.inicio + (cIdx * tiempoPorChunk);
-      const sFin = (cIdx === subChunks.length - 1) ? esc.fin + 0.3 : sInicio + tiempoPorChunk;
+      // Aplicamos el adelanto de 0.35 segundos
+      const offset = 0.35;
+      const sInicio = Math.max(0, esc.inicio + (cIdx * tiempoPorChunk) - offset);
+      const sFin = (cIdx === subChunks.length - 1) ? esc.fin + 0.5 - offset : sInicio + tiempoPorChunk;
       
       const htmlText = chunkText
         .replace(/\*\*(.*?)\*\*/g, '<span class="highlight-red">$1</span>')
@@ -82,16 +84,16 @@ async function main() {
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         width: 720px; height: 1280px;
-        background: radial-gradient(circle at center, #1b1b2f 0%, #08080d 100%);
+        background: radial-gradient(circle at center, #161625 0%, #050508 100%);
         font-family: 'Montserrat', sans-serif;
         overflow: hidden; position: relative;
       }
       .grid-bg {
         position: absolute; inset: 0;
         background-image: 
-          linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-        background-size: 60px 60px;
+          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+        background-size: 50px 50px;
       }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 12px;
@@ -100,18 +102,18 @@ async function main() {
       }
       .top-tag {
         position: absolute; top: 65px; left: 50%; transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.1); color: #e0e0f0;
+        background: rgba(255, 255, 255, 0.08); color: #e0e0f0;
         font-size: 22px; font-weight: 900; padding: 12px 30px;
         border-radius: 40px; letter-spacing: 2px; text-transform: uppercase;
-        border: 2px solid rgba(255,255,255,0.2); white-space: nowrap;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        border: 2px solid rgba(255,255,255,0.18); white-space: nowrap;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
       }
       
       .scene {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
-        padding-bottom: 240px; opacity: 0; transform: scale(0.7);
-        transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        padding-bottom: 240px; opacity: 0; transform: scale(0.6);
+        transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
       .scene.active-scene {
         opacity: 1; transform: scale(1);
@@ -127,26 +129,26 @@ async function main() {
       .draw { stroke-dasharray: 800; stroke-dashoffset: 800; }
 
       .captions-box {
-        position: absolute; bottom: 140px; left: 5%; width: 90%;
+        position: absolute; bottom: 130px; left: 5%; width: 90%;
         text-align: center; z-index: 25; height: 180px;
         display: flex; align-items: center; justify-content: center;
       }
       .caption {
         display: none;
-        font-size: 52px; font-weight: 900; color: #ffffff;
-        text-transform: uppercase; line-height: 1.25;
+        font-size: 54px; font-weight: 900; color: #ffffff;
+        text-transform: uppercase; line-height: 1.2;
         text-shadow: 0 10px 30px rgba(0,0,0,0.95), 0 5px 0 #000;
         max-width: 680px;
-        animation: popIn 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        animation: popIn 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
       }
       .caption.active-caption {
         display: block;
       }
-      .highlight-red { color: #ff2a5f; text-shadow: 0 0 25px rgba(255, 42, 95, 0.9), 0 5px 0 #000; }
-      .highlight-yellow { color: #ffd000; text-shadow: 0 0 25px rgba(255, 208, 0, 0.9), 0 5px 0 #000; }
+      .highlight-red { color: #ff2a5f; text-shadow: 0 0 25px rgba(255, 42, 95, 0.95), 0 5px 0 #000; }
+      .highlight-yellow { color: #ffd000; text-shadow: 0 0 25px rgba(255, 208, 0, 0.95), 0 5px 0 #000; }
 
       @keyframes popIn {
-        0% { transform: scale(0.8); opacity: 0; }
+        0% { transform: scale(0.75); opacity: 0; }
         100% { transform: scale(1); opacity: 1; }
       }
     </style>
@@ -197,17 +199,17 @@ async function main() {
               }
             });
 
-            const drawProgress = Math.min(1, localT / 0.5);
+            const drawProgress = Math.min(1, localT / 0.4);
             sc.querySelectorAll('.draw').forEach(el => {
               el.style.strokeDashoffset = 800 * (1 - drawProgress);
             });
 
-            const floatOffset = Math.sin(localT * 7) * 12;
+            const floatOffset = Math.sin(localT * 8) * 14;
             sc.querySelectorAll('.float').forEach(el => {
               el.style.transform = 'translateY(' + floatOffset + 'px)';
             });
 
-            const pulseScale = 1 + Math.sin(localT * 12) * 0.15;
+            const pulseScale = 1 + Math.sin(localT * 14) * 0.18;
             sc.querySelectorAll('.pulse').forEach(el => {
               el.style.transformOrigin = 'center';
               el.style.transformBox = 'fill-box';
