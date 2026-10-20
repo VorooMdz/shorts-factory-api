@@ -25,7 +25,7 @@ async def generar_video(
         background = ColorClip(size=(1080, 1920), color=(0, 0, 0), duration=duration)
         
         # Crear el texto del gancho centrado
-        txt_clip = TextClip(texto_gancho, fontsize=70, color='white', size=(1000, None), method='caption')
+        txt_clip = TextClip(texto_gancho, font_size=70, color='white', size=(1000, None), method='caption')
         txt_clip = txt_clip.set_position('center').set_duration(duration)
         
         # Combinar vídeo y audio
