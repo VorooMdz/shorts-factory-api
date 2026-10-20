@@ -2,7 +2,7 @@ import os
 import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from moviepy.editor import AudioFileClip, ColorClip, TextClip, CompositeVideoClip
+from moviepy import AudioFileClip, ColorClip, TextClip, CompositeVideoClip
 
 app = FastAPI()
 
