@@ -6,7 +6,7 @@ const puppeteer = require('puppeteer');
 async function main() {
   console.log('🚀 Iniciando motor de renderizado...');
 
-  // 1. Leer el catálogo de 100 piezas y los datos enviados por n8n
+  // 1. Leer el catálogo de piezas y los datos enviados por n8n
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
 
@@ -23,38 +23,47 @@ async function main() {
   const escenasProcesadas = escenas.map((esc, idx) => {
     let svgInterno = '';
 
-    // Si la escena usa un diagrama completo (ej. diag_balanza)
     if (esc.diagrama && catalogo[esc.diagrama]) {
       svgInterno += catalogo[esc.diagrama];
     } else {
-      // Si la escena usa el Stickman modular (Cuerpo + Cara + Prop)
       if (esc.cuerpo && catalogo[esc.cuerpo]) svgInterno += catalogo[esc.cuerpo];
       if (esc.cara && catalogo[esc.cara]) svgInterno += catalogo[esc.cara];
       if (esc.prop && catalogo[esc.prop]) svgInterno += catalogo[esc.prop];
     }
 
-    // Reemplazar variables dinámicas de texto ({{TEXTO_1}}, {{TEXTO_2}}, {{TEXTO_3}})
     svgInterno = svgInterno
       .replace(/\{\{TEXTO_1\}\}/g, esc.texto_1 || '')
       .replace(/\{\{TEXTO_2\}\}/g, esc.texto_2 || '')
       .replace(/\{\{TEXTO_3\}\}/g, esc.texto_3 || '');
 
-    // Resaltar palabras clave en los subtítulos (*palabra* -> amarillo, **palabra** -> rojo)
-    let subtituloHtml = (esc.subtitulo || '')
-      .replace(/\*\*(.*?)\*\*/g, '<span class="hl-red">$1</span>')
-      .replace(/\*(.*?)\*/g, '<span class="hl-yellow">$1</span>');
+    // Convertimos el subtítulo en palabras individuales envueltas en spans para animarlas dinámicamente
+    const textoLimpio = (esc.subtitulo || '')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1');
+    
+    // Generar HTML donde cada palabra es un span secuencial
+    const palabras = textoLimpio.split(' ');
+    let subtituloHtml = palabras.map((palabra, pIdx) => {
+      // Aplicar resaltados si contenía marcas originales
+      let claseColor = '';
+      if ((esc.subtitulo || '').includes(`**${palabra}**`)) claseColor = ' hl-red';
+      else if ((esc.subtitulo || '').includes(`*${palabra}*`)) claseColor = ' hl-yellow';
+      
+      return `<span class="word${claseColor}" data-word-idx="${pIdx}">${palabra}</span>`;
+    }).join(' ');
 
     return {
       ...esc,
       id: idx,
       svgInterno,
       subtituloHtml,
+      totalPalabras: palabras.length,
       plano: esc.plano || 'general',
       color_acento: esc.color_acento || '#ff2a5f'
     };
   });
 
-  // 4. Generar plantilla HTML en alta definición (720x1280 vertical)
+  // 4. Generar plantilla HTML con diseño mejorado y subtítulos dinámicos
   const htmlContent = `
   <!DOCTYPE html>
   <html lang="es">
@@ -103,17 +112,28 @@ async function main() {
       .draw { stroke-dasharray: 700; stroke-dashoffset: 700; }
 
       .captions-box {
-        position: absolute; bottom: 150px; left: 6%; width: 88%;
+        position: absolute; bottom: 140px; left: 5%; width: 90%;
         text-align: center; z-index: 25;
       }
       .caption {
         font-size: 44px; font-weight: 900; color: #ffffff;
-        text-transform: uppercase; line-height: 1.22;
+        text-transform: uppercase; line-height: 1.25;
         text-shadow: 0 6px 20px rgba(0,0,0,0.95), 0 4px 0 #000;
         display: none;
       }
-      .hl-red { color: #ff2a5f; }
-      .hl-yellow { color: #ffd000; }
+      /* Estilo dinámico de palabras tipo Karaoke */
+      .word {
+        opacity: 0.25;
+        display: inline-block;
+        transition: opacity 0.12s ease, transform 0.12s ease, color 0.12s ease;
+      }
+      .word.active {
+        opacity: 1;
+        transform: scale(1.08);
+        color: #ffffff;
+      }
+      .word.hl-red.active { color: #ff2a5f; text-shadow: 0 0 15px rgba(255, 42, 95, 0.8); }
+      .word.hl-yellow.active { color: #ffd000; text-shadow: 0 0 15px rgba(255, 208, 0, 0.8); }
     </style>
   </head>
   <body>
@@ -136,10 +156,9 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin })))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, totalPalabras: e.totalPalabras })))};
       const duracionTotal = ${duracionTotal};
 
-      // Función llamada fotograma a fotograma por Puppeteer
       window.setFrameTime = function(t) {
         document.getElementById('pbar').style.width = Math.min(100, (t / duracionTotal) * 100) + '%';
 
@@ -149,16 +168,30 @@ async function main() {
 
           if (t >= e.inicio && t < e.fin) {
             const localT = t - e.inicio;
+            const duracionEscena = e.fin - e.inicio;
             sc.style.opacity = '1';
             cp.style.display = 'block';
 
-            // Efecto de dibujado progresivo (Whiteboard) en los primeros 0.9s de cada escena
+            // Animación de palabras tipo karaoke repartidas proporcionalmente en el tiempo de la escena
+            const palabrasNodes = cp.querySelectorAll('.word');
+            const tiempoPorPalabra = duracionEscena / e.totalPalabras;
+            const palabraActivaIdx = Math.floor(localT / tiempoPorPalabra);
+
+            palabrasNodes.forEach((wNode, wIdx) => {
+              if (wIdx <= palabraActivaIdx) {
+                wNode.classList.add('active');
+              } else {
+                wNode.classList.remove('active');
+              }
+            });
+
+            // Dibujado progresivo de los trazos SVG
             const drawProgress = Math.min(1, localT / 0.9);
             sc.querySelectorAll('.draw').forEach(el => {
               el.style.strokeDashoffset = 700 * (1 - drawProgress);
             });
 
-            // Movimiento orgánico continuo (float y pulse matemáticos)
+            // Movimiento orgánico
             const floatOffset = Math.sin(localT * 4) * 6;
             sc.querySelectorAll('.float').forEach(el => {
               el.style.transform = 'translateY(' + floatOffset + 'px)';
@@ -183,7 +216,6 @@ async function main() {
   fs.writeFileSync('index.html', htmlContent);
   if (!fs.existsSync('frames')) fs.mkdirSync('frames');
 
-  // 5. Abrir navegador invisible en el servidor y capturar los fotogramas
   const browser = await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -202,7 +234,6 @@ async function main() {
 
   await browser.close();
 
-  // 6. Unir los fotogramas con el audio de ElevenLabs en un MP4 final
   console.log('🔊 Ensamblando MP4 con FFmpeg...');
   execSync('ffmpeg -y -framerate 30 -i frames/frame_%05d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest output.mp4', { stdio: 'inherit' });
 
