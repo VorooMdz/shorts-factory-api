@@ -1,10 +1,10 @@
 const fs = require('fs');
-const path = require('path');
+const path = fn = require('path');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado dinámico por bloques...');
+  console.log('🚀 Iniciando motor de renderizado optimizado final...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -13,11 +13,12 @@ async function main() {
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
 
   const escenas = payload.escenas || [];
-  const duracionTotal = payload.duracion_total || (escenas.length > 0 ? escenas[escenas.length - 1].fin : 15);
+  // Añadimos un pequeño margen extra de 1.5 segundos al final para que la última frase no se corte nunca
+  const duracionBase = payload.duracion_total || (escenas.length > 0 ? escenas[escenas.length - 1].fin : 15);
+  const duracionTotal = duracionBase + 1.5;
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
 
-  // Procesar escenas y dividir subtítulos en chunks cortos (máximo 4 palabras) para máximo dinamismo
   const escenasProcesadas = escenas.map((esc, idx) => {
     let svgInterno = '';
 
@@ -34,9 +35,10 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, esc.texto_2 || '')
       .replace(/\{\{TEXTO_3\}\}/g, esc.texto_3 || '');
 
-    // Dividir el subtítulo en fragmentos cortitos de 3-4 palabras
-    const palabrasCrudas = (esc.subtitulo || '').split(' ');
-    const chunkSize = 3; // Bloques pequeños y rápidos estilo viral
+    // Dividir el texto plano manteniendo las palabras clave intactas para formatearlas
+    const textoOriginal = esc.subtitulo || '';
+    const palabrasCrudas = textoOriginal.split(' ');
+    const chunkSize = 3; 
     const subChunks = [];
     for (let i = 0; i < palabrasCrudas.length; i += chunkSize) {
       subChunks.push(palabrasCrudas.slice(i, i + chunkSize).join(' '));
@@ -47,11 +49,15 @@ async function main() {
 
     const subCaptions = subChunks.map((chunkText, cIdx) => {
       const sInicio = esc.inicio + (cIdx * tiempoPorChunk);
-      const sFin = (cIdx === subChunks.length - 1) ? esc.fin : sInicio + tiempoPorChunk;
+      const sFin = (cIdx === subChunks.length - 1) ? esc.fin + 0.3 : sInicio + tiempoPorChunk;
       
+      // Aplicar formato de colores correctamente en cada bloque troceado
       const htmlText = chunkText
         .replace(/\*\*(.*?)\*\*/g, '<span class="highlight-red">$1</span>')
-        .replace(/\*(.*?)\*/g, '<span class="highlight-yellow">$1</span>');
+        .replace(/\*(.*?)\*/g, '<span class="highlight-yellow">$1</span>')
+        // Limpiar asteriscos sueltos si el bloque los cortó a medias
+        .replace(/\*\*/g, '')
+        .replace(/\*/g, '');
 
       return {
         id: cIdx,
@@ -124,7 +130,6 @@ async function main() {
       .stroke-yellow { stroke: #ffd000; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
       .draw { stroke-dasharray: 800; stroke-dashoffset: 800; }
 
-      /* Subtítulos dinámicos de alto impacto */
       .captions-box {
         position: absolute; bottom: 140px; left: 5%; width: 90%;
         text-align: center; z-index: 25; height: 180px;
@@ -174,7 +179,7 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions })))};
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions }))};
       const duracionTotal = ${duracionTotal};
 
       window.setFrameTime = function(t) {
