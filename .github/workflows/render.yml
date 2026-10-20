@@ -6,12 +6,6 @@ on:
       payload_json:
         description: 'JSON con las escenas y audio de n8n'
         required: true
-      telegram_chat_id:
-        description: 'Tu Chat ID de Telegram'
-        required: true
-      telegram_token:
-        description: 'El Token de tu Bot de Telegram'
-        required: true
 
 jobs:
   build-video:
@@ -41,8 +35,8 @@ jobs:
 
       - name: 7. Enviar vídeo .mp4 final a tu Telegram
         env:
-          TELEGRAM_TOKEN: ${{ github.event.inputs.telegram_token }}
-          TELEGRAM_CHAT_ID: ${{ github.event.inputs.telegram_chat_id }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           curl -v -F chat_id="$TELEGRAM_CHAT_ID" \
                -F video=@output.mp4 \
