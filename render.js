@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado...');
+  console.log('🚀 Iniciando motor de renderizado avanzado...');
 
   // 1. Leer el catálogo de piezas y los datos enviados por n8n
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
@@ -36,21 +36,19 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, esc.texto_2 || '')
       .replace(/\{\{TEXTO_3\}\}/g, esc.texto_3 || '');
 
-    // Convertimos el subtítulo en palabras individuales envueltas en spans para animarlas dinámicamente
+    // Procesar subtítulos palabra por palabra manteniendo espacios reales
     const textoLimpio = (esc.subtitulo || '')
       .replace(/\*\*(.*?)\*\*/g, '$1')
       .replace(/\*(.*?)\*/g, '$1');
     
-    // Generar HTML donde cada palabra es un span secuencial
     const palabras = textoLimpio.split(' ');
     let subtituloHtml = palabras.map((palabra, pIdx) => {
-      // Aplicar resaltados si contenía marcas originales
       let claseColor = '';
       if ((esc.subtitulo || '').includes(`**${palabra}**`)) claseColor = ' hl-red';
       else if ((esc.subtitulo || '').includes(`*${palabra}*`)) claseColor = ' hl-yellow';
       
-      return `<span class="word${claseColor}" data-word-idx="${pIdx}">${palabra}</span>`;
-    }).join(' ');
+      return `<span class="word${claseColor}" data-word-idx="${pIdx}">${palabra}</span>&nbsp;`;
+    }).join('');
 
     return {
       ...esc,
@@ -63,7 +61,7 @@ async function main() {
     };
   });
 
-  // 4. Generar plantilla HTML con diseño mejorado y subtítulos dinámicos
+  // 4. Generar plantilla HTML con transiciones fluidas y diseño dinámico
   const htmlContent = `
   <!DOCTYPE html>
   <html lang="es">
@@ -99,7 +97,11 @@ async function main() {
       .scene {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
-        padding-bottom: 220px; opacity: 0;
+        padding-bottom: 220px; opacity: 0; transform: scale(0.95);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+      }
+      .scene.active-scene {
+        opacity: 1; transform: scale(1);
       }
       svg { width: 540px; height: 648px; overflow: visible; }
       .plano-primer_plano svg { transform: scale(1.55) translateY(55px); }
@@ -116,20 +118,23 @@ async function main() {
         text-align: center; z-index: 25;
       }
       .caption {
-        font-size: 44px; font-weight: 900; color: #ffffff;
-        text-transform: uppercase; line-height: 1.25;
+        font-size: 42px; font-weight: 900; color: #ffffff;
+        text-transform: uppercase; line-height: 1.3;
         text-shadow: 0 6px 20px rgba(0,0,0,0.95), 0 4px 0 #000;
         display: none;
       }
-      /* Estilo dinámico de palabras tipo Karaoke */
+      .caption.active-caption {
+        display: block;
+      }
+      /* Estilo karaoke dinámico y limpio */
       .word {
-        opacity: 0.25;
+        opacity: 0.3;
         display: inline-block;
-        transition: opacity 0.12s ease, transform 0.12s ease, color 0.12s ease;
+        transition: opacity 0.1s ease, transform 0.1s ease, color 0.1s ease;
       }
       .word.active {
         opacity: 1;
-        transform: scale(1.08);
+        transform: scale(1.06);
         color: #ffffff;
       }
       .word.hl-red.active { color: #ff2a5f; text-shadow: 0 0 15px rgba(255, 42, 95, 0.8); }
@@ -152,95 +157,3 @@ async function main() {
     <div class="captions-box">
       ${escenasProcesadas.map(e => `
         <div class="caption" id="cap-${e.id}">${e.subtituloHtml}</div>
-      `).join('')}
-    </div>
-
-    <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, totalPalabras: e.totalPalabras })))};
-      const duracionTotal = ${duracionTotal};
-
-      window.setFrameTime = function(t) {
-        document.getElementById('pbar').style.width = Math.min(100, (t / duracionTotal) * 100) + '%';
-
-        escenas.forEach(e => {
-          const sc = document.getElementById('scene-' + e.id);
-          const cp = document.getElementById('cap-' + e.id);
-
-          if (t >= e.inicio && t < e.fin) {
-            const localT = t - e.inicio;
-            const duracionEscena = e.fin - e.inicio;
-            sc.style.opacity = '1';
-            cp.style.display = 'block';
-
-            // Animación de palabras tipo karaoke repartidas proporcionalmente en el tiempo de la escena
-            const palabrasNodes = cp.querySelectorAll('.word');
-            const tiempoPorPalabra = duracionEscena / e.totalPalabras;
-            const palabraActivaIdx = Math.floor(localT / tiempoPorPalabra);
-
-            palabrasNodes.forEach((wNode, wIdx) => {
-              if (wIdx <= palabraActivaIdx) {
-                wNode.classList.add('active');
-              } else {
-                wNode.classList.remove('active');
-              }
-            });
-
-            // Dibujado progresivo de los trazos SVG
-            const drawProgress = Math.min(1, localT / 0.9);
-            sc.querySelectorAll('.draw').forEach(el => {
-              el.style.strokeDashoffset = 700 * (1 - drawProgress);
-            });
-
-            // Movimiento orgánico
-            const floatOffset = Math.sin(localT * 4) * 6;
-            sc.querySelectorAll('.float').forEach(el => {
-              el.style.transform = 'translateY(' + floatOffset + 'px)';
-            });
-
-            const pulseScale = 1 + Math.sin(localT * 6) * 0.08;
-            sc.querySelectorAll('.pulse').forEach(el => {
-              el.style.transformOrigin = 'center';
-              el.style.transformBox = 'fill-box';
-              el.style.transform = 'scale(' + pulseScale + ')';
-            });
-          } else {
-            sc.style.opacity = '0';
-            cp.style.display = 'none';
-          }
-        });
-      };
-    </script>
-  </body>
-  </html>`;
-
-  fs.writeFileSync('index.html', htmlContent);
-  if (!fs.existsSync('frames')) fs.mkdirSync('frames');
-
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  const page = await browser.newPage();
-  await page.setViewport({ width: 720, height: 1280 });
-  await page.goto('file://' + path.resolve('index.html'), { waitUntil: 'networkidle0' });
-
-  console.log('🎬 Grabando ' + totalFrames + ' fotogramas...');
-  for (let i = 0; i < totalFrames; i++) {
-    const currentTime = i / fps;
-    await page.evaluate((t) => window.setFrameTime(t), currentTime);
-    const frameNum = String(i).padStart(5, '0');
-    await page.screenshot({ path: `frames/frame_${frameNum}.jpg`, type: 'jpeg', quality: 92 });
-  }
-
-  await browser.close();
-
-  console.log('🔊 Ensamblando MP4 con FFmpeg...');
-  execSync('ffmpeg -y -framerate 30 -i frames/frame_%05d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest output.mp4', { stdio: 'inherit' });
-
-  console.log('✅ ¡Vídeo output.mp4 generado con éxito!');
-}
-
-main().catch(err => {
-  console.error('❌ Error en el renderizado:', err);
-  process.exit(1);
-});
