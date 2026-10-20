@@ -1,6 +1,6 @@
 import os
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from moviepy import AudioFileClip, ColorClip, TextClip, CompositeVideoClip
+from moviepy import AudioFileClip, ColorClip, CompositeVideoClip
 
 app = FastAPI()
 
@@ -10,7 +10,6 @@ async def generar_video(
     audio: UploadFile = File(...)
 ):
     try:
-        # Guardar el archivo de audio recibido directamente en disco
         audio_path = "audio.mp3"
         with open(audio_path, "wb") as buffer:
             content = await audio.read()
@@ -18,27 +17,16 @@ async def generar_video(
             
         output_path = "output_short.mp4"
         
-        # Crear un fondo negro vertical (1080x1920) con la duración del audio
         audio_clip = AudioFileClip(audio_path)
         duration = audio_clip.duration
         
+        # Solo fondo y audio (sin texto por ahora para probar)
         background = ColorClip(size=(1080, 1920), color=(0, 0, 0), duration=duration)
         
-        # Crear el texto del gancho centrado (adaptado para MoviePy v2.x)
-        txt_clip = TextClip(
-            text=texto_gancho,
-            font_size=70,
-            color="white",
-            size=(1000, None),
-            method="caption",
-            duration=duration,
-        ).with_position("center")
-        
-        # Combinar vídeo y audio (con .with_audio() para MoviePy v2.x)
-        video = CompositeVideoClip([background, txt_clip])
+        video = CompositeVideoClip([background])
         video = video.with_audio(audio_clip)
         video.write_videofile(output_path, fps=24, codec='libx264', audio_codec='aac')
         
-        return {"mensaje": "¡Vídeo generado con éxito con MoviePy!", "archivo": output_path}
+        return {"mensaje": "¡Vídeo generado con éxito (sin texto)!", "archivo": output_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
