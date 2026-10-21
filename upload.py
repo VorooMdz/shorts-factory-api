@@ -11,7 +11,7 @@ def upload_video():
     refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
     
     video_path = sys.argv[1]
-    title = sys.argv[2]
+    titulo_ia = sys.argv[2]  # Recibe el título dinámico enviado desde el YAML
     
     credentials = Credentials(
         token=None,
@@ -31,23 +31,33 @@ def upload_video():
     
     publish_at_str = target_time.isoformat().replace("+00:00", "Z")
     
+    # Construcción de un título potente y descripción con gancho adaptada al contenido
+    titulo_final = f"{titulo_ia} #shorts"
+    
+    descripcion_atractiva = (
+        f"¿Sabías que tu mente te juega malas pasada sin que te des cuenta? "
+        f"Hoy exploramos: {titulo_ia}.\n\n"
+        f"Suscríbete para descubrir más trucos de la psicología humana y sesgos cognitivos que controlan tus decisiones diarias.\n\n"
+        f"#psicologia #sesgoscognitivos #curiosidades #mente #desarrollopersonal #shorts"
+    )
+    
     body = {
         "snippet": {
-            "title": f"{title} #shorts",
-            "description": "Explorando los secretos de la mente y la psicología humana. #shorts #psicología",
-            "tags": ["psicologia", "sesgoscognitivos", "shorts", "curiosidades"],
-            "categoryId": "27"
+            "title": titulo_final,
+            "description": descripcion_atractiva,
+            "tags": ["psicologia", "sesgoscognitivos", "shorts", "curiosidades", "psicologia oscura"],
+            "categoryId": "27" # Educación
         },
         "status": {
-            "privacyStatus": "private",     # Obligatorio para programar vídeos en YouTube
-            "publishAt": publish_at_str,    # Fecha y hora exacta en la que se lanzará solo
+            "privacyStatus": "private",     # Privado para permitir la programación automática
+            "publishAt": publish_at_str,    # Programado para las 18:00
             "selfDeclaredMadeForKids": False
         }
     }
     
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
     
-    print(f"🚀 Subiendo vídeo a YouTube y programándolo para: {publish_at_str}...")
+    print(f"🚀 Subiendo vídeo '{titulo_final}' programado para: {publish_at_str}...")
     request = youtube.videos().insert(
         part="snippet,status",
         body=body,
