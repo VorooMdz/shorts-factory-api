@@ -47,10 +47,30 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
-          # Extraemos dinámicamente el título del payload generado por la IA
-          TITULO_SHORT=$(node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync('payload.json', 'utf8')); console.log(data.tema_titulo || 'Psicología Fascinante');")
+          # Extraemos el título manejando automáticamente arrays o estructuras de n8n
+          TITULO_SHORT=$(node -e "
+            try {
+              const fs = require('fs');
+              let raw = fs.readFileSync('payload.json', 'utf8');
+              let data = JSON.parse(raw);
+              
+              // Si n8n lo envía como array, cogemos el primer elemento
+              if (Array.isArray(data) && data.length > 0) {
+                data = data[0];
+              }
+              // Si viene envuelto en una propiedad .json interna
+              if (data.json) {
+                data = data.json;
+              }
+              
+              const titulo = data.tema_titulo || data.titulo || data.title || 'Psicología Fascinante';
+              console.log(titulo);
+            } catch(e) {
+              console.log('Psicología Fascinante');
+            }
+          ")
           
-          echo "Título detectado: $TITULO_SHORT"
+          echo "Título dinámico detectado para YouTube: $TITULO_SHORT"
           
           # Pasamos el título extraído como argumento al script de Python
           python upload.py output.mp4 "$TITULO_SHORT"
