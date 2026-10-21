@@ -20,7 +20,7 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   }
 
   const cleanRedundant = (str) => str
-    .replace(/\(\s*(señuelo|ganador|trampa|premio)\s*\)/gi, '')
+    .replace(/\(\s*(señuelo\vert{}ganador\vert{}trampa\vert{}premio)\s*\)/gi, '')
     .replace(/\b(vs\.?|versus)\b/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -500,4 +500,185 @@ async function main() {
         });
       });
 
-      document.querySelectorAll('.scene svg').
+      document.querySelectorAll('.scene svg').forEach(svg => {
+        const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
+        let idx = 0;
+        shapes.forEach(shape => {
+          const fillAttr = shape.getAttribute('fill');
+          const hasSolidFill = fillAttr && fillAttr !== 'none' && !fillAttr.startsWith('rgba');
+          if (hasSolidFill && !shape.classList.contains('draw')) return;
+
+          shape.setAttribute('pathLength', '100');
+          shape.dataset.drawIdx = idx++;
+          shape.style.strokeDasharray = '100';
+          shape.style.strokeDashoffset = '100';
+        });
+      });
+
+      function easeOutBack(x) {
+        const c1 = 1.70158;
+        const c3 = c1 + 1;
+        return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+      }
+
+      const subBox = document.getElementById('sub-box');
+      let lastChunkIdx = -2;
+
+      window.setFrameData = function(frameIdx, t) {
+        const progressPct = ((frameIdx + 1) / totalFrames) * 100;
+        document.getElementById('pbar').style.width = Math.min(100, progressPct) + '%';
+        
+        const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
+        document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
+
+        // 1. RENDERIZADO DE ESCENA VISUAL
+        let activeIdx = escenas.findIndex((e, idx) => {
+          if (idx === escenas.length - 1) return t >= e.inicio;
+          return t >= e.inicio && t < e.fin;
+        });
+        if (activeIdx === -1 && escenas.length > 0) activeIdx = escenas.length - 1;
+
+        escenas.forEach((e, idx) => {
+          const sc = document.getElementById('scene-' + e.id);
+          const inner = document.getElementById('inner-' + e.id);
+
+          if (idx === activeIdx) {
+            const localT = Math.max(0, t - e.inicio);
+            const durEscena = Math.max(0.1, e.fin - e.inicio);
+            sc.style.opacity = '1';
+
+            const entryProgress = Math.min(1, localT / 0.35);
+            let scale = 0.45 + 0.55 * easeOutBack(entryProgress);
+
+            if (localT > durEscena * 0.5) {
+              const midProgress = Math.min(1, (localT - durEscena * 0.5) / 0.25);
+              scale *= (1 + 0.09 * easeOutBack(midProgress));
+            }
+
+            const floatY = Math.sin(localT * 4.5) * 10;
+            const tiltDeg = Math.sin(localT * 2.4) * (e.esDiagrama ? 1.2 : 2.2);
+            inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
+
+            sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
+              const dIdx = parseInt(shape.dataset.drawIdx, 10);
+              const delay = Math.min(0.25, dIdx * 0.03);
+              const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.45));
+              shape.style.strokeDashoffset = String(100 * (1 - drawP));
+            });
+
+            const faceLayer = sc.querySelector('.layer-face');
+            if (faceLayer) {
+              const faceY = Math.sin(localT * 7) * 3;
+              const faceRot = Math.sin(localT * 4.5) * 3.5;
+              faceLayer.style.transformOrigin = '100px 65px';
+              faceLayer.style.transform = \`translateY(\${faceY}px) rotate(\${faceRot}deg)\`;
+            }
+
+            const propLayer = sc.querySelector('.layer-prop');
+            if (propLayer) {
+              const propY = Math.sin(localT * 6 + 1) * 8;
+              const propScale = 1 + Math.sin(localT * 9) * 0.08;
+              propLayer.style.transformOrigin = 'center';
+              propLayer.style.transformBox = 'fill-box';
+              propLayer.style.transform = \`translateY(\${propY}px) scale(\${propScale})\`;
+            }
+
+            sc.querySelectorAll('.float').forEach(el => {
+              const fOffset = Math.sin(localT * 6) * 7;
+              el.style.transform = \`translateY(\${fOffset}px)\`;
+            });
+
+            sc.querySelectorAll('.pulse').forEach(el => {
+              const pScale = 1 + Math.sin(localT * 10) * 0.12;
+              el.style.transformOrigin = 'center';
+              el.style.transformBox = 'fill-box';
+              el.style.transform = \`scale(\${pScale})\`;
+            });
+
+          } else {
+            sc.style.opacity = '0';
+          }
+        });
+
+        // 2. RENDERIZADO DE SUBTÍTULOS PERFECTAMENTE ALINEADOS
+        let cIdx = subtitleChunks.findIndex((c, idx) => {
+          if (idx === subtitleChunks.length - 1) return t >= c.start;
+          return t >= c.start && t < c.end;
+        });
+
+        if (cIdx === -1) {
+          subBox.style.opacity = '0';
+          return;
+        }
+
+        const chunk = subtitleChunks[cIdx];
+        subBox.style.opacity = '1';
+
+        // Animación pop suave al cambiar de bloque de subtítulos
+        const chunkLocalT = Math.max(0, t - chunk.start);
+        const popP = Math.min(1, chunkLocalT / 0.14);
+        const boxScale = 0.88 + 0.12 * easeOutBack(popP);
+        subBox.style.transform = \`scale(\${boxScale})\`;
+
+        if (cIdx !== lastChunkIdx) {
+          lastChunkIdx = cIdx;
+          subBox.innerHTML = chunk.words.map((w, wIdx) => {
+            const kwClass = w.highlight ? 'kw' : '';
+            return \`<span class="sub-word \${kwClass}" id="sw-\${wIdx}">\${w.text}</span>\`;
+          }).join('');
+        }
+
+        // Resaltar y escalar exactamente la palabra que se está pronunciando en este milisegundo
+        chunk.words.forEach((w, wIdx) => {
+          const el = document.getElementById('sw-' + wIdx);
+          if (!el) return;
+          const isCurrent = (t >= w.start && t <= w.end);
+          const isFuture = (t < w.start);
+
+          el.classList.toggle('active', isCurrent);
+          el.classList.toggle('future', isFuture);
+        });
+      };
+    </script>
+  </body>
+  </html>`;
+
+  fs.writeFileSync('index.html', htmlContent);
+
+  if (fs.existsSync('frames')) {
+    fs.rmSync('frames', { recursive: true, force: true });
+  }
+  fs.mkdirSync('frames');
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 720, height: 1280 });
+  await page.goto('file://' + path.resolve('index.html'), { waitUntil: 'networkidle0' });
+  await page.evaluateHandle('document.fonts.ready');
+
+  console.log(`🎬 Grabando exactamente ${totalFrames} fotogramas (${duracionExactaVideo.toFixed(2)}s)...`);
+  for (let i = 0; i < totalFrames; i++) {
+    const currentTime = i / fps;
+    await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
+    const frameNum = String(i).padStart(5, '0');
+    await page.screenshot({ path: `frames/frame_${frameNum}.jpg`, type: 'jpeg', quality: 92 });
+  }
+
+  await browser.close();
+
+  console.log('🔊 Ensamblando MP4 final sincronizado al milisegundo...');
+  execSync(
+    `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
+    { stdio: 'inherit' }
+  );
+
+  console.log('✅ ¡Vídeo output.mp4 generado con subtítulos sincronizados y color dinámico!');
+}
+
+main().catch(err => {
+  console.error('❌ Error en el renderizado:', err);
+  process.exit(1);
+});
