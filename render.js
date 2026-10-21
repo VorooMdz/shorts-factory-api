@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado (Sincronización exacta al milisegundo)...');
+  console.log('🚀 Iniciando motor de renderizado (Enfoque definitivo de desbordamiento controlado)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -27,14 +27,16 @@ async function main() {
     console.log('⚠️ Usando duración estimada del payload.');
   }
 
-  // Duración estricta sin márgenes extra para que vídeo y audio sincronicen de principio a fin
-  const duracionTotal = realAudioDuration;
+  // ENFOQUE CLAVE: Forzamos que el vídeo dure SIEMPRE 2 segundos más que el audio.
+  // Así garantizamos que el flujo de vídeo NUNCA termine antes, permitiendo que -shortest 
+  // corte el vídeo exactamente al finalizar el audio sin recortar la voz.
+  const duracionVideoRender = realAudioDuration + 2.0;
   const fps = 30;
-  const totalFrames = Math.ceil(duracionTotal * fps);
+  const totalFrames = Math.ceil(duracionVideoRender * fps);
   const escenasOriginales = payload.escenas || [];
 
   // ============================================================================
-  // 2. ESCALADO PROPORCIONAL DE ESCENAS AL SEGUNDO EXACTO
+  // 2. MAPEO DE ESCENAS PROPORCIONALES AL AUDIO REAL
   // ============================================================================
   const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
   const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
@@ -164,7 +166,7 @@ async function main() {
 
     <script>
       const escenas = ${JSON.stringify(escenasProcesadas)};
-      const duracionTotal = ${duracionTotal};
+      const realAudioDuration = ${realAudioDuration};
 
       document.querySelectorAll('.scene svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
@@ -188,7 +190,8 @@ async function main() {
       }
 
       window.setFrameTime = function(t) {
-        document.getElementById('pbar').style.width = Math.min(100, (t / duracionTotal) * 100) + '%';
+        // La barra avanza en función del audio real para que llegue al 100% exacto
+        document.getElementById('pbar').style.width = Math.min(100, (t / realAudioDuration) * 100) + '%';
         
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
@@ -196,7 +199,7 @@ async function main() {
         escenas.forEach((e, idx) => {
           const sc = document.getElementById('scene-' + e.id);
           const inner = document.getElementById('inner-' + e.id);
-          const finReal = (idx === escenas.length - 1) ? duracionTotal : e.fin;
+          const finReal = (idx === escenas.length - 1) ? realAudioDuration : e.fin;
 
           if (t >= e.inicio && t < finReal) {
             const localT = t - e.inicio;
@@ -271,7 +274,7 @@ async function main() {
   await page.setViewport({ width: 720, height: 1280 });
   await page.goto('file://' + path.resolve('index.html'), { waitUntil: 'networkidle0' });
 
-  console.log('🎬 Grabando fotogramas al segundo exacto...');
+  console.log(`🎬 Grabando ${totalFrames} fotogramas (con margen de seguridad de vídeo)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((t) => window.setFrameTime(t), currentTime);
@@ -281,11 +284,11 @@ async function main() {
 
   await browser.close();
 
-  console.log('🔊 Ensamblando MP4 con corte estricto -shortest...');
-  // Usamos -shortest para asegurar que el vídeo se corta al milisegundo exacto en que termina el audio
+  console.log('🔊 Ensamblando MP4 definitivo con el audio como pista maestra (-shortest)...');
+  // Al ser el vídeo más largo que el audio, -shortest cortará estrictamente en el fin del audio.mp3
   execSync('ffmpeg -y -framerate 30 -i frames/frame_%05d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest output.mp4', { stdio: 'inherit' });
 
-  console.log('✅ ¡Vídeo output.mp4 generado sin pasarse de largo!');
+  console.log('✅ ¡Vídeo output.mp4 generado y sincronizado perfectamente!');
 }
 
 main().catch(err => {
