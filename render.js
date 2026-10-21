@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado universal definitivo...');
+  console.log('🚀 Iniciando motor de renderizado universal con sincronización maestra de audio y subtítulos...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -19,43 +19,37 @@ async function main() {
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
 
   // ============================================================================
-  // 1. SINCRONIZACIÓN AUTOMÁTICA DE AUDIO REAL CON FFPROBE
+  // 1. OBTENER DURACIÓN REAL DEL AUDIO CON FFPROBE
   // ============================================================================
-  let realAudioDuration = payload.duracion_total || 30;
+  let realAudioDuration = payload.duracion_total || 35;
   try {
     const probeOutput = execSync('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:n=1 audio.mp3', { encoding: 'utf8' });
     const parsed = parseFloat(probeOutput.trim());
     if (!isNaN(parsed) && parsed > 0) {
       realAudioDuration = parsed;
-      console.log(`🎙️ Duración real del audio detectada: ${realAudioDuration}s`);
+      console.log(`🎙️ Duración real de audio detectada: ${realAudioDuration}s`);
     }
   } catch (err) {
-    console.log('⚠️ No se pudo usar ffprobe, usando duración estimada del payload.');
+    console.log('⚠️ No se pudo usar ffprobe, usando duración estimada.');
   }
 
-  const escenasOriginales = payload.escenas || [];
-  const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
-  const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
-
-  const duracionTotal = realAudioDuration + 1.0;
+  const duracionTotal = realAudioDuration + 0.8;
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
+  const escenasOriginales = payload.escenas || [];
 
   // ============================================================================
-  // 2. SELECCIÓN DE ARTE DINÁMICA Y VARIADA (Anti-repetición automática)
+  // 2. SELECCIÓN DE ARTE DINÁMICA (Anti-repetición universal)
   // ============================================================================
   function seleccionarArteDinamico(esc, idx) {
     if (esc.diagrama && catalogo[esc.diagrama]) {
       return { tipo: 'diagrama', diag: esc.diagrama };
     }
-
-    // Intercalar diagramas visuales dinámicos cada 3 escenas para dar ritmo profesional
     if (idx > 0 && idx % 3 === 0 && diagsDisponibles.length > 0) {
       const diagAleatorio = diagsDisponibles[(idx * 7) % diagsDisponibles.length];
       if (catalogo[diagAleatorio]) return { tipo: 'diagrama', diag: diagAleatorio };
     }
 
-    // Seleccionar elementos variados rotando por catálogo si vienen vacíos o repetidos
     const cuerpoPorDefecto = cuerposDisponibles[(idx * 3) % cuerposDisponibles.length];
     const caraPorDefecto = carasDisponibles[(idx * 5) % carasDisponibles.length];
     const propPorDefecto = propsDisponibles[(idx * 2) % propsDisponibles.length];
@@ -68,37 +62,17 @@ async function main() {
   }
 
   // ============================================================================
-  // 3. PROCESAR ESCENAS Y SUBTÍTULOS ESCALADOS AL AUDIO REAL
+  // 3. PROCESAMIENTO DE ESCENAS Y REPARTO PROPORCIONAL DE SUBTÍTULOS
   // ============================================================================
-  const todosLosSubtitulos = [];
+  const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
+  const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
 
-  const escenasProcesadas = escenasOriginales.map((esc, idx) => {
-    const inicioEscena = esc.inicio * timeScale;
-    const finEscena = esc.fin * timeScale;
+  // Recopilar y trocear todas las palabras de todas las escenas para un flujo de lectura uniforme
+  let listaGlobalChunks = [];
+
+  escenasOriginales.forEach(esc => {
     const subTexto = esc.subtitulo || '';
-    
-    const arte = seleccionarArteDinamico(esc, idx);
-    let svgInterno = '';
-
-    if (arte.tipo === 'diagrama') {
-      svgInterno = `<g class="layer-main">${catalogo[arte.diag]}</g>`;
-    } else {
-      svgInterno += `<g class="layer-body">${catalogo[arte.cuerpo]}</g>`;
-      svgInterno += `<g class="layer-face">${catalogo[arte.cara]}</g>`;
-      if (arte.prop && catalogo[arte.prop]) {
-        svgInterno += `<g class="layer-prop">${catalogo[arte.prop]}</g>`;
-      }
-    }
-
-    const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim().toUpperCase());
-    const t1 = esc.texto_1 || matchesDestacados[0] || 'REALIDAD';
-    const t2 = esc.texto_2 || matchesDestacados[1] || 'ILUSIÓN';
-    const t3 = esc.texto_3 || matchesDestacados[2] || 'SESGO';
-
-    svgInterno = svgInterno
-      .replace(/\{\{TEXTO_1\}\}/g, t1)
-      .replace(/\{\{TEXTO_2\}\}/g, t2)
-      .replace(/\{\{TEXTO_3\}\}/g, t3);
+    if (!subTexto.trim()) return;
 
     let enRojo = false;
     let enAmarillo = false;
@@ -123,26 +97,54 @@ async function main() {
     });
 
     const chunkSize = 3;
-    const subChunks = [];
     for (let i = 0; i < palabrasColoreadas.length; i += chunkSize) {
-      subChunks.push(palabrasColoreadas.slice(i, i + chunkSize).join(' '));
+      listaGlobalChunks.push(palabrasColoreadas.slice(i, i + chunkSize).join(' '));
+    }
+  });
+
+  // Distribuir el tiempo real del audio de forma proporcional entre todos los bloques de texto
+  const tiempoPorBloque = realAudioDuration / Math.max(1, listaGlobalChunks.length);
+  const todosLosSubtitulos = [];
+  const offsetAdelanto = 0.35; // Adelanto suave y constante para que golpee con la voz
+
+  listaGlobalChunks.forEach((chunkHtml, idx) => {
+    const sInicio = Math.max(0, (idx * tiempoPorBloque) - offsetAdelanto);
+    const sFin = Math.min(realAudioDuration, ((idx + 1) * tiempoPorBloque) - offsetAdelanto + 0.1);
+
+    todosLosSubtitulos.push({
+      uid: `sub-global-${idx}`,
+      inicio: sInicio,
+      fin: Math.max(sInicio + 0.25, sFin),
+      html: chunkHtml
+    });
+  });
+
+  const escenasProcesadas = escenasOriginales.map((esc, idx) => {
+    const inicioEscena = esc.inicio * timeScale;
+    const finEscena = esc.fin * timeScale;
+    const arte = seleccionarArteDinamico(esc, idx);
+    let svgInterno = '';
+
+    if (arte.tipo === 'diagrama') {
+      svgInterno = `<g class="layer-main">${catalogo[arte.diag]}</g>`;
+    } else {
+      svgInterno += `<g class="layer-body">${catalogo[arte.cuerpo]}</g>`;
+      svgInterno += `<g class="layer-face">${catalogo[arte.cara]}</g>`;
+      if (arte.prop && catalogo[arte.prop]) {
+        svgInterno += `<g class="layer-prop">${catalogo[arte.prop]}</g>`;
+      }
     }
 
-    const duracionEscena = (finEscena - inicioEscena);
-    const tiempoPorChunk = duracionEscena / Math.max(1, subChunks.length);
-    const offset = 0.45;
+    const subTexto = esc.subtitulo || '';
+    const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim().toUpperCase());
+    const t1 = esc.texto_1 || matchesDestacados[0] || 'REALIDAD';
+    const t2 = esc.texto_2 || matchesDestacados[1] || 'ILUSIÓN';
+    const t3 = esc.texto_3 || matchesDestacados[2] || 'SESGO';
 
-    subChunks.forEach((chunkHtml, cIdx) => {
-      const sInicio = Math.max(0, inicioEscena + (cIdx * tiempoPorChunk) - offset);
-      const sFin = (cIdx === subChunks.length - 1) ? (finEscena + 0.2 - offset) : (sInicio + tiempoPorChunk);
-
-      todosLosSubtitulos.push({
-        uid: `sub-${idx}-${cIdx}`,
-        inicio: sInicio,
-        fin: Math.max(sInicio + 0.2, sFin),
-        html: chunkHtml
-      });
-    });
+    svgInterno = svgInterno
+      .replace(/\{\{TEXTO_1\}\}/g, t1)
+      .replace(/\{\{TEXTO_2\}\}/g, t2)
+      .replace(/\{\{TEXTO_3\}\}/g, t3);
 
     const planosRotativos = ['medio', 'general', 'primer_plano', 'medio'];
     const planoElegido = esc.plano || planosRotativos[idx % planosRotativos.length];
@@ -157,16 +159,6 @@ async function main() {
       plano: planoElegido
     };
   });
-
-  // Prevención de solapamientos en subtítulos
-  for (let i = 0; i < todosLosSubtitulos.length - 1; i++) {
-    if (todosLosSubtitulos[i].fin > todosLosSubtitulos[i + 1].inicio) {
-      todosLosSubtitulos[i].fin = todosLosSubtitulos[i + 1].inicio;
-    }
-  }
-  if (todosLosSubtitulos.length > 0) {
-    todosLosSubtitulos[todosLosSubtitulos.length - 1].fin = realAudioDuration;
-  }
 
   const htmlContent = `
   <!DOCTYPE html>
