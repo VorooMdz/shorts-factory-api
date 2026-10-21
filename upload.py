@@ -11,34 +11,49 @@ def upload_video():
     client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
     refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
     
-    # El primer argumento es la ruta del vídeo renderizado (output.mp4)
     video_path = sys.argv[1] if len(sys.argv) > 1 else "output.mp4"
     
-    # Valores por defecto por si el payload no trae los campos esperados
+    # Valores por defecto por seguridad
     titulo_final = "Psicología Fascinante #shorts"
     descripcion_atractiva = "Explorando los secretos de la mente y la psicología humana. #shorts #psicología"
     
-    # Leemos el archivo payload.json descargado en el workflow para extraer los textos personalizados
     if os.path.exists("payload.json"):
         try:
             with open("payload.json", "r", encoding="utf-8") as f:
-                data = json.load(f)
-                # Si n8n envía un array, cogemos el primer elemento
-                if isinstance(data, list) and len(data) > 0:
-                    data = data[0]
-                if "json" in data:
-                    data = data["json"]
+                raw_data = json.load(f)
                 
-                # Extraemos el TituloYT y DescripcionYT generados por el Guionista 1
-                if "TituloYT" in data and data["TituloYT"]:
-                    titulo_final = data["TituloYT"]
-                elif "tema_titulo" in data and data["tema_titulo"]:
-                    titulo_final = f"{data['tema_titulo']} #shorts"
-                    
-                if "DescripcionYT" in data and data["DescripcionYT"]:
-                    descripcion_atractiva = data["DescripcionYT"]
+                # Normalizar si n8n envía un array
+                item = raw_data[0] if isinstance(raw_data, list) and len(raw_data) > 0 else raw_data
+                if isinstance(item, dict) and "json" in item:
+                    item = item["json"]
+                
+                parsed_data = None
+                
+                # Caso A: Los campos vienen directamente en el objeto
+                if isinstance(item, dict) and ("TituloYT" in item or "tema_titulo" in item):
+                    parsed_data = item
+                
+                # Caso B: Vienen dentro de la estructura de respuesta de Gemini (candidates -> content -> parts -> text)
+                elif isinstance(item, dict) and "candidates" in item:
+                    try:
+                        text_content = item["candidates"][0]["content"]["parts"][0]["text"]
+                        # El texto de Gemini es un string JSON, lo parseamos
+                        parsed_data = json.loads(text_content)
+                    except Exception as parse_err:
+                        print(f"⚠️ Error al extraer el JSON del texto de Gemini: {parse_err}")
+                
+                # Si conseguimos extraer los datos con éxito, los aplicamos
+                if parsed_data:
+                    if "TituloYT" in parsed_data and parsed_data["TituloYT"]:
+                        titulo_final = parsed_data["TituloYT"]
+                    elif "tema_titulo" in parsed_data and parsed_data["tema_titulo"]:
+                        titulo_final = f"{parsed_data['tema_titulo']} #shorts"
+                        
+                    if "DescripcionYT" in parsed_data and parsed_data["DescripcionYT"]:
+                        descripcion_atractiva = parsed_data["DescripcionYT"]
+                        
         except Exception as e:
-            print(f"⚠️ No se pudo leer el payload.json para los textos: {e}")
+            print(f"⚠️ No se pudo leer el payload.json: {e}")
 
     credentials = Credentials(
         token=None,
@@ -66,8 +81,8 @@ def upload_video():
             "categoryId": "27" # Educación
         },
         "status": {
-            "privacyStatus": "private",     # Obligatorio para programar vídeos en YouTube
-            "publishAt": publish_at_str,    # Fecha y hora exacta en la que se lanzará de forma automática
+            "privacyStatus": "private",
+            "publishAt": publish_at_str,
             "selfDeclaredMadeForKids": False
         }
     }
