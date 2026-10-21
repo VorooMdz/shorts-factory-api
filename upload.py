@@ -11,79 +11,41 @@ def upload_video():
     client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
     refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
     
+    # El primer argumento es la ruta del vídeo renderizado (output.mp4)
     video_path = sys.argv[1] if len(sys.argv) > 1 else "output.mp4"
     
-    # Valores por defecto de seguridad
+    # Valores por defecto por si el payload no trae los campos esperados
     titulo_final = "Psicología Fascinante #shorts"
     descripcion_atractiva = "Explorando los secretos de la mente y la psicología humana. #shorts #psicología"
     
-    print(f"🔍 Directorio de trabajo actual: {os.getcwd()}")
-    
+    # Leemos el archivo payload.json descargado en el workflow para extraer los textos personalizados
     if os.path.exists("payload.json"):
-        print("✅ ¡Archivo payload.json encontrado en el disco!")
         try:
             with open("payload.json", "r", encoding="utf-8") as f:
-                raw_text = f.read()
-                print(f"📄 Longitud del texto en payload.json: {len(raw_text)} caracteres")
-                print(f"📄 Primeros 200 caracteres del JSON: {raw_text[:200]}")
+                data = json.load(f)
+                # Si n8n envía un array, cogemos el primer elemento
+                if isinstance(data, list) and len(data) > 0:
+                    data = data[0]
+                if "json" in data:
+                    data = data["json"]
                 
-                raw_data = json.loads(raw_text)
-                
-                # Normalizar si n8n envía un array
-                item = raw_data[0] if isinstance(raw_data, list) and len(raw_data) > 0 else raw_data
-                if isinstance(item, dict) and "json" in item:
-                    item = item["json"]
-                
-                parsed_data = None
-                
-                # Caso A: Los campos vienen directamente en la raíz
-                if isinstance(item, dict) and ("TituloYT" in item or "tema_titulo" in item):
-                    print("🎯 Detectados campos directamente en la raíz del JSON.")
-                    parsed_data = item
-                
-                # Caso B: Vienen dentro de la estructura nativa de respuesta de Gemini
-                elif isinstance(item, dict) and "candidates" in item:
-                    print("🤖 Detectada estructura de respuesta de Gemini. Extrayendo texto interno...")
-                    try:
-                        text_content = item["candidates"][0]["content"]["parts"][0]["text"].strip()
-                        
-                        # Limpiar bloques de Markdown si los hay
-                        if text_content.startswith("```"):
-                            lines = text_content.splitlines()
-                            if len(lines) > 2:
-                                text_content = "\n".join(lines[1:-1]).strip()
-                        
-                        parsed_data = json.loads(text_content)
-                        print("✨ JSON interno de Gemini parseado con éxito.")
-                    except Exception as parse_err:
-                        print(f"⚠️ Error al parsear el JSON interno de Gemini: {parse_err}")
-                
-                # Aplicar los textos extraídos
-                if parsed_data:
-                    if "TituloYT" in parsed_data and parsed_data["TituloYT"]:
-                        titulo_final = parsed_data["TituloYT"]
-                    elif "tema_titulo" in parsed_data and parsed_data["tema_titulo"]:
-                        titulo_final = f"{parsed_data['tema_titulo']} #shorts"
-                        
-                    if "DescripcionYT" in parsed_data and parsed_data["DescripcionYT"]:
-                        descripcion_atractiva = parsed_data["DescripcionYT"]
-                else:
-                    print("⚠️ No se pudo extraer parsed_data de ninguna de las formas previstas.")
-                        
+                # Extraemos el TituloYT y DescripcionYT generados por el Guionista 1
+                if "TituloYT" in data and data["TituloYT"]:
+                    titulo_final = data["TituloYT"]
+                elif "tema_titulo" in data and data["tema_titulo"]:
+                    titulo_final = f"{data['tema_titulo']} #shorts"
+                    
+                if "DescripcionYT" in data and data["DescripcionYT"]:
+                    descripcion_atractiva = data["DescripcionYT"]
         except Exception as e:
-            print(f"⚠️ Error crítico al leer o procesar payload.json: {e}")
-    else:
-        print("❌ ¡ALERTA: El archivo payload.json NO existe en esta ruta!")
-
-    print(f"📌 TÍTULO FINAL QUE SE SUBIRÁ A YOUTUBE: --> {titulo_final} <--")
-    print(f"📌 DESCRIPCIÓN FINAL: --> {descripcion_atractiva[:60]}... <--")
+            print(f"⚠️ No se pudo leer el payload.json para los textos: {e}")
 
     credentials = Credentials(
         token=None,
         refresh_token=refresh_token,
         client_id=client_id,
         client_secret=client_secret,
-        token_uri="[https://oauth2.googleapis.com/token](https://oauth2.googleapis.com/token)"
+        token_uri="https://oauth2.googleapis.com/token"
     )
     
     youtube = build("youtube", "v3", credentials=credentials)
@@ -104,15 +66,15 @@ def upload_video():
             "categoryId": "27" # Educación
         },
         "status": {
-            "privacyStatus": "private",
-            "publishAt": publish_at_str,
+            "privacyStatus": "private",     # Obligatorio para programar vídeos en YouTube
+            "publishAt": publish_at_str,    # Fecha y hora exacta en la que se lanzará de forma automática
             "selfDeclaredMadeForKids": False
         }
     }
     
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
     
-    print(f"🚀 Subiendo vídeo a YouTube...")
+    print(f"🚀 Subiendo vídeo '{titulo_final}' y programándolo para: {publish_at_str}...")
     request = youtube.videos().insert(
         part="snippet,status",
         body=body,
@@ -127,6 +89,7 @@ def upload_video():
             
     video_id = response.get('id')
     print(f"✅ ¡Vídeo programado con éxito! ID: {video_id}")
+    print(f"🔗 Enlace: https://youtu.be/{video_id}")
 
 if __name__ == "__main__":
     upload_video()
