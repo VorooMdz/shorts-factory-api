@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado universal v4...');
+  console.log('🚀 Iniciando motor de renderizado universal definitivo...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -18,56 +18,81 @@ async function main() {
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
 
-  const escenas = payload.escenas || [];
-  const duracionBase = payload.duracion_total || (escenas.length > 0 ? escenas[escenas.length - 1].fin : 15);
-  const duracionTotal = duracionBase + 2.0;
+  // ============================================================================
+  // 1. SINCRONIZACIÓN AUTOMÁTICA DE AUDIO REAL CON FFPROBE
+  // ============================================================================
+  let realAudioDuration = payload.duracion_total || 30;
+  try {
+    const probeOutput = execSync('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:n=1 audio.mp3', { encoding: 'utf8' });
+    const parsed = parseFloat(probeOutput.trim());
+    if (!isNaN(parsed) && parsed > 0) {
+      realAudioDuration = parsed;
+      console.log(`🎙️ Duración real del audio detectada: ${realAudioDuration}s`);
+    }
+  } catch (err) {
+    console.log('⚠️ No se pudo usar ffprobe, usando duración estimada del payload.');
+  }
+
+  const escenasOriginales = payload.escenas || [];
+  const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
+  const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
+
+  const duracionTotal = realAudioDuration + 1.0;
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
 
   // ============================================================================
-  // 1. SELECTOR UNIVERSAL DE ARTE (Lee directamente lo que pide n8n)
+  // 2. SELECCIÓN DE ARTE DINÁMICA Y VARIADA (Anti-repetición automática)
   // ============================================================================
-  function obtenerPiezaSegura(nombre, listaStock, tipoPrefijo, fallbackIdx) {
-    if (nombre && catalogo[nombre]) return nombre;
-    if (nombre) {
-      const limpia = nombre.toLowerCase().trim();
-      const match = listaStock.find(k => k.toLowerCase().includes(limpia) || limpia.includes(k.toLowerCase()));
-      if (match) return match;
+  function seleccionarArteDinamico(esc, idx) {
+    if (esc.diagrama && catalogo[esc.diagrama]) {
+      return { tipo: 'diagrama', diag: esc.diagrama };
     }
-    // Rotativo inteligente de respaldo si n8n no especificó este campo en la escena
-    return listaStock[(fallbackIdx * 2) % listaStock.length] || null;
+
+    // Intercalar diagramas visuales dinámicos cada 3 escenas para dar ritmo profesional
+    if (idx > 0 && idx % 3 === 0 && diagsDisponibles.length > 0) {
+      const diagAleatorio = diagsDisponibles[(idx * 7) % diagsDisponibles.length];
+      if (catalogo[diagAleatorio]) return { tipo: 'diagrama', diag: diagAleatorio };
+    }
+
+    // Seleccionar elementos variados rotando por catálogo si vienen vacíos o repetidos
+    const cuerpoPorDefecto = cuerposDisponibles[(idx * 3) % cuerposDisponibles.length];
+    const caraPorDefecto = carasDisponibles[(idx * 5) % carasDisponibles.length];
+    const propPorDefecto = propsDisponibles[(idx * 2) % propsDisponibles.length];
+
+    const cuerpoFinal = (esc.cuerpo && catalogo[esc.cuerpo] && esc.cuerpo !== 'cuerpo_base_quieto') ? esc.cuerpo : cuerpoPorDefecto;
+    const caraFinal = (esc.cara && catalogo[esc.cara] && esc.cara !== 'cara_duda') ? esc.cara : caraPorDefecto;
+    const propFinal = (esc.prop && catalogo[esc.prop] && esc.prop !== 'prop_interrogaciones') ? esc.prop : propPorDefecto;
+
+    return { tipo: 'stickman', cuerpo: cuerpoFinal, cara: caraFinal, prop: propFinal };
   }
 
   // ============================================================================
-  // 2. PROCESAR ESCENAS Y SUBTÍTULOS ADAPTADOS AL NUEVO PAYLOAD
+  // 3. PROCESAR ESCENAS Y SUBTÍTULOS ESCALADOS AL AUDIO REAL
   // ============================================================================
   const todosLosSubtitulos = [];
 
-  const escenasProcesadas = escenas.map((esc, idx) => {
+  const escenasProcesadas = escenasOriginales.map((esc, idx) => {
+    const inicioEscena = esc.inicio * timeScale;
+    const finEscena = esc.fin * timeScale;
     const subTexto = esc.subtitulo || '';
+    
+    const arte = seleccionarArteDinamico(esc, idx);
     let svgInterno = '';
 
-    // Si n8n solicita un diagrama específico y existe, lo usamos
-    if (esc.diagrama && catalogo[esc.diagrama]) {
-      console.log(`🎬 Escena ${idx} [DIAGRAMA]: ${esc.diagrama}`);
-      svgInterno = `<g class="layer-main">${catalogo[esc.diagrama]}</g>`;
+    if (arte.tipo === 'diagrama') {
+      svgInterno = `<g class="layer-main">${catalogo[arte.diag]}</g>`;
     } else {
-      // Si no, montamos el stickman modular utilizando lo que mandó n8n o rotando stock
-      const cuerpoKey = obtenerPiezaSegura(esc.cuerpo, cuerposDisponibles, 'cuerpo', idx);
-      const caraKey = obtenerPiezaSegura(esc.cara, carasDisponibles, 'cara', idx);
-      const propKey = obtenerPiezaSegura(esc.prop, propsDisponibles, 'prop', idx);
-
-      console.log(`🎬 Escena ${idx} [STICKMAN]: ${cuerpoKey} + ${caraKey} + ${propKey || 'sin_prop'}`);
-
-      if (cuerpoKey && catalogo[cuerpoKey]) svgInterno += `<g class="layer-body">${catalogo[cuerpoKey]}</g>`;
-      if (caraKey && catalogo[caraKey]) svgInterno += `<g class="layer-face">${catalogo[caraKey]}</g>`;
-      if (propKey && catalogo[propKey]) svgInterno += `<g class="layer-prop">${catalogo[propKey]}</g>`;
+      svgInterno += `<g class="layer-body">${catalogo[arte.cuerpo]}</g>`;
+      svgInterno += `<g class="layer-face">${catalogo[arte.cara]}</g>`;
+      if (arte.prop && catalogo[arte.prop]) {
+        svgInterno += `<g class="layer-prop">${catalogo[arte.prop]}</g>`;
+      }
     }
 
-    // Rellenar variables de texto dinámicas si el SVG las requiere
     const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim().toUpperCase());
-    const t1 = esc.texto_1 || matchesDestacados[0] || 'OPCIÓN A';
-    const t2 = esc.texto_2 || matchesDestacados[1] || 'OPCIÓN B';
+    const t1 = esc.texto_1 || matchesDestacados[0] || 'REALIDAD';
+    const t2 = esc.texto_2 || matchesDestacados[1] || 'ILUSIÓN';
     const t3 = esc.texto_3 || matchesDestacados[2] || 'SESGO';
 
     svgInterno = svgInterno
@@ -75,7 +100,6 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, t2)
       .replace(/\{\{TEXTO_3\}\}/g, t3);
 
-    // Formateo de subtítulos conservando colores de énfasis (**) y (*)
     let enRojo = false;
     let enAmarillo = false;
     const palabrasCrudas = subTexto.trim().split(/\s+/);
@@ -104,13 +128,13 @@ async function main() {
       subChunks.push(palabrasColoreadas.slice(i, i + chunkSize).join(' '));
     }
 
-    const duracionEscena = (esc.fin - esc.inicio);
+    const duracionEscena = (finEscena - inicioEscena);
     const tiempoPorChunk = duracionEscena / Math.max(1, subChunks.length);
-    const offset = 0.45; // Sincronización precisa con el audio
+    const offset = 0.45;
 
     subChunks.forEach((chunkHtml, cIdx) => {
-      const sInicio = Math.max(0, esc.inicio + (cIdx * tiempoPorChunk) - offset);
-      const sFin = (cIdx === subChunks.length - 1) ? (esc.fin + 0.2 - offset) : (sInicio + tiempoPorChunk);
+      const sInicio = Math.max(0, inicioEscena + (cIdx * tiempoPorChunk) - offset);
+      const sFin = (cIdx === subChunks.length - 1) ? (finEscena + 0.2 - offset) : (sInicio + tiempoPorChunk);
 
       todosLosSubtitulos.push({
         uid: `sub-${idx}-${cIdx}`,
@@ -126,20 +150,22 @@ async function main() {
     return {
       ...esc,
       id: idx,
+      inicio: inicioEscena,
+      fin: finEscena,
       svgInterno,
-      esDiagrama: !!esc.diagrama,
+      esDiagrama: arte.tipo === 'diagrama',
       plano: planoElegido
     };
   });
 
-  // Prevención estricta de solapamientos entre bloques de texto
+  // Prevención de solapamientos en subtítulos
   for (let i = 0; i < todosLosSubtitulos.length - 1; i++) {
     if (todosLosSubtitulos[i].fin > todosLosSubtitulos[i + 1].inicio) {
       todosLosSubtitulos[i].fin = todosLosSubtitulos[i + 1].inicio;
     }
   }
   if (todosLosSubtitulos.length > 0) {
-    todosLosSubtitulos[todosLosSubtitulos.length - 1].fin = duracionTotal;
+    todosLosSubtitulos[todosLosSubtitulos.length - 1].fin = realAudioDuration;
   }
 
   const htmlContent = `
@@ -275,7 +301,6 @@ async function main() {
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
-        // Renderizado de subtítulos sincronizados al milisegundo
         subtitulos.forEach(sub => {
           const subEl = document.getElementById(sub.uid);
           if (t >= sub.inicio && t < sub.fin) {
