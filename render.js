@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado puro (leyendo dirección de arte del guionista)...');
+  console.log('🚀 Iniciando motor de renderizado puro (con blindaje total de duración de audio)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -13,7 +13,7 @@ async function main() {
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
 
   // ============================================================================
-  // 1. BLINDAJE DE AUDIO REAL CON FFPROBE (Cero cortes al final)
+  // 1. BLINDAJE DE AUDIO REAL CON FFPROBE (Duración exacta al milisegundo)
   // ============================================================================
   let realAudioDuration = payload.duracion_total || 35;
   try {
@@ -27,22 +27,32 @@ async function main() {
     console.log('⚠️ No se pudo usar ffprobe, usando duración estimada del payload.');
   }
 
-  const duracionTotal = realAudioDuration + 0.6;
+  // Damos un pequeño margen de seguridad de 0.5s para que la música/voz respiren al final
+  const duracionTotal = realAudioDuration + 0.5;
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
   const escenasOriginales = payload.escenas || [];
 
   // ============================================================================
-  // 2. MONTAJE DIRECTO DE LA ARQUITECTURA VISUAL ELEGIDA POR EL GUIONISTA
+  // 2. ESCALADO PROPORCIONAL Y BLINDAJE DE FIN DE ESCENAS
   // ============================================================================
+  const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
+  const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
+
   const escenasProcesadas = escenasOriginales.map((esc, idx) => {
+    let inicioEscena = esc.inicio * timeScale;
+    let finEscena = esc.fin * timeScale;
+
+    // Blindaje clave: Si es la última escena, forzamos imperativamente que termine exactamente con el audio real
+    if (idx === escenasOriginales.length - 1) {
+      finEscena = realAudioDuration;
+    }
+
     let svgInterno = '';
 
-    // Si el guionista eligió un diagrama, lo montamos directamente
     if (esc.diagrama && catalogo[esc.diagrama]) {
       svgInterno = `<g class="layer-main">${catalogo[esc.diagrama]}</g>`;
     } else {
-      // Si no, montamos el stickman usando exactamente las piezas que indicó la IA
       const cuerpoKey = (esc.cuerpo && catalogo[esc.cuerpo]) ? esc.cuerpo : 'cuerpo_base_quieto';
       const caraKey = (esc.cara && catalogo[esc.cara]) ? esc.cara : 'cara_duda';
       const propKey = (esc.prop && catalogo[esc.prop]) ? esc.prop : null;
@@ -52,7 +62,6 @@ async function main() {
       if (propKey && catalogo[propKey]) svgInterno += `<g class="layer-prop">${catalogo[propKey]}</g>`;
     }
 
-    // Inyectar textos dinámicos si el SVG del catálogo los requiere
     const subTexto = esc.subtitulo || '';
     const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim().toUpperCase());
     const t1 = esc.texto_1 || matchesDestacados[0] || 'REALIDAD';
@@ -70,6 +79,8 @@ async function main() {
     return {
       ...esc,
       id: idx,
+      inicio: inicioEscena,
+      fin: finEscena,
       svgInterno,
       esDiagrama: !!esc.diagrama,
       plano: planoElegido
@@ -140,7 +151,7 @@ async function main() {
     <div class="grid-bg"></div>
     <div class="glow-spot" id="glow"></div>
     <div class="progress-bar" id="pbar"></div>
-    <div class="top-tag">${payload.categoria || 'Psicología • Sesgos Cognitivos'}</div>
+    <div class="top-tag">${payload.categoria || 'PSICOLOGÍA'}</div>
 
     <div id="scenes-wrapper">
       ${escenasProcesadas.map(e => `
