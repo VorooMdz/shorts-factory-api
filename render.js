@@ -4,13 +4,16 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con auto-inyección SVG y físicas...');
+  console.log('🚀 Iniciando motor de renderizado conectado al catálogo real...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
-  const clavesCatalogo = Object.keys(catalogo);
+  const claves = Object.keys(catalogo);
 
-  console.log(`📦 Catálogo cargado con ${clavesCatalogo.length} piezas. Ejemplo de claves:`, clavesCatalogo.slice(0, 10));
+  const carasDisponibles = claves.filter(k => k.startsWith('cara_'));
+  const cuerposDisponibles = claves.filter(k => k.startsWith('cuerpo_'));
+  const propsDisponibles = claves.filter(k => k.startsWith('prop_'));
+  const diagsDisponibles = claves.filter(k => k.startsWith('diag_'));
 
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
@@ -21,67 +24,117 @@ async function main() {
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
 
-  // Función auxiliar para buscar una pieza en el catálogo (exacta o por similitud)
-  function obtenerPieza(nombreClave, tipoPorDefecto) {
-    if (nombreClave && catalogo[nombreClave]) return catalogo[nombreClave];
-    
-    // Si n8n mandó un nombre ligeramente distinto, buscamos coincidencia parcial
-    if (nombreClave) {
-      const limpia = nombreClave.toLowerCase().trim();
-      const encontrada = clavesCatalogo.find(k => k.toLowerCase().includes(limpia) || limpia.includes(k.toLowerCase()));
-      if (encontrada) return catalogo[encontrada];
-    }
+  // Buscador inteligente: cruza lo que pide n8n o el texto del subtítulo con las claves reales de catalogo.json
+  function buscarMejorPieza(valorPedido, textoSubtitulo, listaClaves, prefijo, idxEscena, obligatorio = true) {
+    // 1. Coincidencia exacta en catalogo.json
+    if (valorPedido && catalogo[valorPedido]) return valorPedido;
 
-    // Fallback: si no vino nada o no coincidió, buscar la primera pieza de ese tipo en el catálogo
-    if (tipoPorDefecto) {
-      const fallbackKey = clavesCatalogo.find(k => k.toLowerCase().startsWith(tipoPorDefecto.toLowerCase()));
-      if (fallbackKey) return catalogo[fallbackKey];
-    }
-    return '';
-  }
-
-  const escenasProcesadas = escenas.map((esc, idx) => {
-    console.log(`🎬 Escena ${idx} solicitada -> diagrama: ${esc.diagrama || 'N/A'}, cuerpo: ${esc.cuerpo || 'N/A'}, cara: ${esc.cara || 'N/A'}, prop: ${esc.prop || 'N/A'}`);
-
-    let svgInterno = '';
-
-    // 1. Intentar cargar diagrama o cualquier clave directa que venga en el objeto escena
-    const posiblesClavesDirectas = [esc.diagrama, esc.svg, esc.pieza, esc.icono, esc.ilustracion, esc.animacion].filter(Boolean);
-    for (const clave of posiblesClavesDirectas) {
-      const pieza = obtenerPieza(clave, null);
-      if (pieza) {
-        svgInterno += `<g class="anim-layer-main">${pieza}</g>`;
-        break;
+    // 2. Coincidencia parcial con lo que pidió n8n (ej. "shock" -> "cara_shock")
+    if (valorPedido && typeof valorPedido === 'string') {
+      const tokens = valorPedido.toLowerCase().replace(/[^a-z0-9_]/g, ' ').split(/\s+/).filter(w => w.length > 2 && w !== prefijo);
+      for (const t of tokens) {
+        const match = listaClaves.find(k => k.toLowerCase().includes(t));
+        if (match) return match;
       }
     }
 
-    // 2. Si no era un diagrama único, ensamblar Stickman modular (Cuerpo + Cara + Prop)
-    if (!svgInterno) {
-      const svgCuerpo = obtenerPieza(esc.cuerpo, 'cuerpo');
-      const svgCara = obtenerPieza(esc.cara, 'cara');
-      const svgProp = obtenerPieza(esc.prop, null);
+    // 3. Selección inteligente según el contenido del subtítulo de la escena
+    const sub = (textoSubtitulo || '').toLowerCase();
+    const mapaSemantico = {
+      cara: [
+        { regex: /mentira|enga|truco|falso|secreto/, key: 'cara_sonrisa_falsa' },
+        { regex: /duda|seguro|decidiste|elegir|opci/, key: 'cara_duda' },
+        { regex: /atractivo|pasi|amor|gust/, key: 'cara_enamorado_sesgo' },
+        { regex: /ciego|ceguera|notó|ver/, key: 'cara_vendada' },
+        { regex: /científic|lógic|estudio|razon/, key: 'cara_gafas_intelectual' },
+        { regex: /compra|dinero|precio|voto/, key: 'cara_hipnotizado' },
+        { regex: /mente|cerebro|hackear|control/, key: 'cara_cerebro_visible' },
+        { regex: /80|ochenta|ciento|calcul/, key: 'cara_calculando' },
+        { regex: /shock|sorpresa|increíble/, key: 'cara_shock' }
+      ],
+      cuerpo: [
+        { regex: /mentira|duda|seguro|por qué/, key: 'cuerpo_rascando_cabeza' },
+        { regex: /elegir|dos|retratos|cambio|opci/, key: 'cuerpo_indeciso_dividido' },
+        { regex: /truco|cartas|entregaron|fotos/, key: 'cuerpo_sosteniendo_objeto' },
+        { regex: /ciego|ceguera|notó/, key: 'cuerpo_caminando_ciego' },
+        { regex: /control|hackear|atrapado|hilos/, key: 'cuerpo_atrapado_hilos' },
+        { regex: /científic|explicó|razones|lógic/, key: 'cuerpo_hablando_pizarra' },
+        { regex: /compra|todos los días|polític/, key: 'cuerpo_mirando_movil' }
+      ],
+      prop: [
+        { regex: /mentira|seguro|por qué|\?/, key: 'prop_interrogaciones' },
+        { regex: /control|hackear|manipul|decidiste/, key: 'prop_cruceta_marioneta' },
+        { regex: /científic|estudio|notó|mir/, key: 'prop_lupa' },
+        { regex: /atractivo|cara|espejo|falso/, key: 'prop_mascara_feliz' },
+        { regex: /compra|producto|dinero/, key: 'prop_bolsa_dinero' },
+        { regex: /idea|razones|mente/, key: 'prop_bombilla' },
+        { regex: /voto|opiniones|polític/, key: 'prop_megafono' }
+      ],
+      diag: [
+        { regex: /dos retratos|elegir el más|vs/, key: 'diag_comparacion_vs' },
+        { regex: /lógic.*emoci|pasión.*lógic|cerebro/, key: 'diag_cerebro_dual' },
+        { regex: /truco|ceguera a la elección|dos puertas/, key: 'diag_dos_puertas' },
+        { regex: /todos los días|opiniones ajenas|rebaño/, key: 'diag_efecto_rebano' },
+        { regex: /80|ochenta por ciento/, key: 'diag_diana_foco' }
+      ]
+    };
 
-      if (svgCuerpo) svgInterno += `<g class="anim-layer-body">${svgCuerpo}</g>`;
-      if (svgCara) svgInterno += `<g class="anim-layer-face">${svgCara}</g>`;
-      if (svgProp) svgInterno += `<g class="anim-layer-prop">${svgProp}</g>`;
+    if (mapaSemantico[prefijo]) {
+      for (const regla of mapaSemantico[prefijo]) {
+        if (regla.regex.test(sub) && catalogo[regla.key]) {
+          return regla.key;
+        }
+      }
     }
 
-    // 3. Fallback de emergencia: si la escena sigue completamente vacía, usar una pieza del catálogo rotativa
-    if (!svgInterno.trim() && clavesCatalogo.length > 0) {
-      const claveRotativa = clavesCatalogo[idx % clavesCatalogo.length];
-      console.log(`⚠️ Escena ${idx} quedó vacía. Usando pieza de respaldo del catálogo: ${claveRotativa}`);
-      svgInterno = `<g class="anim-layer-main">${catalogo[claveRotativa]}</g>`;
+    // 4. Si es obligatorio (cuerpo y cara), rotamos entre las piezas del catálogo para máxima variedad
+    if (obligatorio && listaClaves.length > 0) {
+      return listaClaves[(idxEscena * 3) % listaClaves.length];
+    }
+    return null;
+  }
+
+  const escenasProcesadas = escenas.map((esc, idx) => {
+    const subTexto = esc.subtitulo || '';
+    let svgInterno = '';
+
+    // Comprobar si la escena pide explícitamente un diagrama o si alternamos un diagrama en escenas clave
+    let diagKey = null;
+    if (esc.diagrama) {
+      diagKey = buscarMejorPieza(esc.diagrama, subTexto, diagsDisponibles, 'diag', idx, false);
+    } else if (!esc.cuerpo && !esc.cara && idx % 3 === 1) {
+      // Si n8n no especificó nada en absoluto, intercalamos diagramas visuales con stickmans
+      diagKey = buscarMejorPieza(null, subTexto, diagsDisponibles, 'diag', idx, false);
     }
 
-    // Reemplazar textos dinámicos si el SVG los incluye
+    if (diagKey && catalogo[diagKey]) {
+      console.log(`🎬 Escena ${idx}: Usando Diagrama [${diagKey}]`);
+      svgInterno = `<g class="layer-main">${catalogo[diagKey]}</g>`;
+    } else {
+      const cuerpoKey = buscarMejorPieza(esc.cuerpo, subTexto, cuerposDisponibles, 'cuerpo', idx, true);
+      const caraKey = buscarMejorPieza(esc.cara, subTexto, carasDisponibles, 'cara', idx, true);
+      const propKey = buscarMejorPieza(esc.prop, subTexto, propsDisponibles, 'prop', idx, true);
+
+      console.log(`🎬 Escena ${idx}: Stickman armado -> Cuerpo: [${cuerpoKey}], Cara: [${caraKey}], Prop: [${propKey}]`);
+
+      if (cuerpoKey && catalogo[cuerpoKey]) svgInterno += `<g class="layer-body">${catalogo[cuerpoKey]}</g>`;
+      if (caraKey && catalogo[caraKey]) svgInterno += `<g class="layer-face">${catalogo[caraKey]}</g>`;
+      if (propKey && catalogo[propKey]) svgInterno += `<g class="layer-prop">${catalogo[propKey]}</g>`;
+    }
+
+    // Extraer palabras destacadas del subtítulo por si el SVG tiene {{TEXTO_1}}, {{TEXTO_2}}, {{TEXTO_3}}
+    const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].toUpperCase());
+    const t1 = esc.texto_1 || matchesDestacados[0] || 'OPCIÓN A';
+    const t2 = esc.texto_2 || matchesDestacados[1] || 'OPCIÓN B';
+    const t3 = esc.texto_3 || matchesDestacados[2] || 'SESGO';
+
     svgInterno = svgInterno
-      .replace(/\{\{TEXTO_1\}\}/g, esc.texto_1 || '')
-      .replace(/\{\{TEXTO_2\}\}/g, esc.texto_2 || '')
-      .replace(/\{\{TEXTO_3\}\}/g, esc.texto_3 || '');
+      .replace(/\{\{TEXTO_1\}\}/g, t1)
+      .replace(/\{\{TEXTO_2\}\}/g, t2)
+      .replace(/\{\{TEXTO_3\}\}/g, t3);
 
-    // Subtítulos (INTACTOS con tu configuración perfecta de 3 palabras y 0.55s de adelanto)
-    const textoOriginal = esc.subtitulo || '';
-    const palabrasCrudas = textoOriginal.split(' ');
+    // Subtítulos (INTACTOS: bloques de 3 palabras y 0.55s de adelanto)
+    const palabrasCrudas = subTexto.split(' ');
     const chunkSize = 3; 
     const subChunks = [];
     for (let i = 0; i < palabrasCrudas.length; i += chunkSize) {
@@ -110,12 +163,16 @@ async function main() {
       };
     });
 
+    // Alternar planos automáticamente si n8n no los envía para dar dinamismo de cámara
+    const planosRotativos = ['medio', 'general', 'primer_plano', 'medio'];
+    const planoElegido = esc.plano || planosRotativos[idx % planosRotativos.length];
+
     return {
       ...esc,
       id: idx,
       svgInterno,
       subCaptions,
-      plano: esc.plano || 'general'
+      plano: planoElegido
     };
   });
 
@@ -125,20 +182,26 @@ async function main() {
   <head>
     <meta charset="UTF-8">
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=swap');
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         width: 720px; height: 1280px;
-        background: radial-gradient(circle at center, #161625 0%, #050508 100%);
+        background: radial-gradient(circle at 50% 42%, #1e1e36 0%, #07070c 100%);
         font-family: 'Montserrat', sans-serif;
         overflow: hidden; position: relative;
       }
       .grid-bg {
         position: absolute; inset: 0;
         background-image: 
-          linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+          linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
         background-size: 50px 50px;
+      }
+      .glow-spot {
+        position: absolute; top: 38%; left: 50%; width: 460px; height: 460px;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(circle, rgba(255, 42, 95, 0.14) 0%, rgba(255, 208, 0, 0.05) 45%, transparent 70%);
+        pointer-events: none; z-index: 1;
       }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 12px;
@@ -151,31 +214,26 @@ async function main() {
         font-size: 22px; font-weight: 900; padding: 12px 30px;
         border-radius: 40px; letter-spacing: 2px; text-transform: uppercase;
         border: 2px solid rgba(255,255,255,0.18); white-space: nowrap;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 20;
       }
       
       .scene {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
-        padding-bottom: 240px; opacity: 0;
+        padding-bottom: 230px; opacity: 0; z-index: 10;
       }
       .scene-inner {
         display: flex; justify-content: center; align-items: center;
         will-change: transform;
       }
-      svg { width: 560px; height: 660px; overflow: visible; filter: drop-shadow(0 12px 25px rgba(0,0,0,0.7)); }
-      .plano-primer_plano svg { width: 780px; height: 900px; }
-      .plano-medio svg { width: 660px; height: 780px; }
-      .plano-general svg { width: 560px; height: 660px; }
+      svg { width: 560px; height: 670px; overflow: visible; filter: drop-shadow(0 15px 30px rgba(0,0,0,0.85)); }
+      .plano-primer_plano svg { width: 720px; height: 860px; }
+      .plano-medio svg { width: 620px; height: 740px; }
+      .plano-general svg { width: 540px; height: 650px; }
 
-      /* Estilos por defecto para asegurar que cualquier SVG del catálogo se vea brillante */
-      svg path, svg line, svg polyline, svg polygon, svg circle, svg rect, svg ellipse {
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-      .stroke-white { stroke: #ffffff; stroke-width: 6; fill: none; }
-      .stroke-red { stroke: #ff2a5f; stroke-width: 6; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
-      .stroke-yellow { stroke: #ffd000; stroke-width: 6; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
+      .stroke-white { stroke: #ffffff; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,255,255,0.35)); }
+      .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
+      .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
 
       .captions-box {
         position: absolute; bottom: 130px; left: 5%; width: 90%;
@@ -198,6 +256,7 @@ async function main() {
   </head>
   <body>
     <div class="grid-bg"></div>
+    <div class="glow-spot" id="glow"></div>
     <div class="progress-bar" id="pbar"></div>
     <div class="top-tag">${payload.categoria || 'Psicología • Sesgos Cognitivos'}</div>
 
@@ -225,31 +284,17 @@ async function main() {
       const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions })))};
       const duracionTotal = ${duracionTotal};
 
-      // Preparar todos los elementos geométricos de cada SVG para el efecto de dibujado (Whiteboard)
+      // Normalizar absolutamente todas las figuras del catálogo con pathLength="100" para dibujado perfecto
       document.querySelectorAll('.scene svg').forEach(svg => {
         const shapes = svg.querySelectorAll('path, line, polyline, polygon, circle, rect, ellipse');
-        shapes.forEach(shape => {
-          // Si un elemento no tiene ni stroke ni fill definidos, le ponemos trazo blanco por defecto
-          const computed = window.getComputedStyle(shape);
-          if ((computed.stroke === 'none' || !computed.stroke) && (computed.fill === 'none' || !computed.fill)) {
-            shape.style.stroke = '#ffffff';
-            shape.style.strokeWidth = '6px';
-            shape.style.fill = 'none';
-          }
-          try {
-            if (typeof shape.getTotalLength === 'function') {
-              const len = shape.getTotalLength();
-              if (len > 0) {
-                shape.dataset.pathLen = len;
-                shape.style.strokeDasharray = len;
-                shape.style.strokeDashoffset = len;
-              }
-            }
-          } catch (err) {}
+        shapes.forEach((shape, idx) => {
+          shape.setAttribute('pathLength', '100');
+          shape.dataset.drawIdx = idx;
+          shape.style.strokeDasharray = '100';
+          shape.style.strokeDashoffset = '100';
         });
       });
 
-      // Función matemática de rebote elástico para entradas dinámicas (sustituye a CSS transition en Puppeteer)
       function easeOutBack(x) {
         const c1 = 1.70158;
         const c3 = c1 + 1;
@@ -258,58 +303,81 @@ async function main() {
 
       window.setFrameTime = function(t) {
         document.getElementById('pbar').style.width = Math.min(100, (t / duracionTotal) * 100) + '%';
+        
+        // Pulso ambiental de fondo
+        const glowScale = 1 + Math.sin(t * 3) * 0.15;
+        document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
         escenas.forEach(e => {
           const sc = document.getElementById('scene-' + e.id);
           const inner = document.getElementById('inner-' + e.id);
 
-          // 1. Controlar Subtítulos (independientes gracias al adelanto de 0.55s)
+          // 1. Subtítulos (con su adelanto de 0.55s libre de cortes de escena)
           e.subCaptions.forEach(sub => {
             const subEl = document.getElementById('sub-' + e.id + '-' + sub.id);
             if (t >= sub.inicio && t < sub.fin) {
               subEl.classList.add('active-caption');
               const subLocalT = t - sub.inicio;
-              const popProgress = Math.min(1, subLocalT / 0.14);
-              const subScale = 0.75 + 0.25 * easeOutBack(popProgress);
+              const popProgress = Math.min(1, subLocalT / 0.12);
+              const subScale = 0.78 + 0.22 * easeOutBack(popProgress);
               subEl.style.transform = 'scale(' + subScale + ')';
             } else {
               subEl.classList.remove('active-caption');
             }
           });
 
-          // 2. Controlar Escena Visual y Animaciones SVG
+          // 2. Animación multicapa de los Stickers y Diagramas del Catálogo
           if (t >= e.inicio && t < e.fin) {
             const localT = t - e.inicio;
             sc.style.opacity = '1';
 
-            // A) Entrada elástica + Flotación + Respiración continua en TODO el dibujo
-            const entryProgress = Math.min(1, localT / 0.35);
-            const baseScale = easeOutBack(entryProgress);
-            const floatY = Math.sin(localT * 4.5) * 12;
-            const swayRot = Math.sin(localT * 2.5) * 2.5;
-            const breathScale = 1 + Math.sin(localT * 7) * 0.035;
+            // Entrada con rebote elástico + levitación continua de toda la figura
+            const entryProgress = Math.min(1, localT / 0.38);
+            const entryScale = 0.4 + 0.6 * easeOutBack(entryProgress);
+            const floatY = Math.sin(localT * 4.5) * 10;
+            const tiltDeg = Math.sin(localT * 2.2) * 2;
+            inner.style.transform = \`translateY(\${floatY}px) scale(\${entryScale}) rotate(\${tiltDeg}deg)\`;
 
-            inner.style.transform = \`translateY(\${floatY}px) scale(\${baseScale * breathScale}) rotate(\${swayRot}deg)\`;
-
-            // B) Efecto Whiteboard: dibujar progresivamente todas las líneas del SVG en los primeros 0.85s
-            const drawProgress = Math.min(1, localT / 0.85);
-            const shapes = sc.querySelectorAll('[data-path-len]');
-            shapes.forEach((shape, sIdx) => {
-              const len = parseFloat(shape.dataset.pathLen);
-              // Pequeño escalonado entre trazos para que se vea más orgánico
-              const delay = Math.min(0.3, sIdx * 0.03);
-              const p = Math.max(0, Math.min(1, (localT - delay) / 0.65));
-              shape.style.strokeDashoffset = len * (1 - p);
+            // Efecto Whiteboard: trazado progresivo de cada línea en los primeros 0.75s
+            sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
+              const idx = parseInt(shape.dataset.drawIdx, 10);
+              const delay = Math.min(0.25, idx * 0.025);
+              const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.55));
+              shape.style.strokeDashoffset = String(100 * (1 - drawP));
             });
 
-            // C) Movimiento secundario para el prop/accesorio si existe
-            const propLayer = sc.querySelector('.anim-layer-prop');
+            // Animación independiente para la CARA (gesticulación sutil)
+            const faceLayer = sc.querySelector('.layer-face');
+            if (faceLayer) {
+              const faceY = Math.sin(localT * 7) * 3.5;
+              const faceRot = Math.cos(localT * 5) * 3;
+              faceLayer.style.transformOrigin = '100px 65px';
+              faceLayer.style.transform = \`translateY(\${faceY}px) rotate(\${faceRot}deg)\`;
+            }
+
+            // Animación independiente para el PROP (flotación amplia y rebote)
+            const propLayer = sc.querySelector('.layer-prop');
             if (propLayer) {
-              const propPulse = 1 + Math.sin(localT * 10) * 0.12;
+              const propY = Math.sin(localT * 6 + 1) * 9;
+              const propScale = 1 + Math.sin(localT * 9) * 0.1;
               propLayer.style.transformOrigin = 'center';
               propLayer.style.transformBox = 'fill-box';
-              propLayer.style.transform = \`scale(\${propPulse}) rotate(\${Math.cos(localT * 6) * 6}deg)\`;
+              propLayer.style.transform = \`translateY(\${propY}px) scale(\${propScale})\`;
             }
+
+            // Animación para elementos con clases .float y .pulse internas del catálogo
+            sc.querySelectorAll('.float').forEach(el => {
+              const fOffset = Math.sin(localT * 6.5) * 8;
+              el.style.transform = \`translateY(\${fOffset}px)\`;
+            });
+
+            sc.querySelectorAll('.pulse').forEach(el => {
+              const pScale = 1 + Math.sin(localT * 11) * 0.14;
+              el.style.transformOrigin = 'center';
+              el.style.transformBox = 'fill-box';
+              el.style.transform = \`scale(\${pScale})\`;
+            });
+
           } else {
             sc.style.opacity = '0';
           }
