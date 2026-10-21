@@ -39,9 +39,9 @@ jobs:
           python-version: '3.10'
 
       - name: 8. Instalar dependencias de Python para YouTube
-        run: pip install google-auth-oauthlib google-api-python-client
+        run: pip install google-auth-oauthlib google-api-python-client requests
 
-      - name: 9. Subir vídeo a YouTube como No Listado
+      - name: 9. Subir y programar vídeo en YouTube a las 18:00
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
@@ -49,18 +49,15 @@ jobs:
         run: |
           python upload.py output.mp4 "Psicología Fascinante"
 
-      - name: 10. Enviar vídeo .mp4 y notificación interactiva a Telegram
+      - name: 10. Enviar aviso informativo a Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          # Limpiamos cualquier salto de línea o espacio invisible en los secrets
           CLEAN_TOKEN=$(echo "$TELEGRAM_TOKEN" | tr -d '[:space:]')
           CLEAN_CHAT_ID=$(echo "$TELEGRAM_CHAT_ID" | tr -d '[:space:]')
 
-          # Enviamos el vídeo junto con los botones interactivos de Telegram
           curl -v -F chat_id="$CLEAN_CHAT_ID" \
                -F video=@output.mp4 \
-               -F caption="🎬 ¡Short renderizado y subido a YouTube (No Listado)! ¿Qué deseas hacer con él?" \
-               -F reply_markup='{"inline_keyboard":[[{"text":"🚀 Publicar en Público","callback_data":"publish_yt"},{"text":"❌ Descartar","callback_data":"delete_yt"}]]}' \
+               -F caption="🕒 ¡Short renderizado, subido y programado automáticamente para las 18:00!" \
                "https://api.telegram.org/bot$CLEAN_TOKEN/sendVideo"
