@@ -3,25 +3,55 @@ const path = require('path');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
+// Función para limpiar redundancias y textos mal partidos por la IA
+function sanitizeSvgTexts(esc, matchesDestacados) {
+  let raw1 = (esc.texto_1 || '').trim();
+  let raw2 = (esc.texto_2 || '').trim();
+  let raw3 = (esc.texto_3 || '').trim();
+
+  // Si la IA metió "A vs B" todo junto en texto_1 y dejó texto_2 vacío o con "vs"
+  if (/ vs\.? /i.test(raw1) && (!raw2 || /^vs\.?$/i.test(raw2))) {
+    const parts = raw1.split(/ vs\.? /i);
+    raw1 = parts[0].trim();
+    raw2 = (parts[1] || '').trim();
+  }
+
+  // Si texto_2 es literalmente "vs" o "contra", lo limpiamos
+  if (/^(vs\.?|contra|versus)$/i.test(raw2)) {
+    raw2 = matchesDestacados[1] || '';
+  }
+
+  // Limpiar palabras redundantes que ya están pintadas fijas en los SVGs (como "(Señuelo)" o "(Ganador)")
+  const cleanRedundant = (str) => str
+    .replace(/\(\s*(señuelo\vert{}ganador\vert{}trampa\vert{}premio)\s*\)/gi, '')
+    .replace(/\b(vs\.?|versus)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  raw1 = cleanRedundant(raw1) || matchesDestacados[0] || 'OPCIÓN A';
+  raw2 = cleanRedundant(raw2) || matchesDestacados[1] || 'OPCIÓN B';
+  raw3 = cleanRedundant(raw3) || matchesDestacados[2] || 'OPCIÓN C';
+
+  return [raw1.toUpperCase(), raw2.toUpperCase(), raw3.toUpperCase()];
+}
+
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con sincronización WAV exacta...');
+  console.log('🚀 Iniciando motor de renderizado con sincronización WAV y textos auto-ajustables...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
 
-  // 1. Guardar MP3 original y convertir a WAV limpio (con 0.25s de respiro final para evitar cortes abruptos)
+  // 1. Guardar MP3 original y convertir a WAV limpio (con 0.25s de respiro final)
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio_raw.mp3', Buffer.from(audioBase64, 'base64'));
 
-  // Convertimos a WAV añadiendo 0.25s de silencio al final para que la última sílaba jamás quede truncada
   execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.25" -c:a pcm_s16le audio.wav', { stdio: 'ignore' });
 
   // ============================================================================
-  // 2. OBTENCIÓN DE LA DURACIÓN REAL EXACTA (CORREGIDO: nk=1 sobre WAV)
+  // 2. OBTENCIÓN DE LA DURACIÓN REAL EXACTA (nk=1 sobre WAV)
   // ============================================================================
   let realAudioDuration = 35;
   try {
-    // NOTA: 'nk=1' (nokey=1) devuelve solo el número. Antes ponía 'n=1' y parseFloat daba NaN.
     const probeOutput = execSync(
       'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nk=1 audio.wav',
       { encoding: 'utf8' }
@@ -38,13 +68,12 @@ async function main() {
     realAudioDuration = Number(payload.duracion_total) || 35;
   }
 
-  // El vídeo durará EXACTAMENTE lo que dura el audio WAV (ni más ni menos)
   const fps = 30;
   const totalFrames = Math.ceil(realAudioDuration * fps);
   const duracionExactaVideo = totalFrames / fps;
 
   // ============================================================================
-  // 3. ESCALADO PROPORCIONAL EXACTO DE ESCENAS DE 0 A 100% DEL TIEMPO
+  // 3. ESCALADO PROPORCIONAL DE ESCENAS Y LIMPIEZA DE TEXTOS
   // ============================================================================
   const escenasOriginales = payload.escenas || [];
   const ultimaEscenaFinOriginal = escenasOriginales.length > 0
@@ -74,10 +103,8 @@ async function main() {
     }
 
     const subTexto = esc.subtitulo || '';
-    const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim().toUpperCase());
-    const t1 = esc.texto_1 || matchesDestacados[0] || 'REALIDAD';
-    const t2 = esc.texto_2 || matchesDestacados[1] || 'ILUSIÓN';
-    const t3 = esc.texto_3 || matchesDestacados[2] || 'SESGO';
+    const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim());
+    const [t1, t2, t3] = sanitizeSvgTexts(esc, matchesDestacados);
 
     svgInterno = svgInterno
       .replace(/\{\{TEXTO_1\}\}/g, t1)
@@ -155,6 +182,16 @@ async function main() {
       .plano-medio svg { width: 610px; height: 730px; }
       .plano-general svg { width: 560px; height: 670px; }
 
+      svg text {
+        font-family: 'Montserrat', sans-serif;
+        font-weight: 900;
+        paint-order: stroke fill;
+        stroke: #0a0a12;
+        stroke-width: 2.5px;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
       .stroke-white { stroke: #ffffff; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,255,255,0.35)); }
       .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
       .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
@@ -180,6 +217,58 @@ async function main() {
       const escenas = ${JSON.stringify(escenasProcesadas)};
       const totalFrames = ${totalFrames};
 
+      // ========================================================================
+      // AUTO-AJUSTE INTELIGENTE DE TEXTOS SVG (Evita solapamientos al 100%)
+      // ========================================================================
+      document.fonts.ready.then(() => {
+        document.querySelectorAll('.scene svg').forEach(svg => {
+          const texts = Array.from(svg.querySelectorAll('text'));
+          
+          texts.forEach(txt => {
+            const content = (txt.textContent || '').trim();
+            // Ignorar símbolos decorativos de 1-2 caracteres (?, $, €, ★, #1, VS)
+            if (content.length <= 2) return;
+
+            const x = parseFloat(txt.getAttribute('x') || '100');
+            const y = parseFloat(txt.getAttribute('y') || '120');
+
+            // Determinar el ancho máximo permitido según cuántos textos comparten la misma línea horizontal
+            const sameRowTexts = texts.filter(other => {
+              if (other === txt) return false;
+              const oy = parseFloat(other.getAttribute('y') || '0');
+              return Math.abs(oy - y) < 14;
+            });
+
+            let maxAllowedWidth = 170; // Si está solo en su fila (centrado en x=100)
+            if (sameRowTexts.length >= 2) {
+              // Hay 3 columnas (ej: diag_3_opciones_senuelo en x=39, 101, 164)
+              maxAllowedWidth = 52;
+            } else if (sameRowTexts.length === 1) {
+              // Hay 2 columnas (ej: diag_comparacion_vs, diag_balanza, diag_dos_puertas)
+              const ox = parseFloat(sameRowTexts[0].getAttribute('x') || '100');
+              const dist = Math.abs(x - ox);
+              maxAllowedWidth = Math.max(54, dist - 28);
+            } else if (x < 65 || x > 135) {
+              // Texto lateralizado en caja o bocadillo
+              maxAllowedWidth = 60;
+            }
+
+            // Reducir font-size dinámicamente hasta que quepa con holgura
+            let currentSize = parseFloat(txt.getAttribute('font-size') || '12');
+            while (txt.getComputedTextLength() > maxAllowedWidth && currentSize > 6.5) {
+              currentSize -= 0.5;
+              txt.setAttribute('font-size', String(currentSize));
+            }
+
+            // Si aún es muy ancho, comprimimos ligeramente con textLength
+            if (txt.getComputedTextLength() > maxAllowedWidth) {
+              txt.setAttribute('textLength', String(maxAllowedWidth));
+              txt.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+            }
+          });
+        });
+      });
+
       document.querySelectorAll('.scene svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
         let idx = 0;
@@ -202,14 +291,12 @@ async function main() {
       }
 
       window.setFrameData = function(frameIdx, t) {
-        // La barra de progreso se calcula directamente con el índice de fotograma: 0% en el primer frame, 100% en el último
         const progressPct = ((frameIdx + 1) / totalFrames) * 100;
         document.getElementById('pbar').style.width = Math.min(100, progressPct) + '%';
         
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
-        // Buscamos la escena activa (si t roza el final, mantenemos activa la última escena para que nunca quede pantalla vacía)
         let activeIdx = escenas.findIndex((e, idx) => {
           if (idx === escenas.length - 1) return t >= e.inicio;
           return t >= e.inicio && t < e.fin;
@@ -284,7 +371,6 @@ async function main() {
 
   fs.writeFileSync('index.html', htmlContent);
 
-  // Limpiamos SIEMPRE el directorio frames por si hubiera fotogramas residuales
   if (fs.existsSync('frames')) {
     fs.rmSync('frames', { recursive: true, force: true });
   }
@@ -297,6 +383,7 @@ async function main() {
   const page = await browser.newPage();
   await page.setViewport({ width: 720, height: 1280 });
   await page.goto('file://' + path.resolve('index.html'), { waitUntil: 'networkidle0' });
+  await page.evaluateHandle('document.fonts.ready');
 
   console.log(`🎬 Grabando exactamente ${totalFrames} fotogramas (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
@@ -309,13 +396,12 @@ async function main() {
   await browser.close();
 
   console.log('🔊 Ensamblando MP4 final sincronizado al milisegundo...');
-  // Usamos audio.wav (que ya mide exactamente lo mismo que los fotogramas) y cerramos exactamente en duracionExactaVideo
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con barra al 100% y audio íntegro!');
+  console.log('✅ ¡Vídeo output.mp4 generado con textos limpios y sincronización exacta!');
 }
 
 main().catch(err => {
