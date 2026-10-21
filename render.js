@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado puro (con blindaje total de duración de audio)...');
+  console.log('🚀 Iniciando motor de renderizado universal (Solución definitiva de corte de audio)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -13,7 +13,7 @@ async function main() {
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
 
   // ============================================================================
-  // 1. BLINDAJE DE AUDIO REAL CON FFPROBE (Duración exacta al milisegundo)
+  // 1. OBTENCIÓN Y BLINDAJE ABSOLUTO DE LA DURACIÓN DEL AUDIO
   // ============================================================================
   let realAudioDuration = payload.duracion_total || 35;
   try {
@@ -21,20 +21,20 @@ async function main() {
     const parsed = parseFloat(probeOutput.trim());
     if (!isNaN(parsed) && parsed > 0) {
       realAudioDuration = parsed;
-      console.log(`🎙️ Duración real de audio detectada: ${realAudioDuration}s`);
+      console.log(`🎙️ Duración real de audio detectada por ffprobe: ${realAudioDuration}s`);
     }
   } catch (err) {
     console.log('⚠️ No se pudo usar ffprobe, usando duración estimada del payload.');
   }
 
-  // Damos un pequeño margen de seguridad de 0.5s para que la música/voz respiren al final
-  const duracionTotal = realAudioDuration + 0.5;
+  // Margen de seguridad amplio (2 segundos extra) para garantizar cero cortes al final
+  const duracionTotal = realAudioDuration + 2.0;
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
   const escenasOriginales = payload.escenas || [];
 
   // ============================================================================
-  // 2. ESCALADO PROPORCIONAL Y BLINDAJE DE FIN DE ESCENAS
+  // 2. MAPEO DE ESCENAS CON CIERRE EXACTO AL AUDIO REAL
   // ============================================================================
   const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
   const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
@@ -43,7 +43,7 @@ async function main() {
     let inicioEscena = esc.inicio * timeScale;
     let finEscena = esc.fin * timeScale;
 
-    // Blindaje clave: Si es la última escena, forzamos imperativamente que termine exactamente con el audio real
+    // La última escena se extiende obligatoriamente hasta el final exacto del audio
     if (idx === escenasOriginales.length - 1) {
       finEscena = realAudioDuration;
     }
@@ -166,6 +166,7 @@ async function main() {
     <script>
       const escenas = ${JSON.stringify(escenasProcesadas)};
       const duracionTotal = ${duracionTotal};
+      const realAudioDuration = ${realAudioDuration};
 
       document.querySelectorAll('.scene svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
@@ -189,7 +190,7 @@ async function main() {
       }
 
       window.setFrameTime = function(t) {
-        document.getElementById('pbar').style.width = Math.min(100, (t / duracionTotal) * 100) + '%';
+        document.getElementById('pbar').style.width = Math.min(100, (t / realAudioDuration) * 100) + '%';
         
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
@@ -197,7 +198,7 @@ async function main() {
         escenas.forEach((e, idx) => {
           const sc = document.getElementById('scene-' + e.id);
           const inner = document.getElementById('inner-' + e.id);
-          const finReal = (idx === escenas.length - 1) ? duracionTotal : e.fin;
+          const finReal = (idx === escenas.length - 1) ? realAudioDuration : e.fin;
 
           if (t >= e.inicio && t < finReal) {
             const localT = t - e.inicio;
@@ -282,10 +283,11 @@ async function main() {
 
   await browser.close();
 
-  console.log('🔊 Ensamblando MP4 con FFmpeg...');
-  execSync('ffmpeg -y -framerate 30 -i frames/frame_%05d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest output.mp4', { stdio: 'inherit' });
+  console.log('🔊 Ensamblando MP4 con FFmpeg (Blindaje de finalización)...');
+  // Se usa -t para recortar de forma exacta al tiempo del audio real y evitar que se trunque antes
+  execSync(`ffmpeg -y -framerate 30 -i frames/frame_%05d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -t ${realAudioDuration} output.mp4`, { stdio: 'inherit' });
 
-  console.log('✅ ¡Vídeo output.mp4 generado con éxito!');
+  console.log('✅ ¡Vídeo output.mp4 generado sin cortes de audio!');
 }
 
 main().catch(err => {
