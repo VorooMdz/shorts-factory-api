@@ -41,7 +41,7 @@ async function main() {
   }
 
   const escenasProcesadas = escenas.map((esc, idx) => {
-    console.log(`🎬 Escena ${idx} solicitada -> diagrama: ${esc.diagrama \vert{}\vert{} 'N/A'}, cuerpo:${esc.cuerpo || 'N/A'}, cara: ${esc.cara \vert{}\vert{} 'N/A'}, prop:${esc.prop || 'N/A'}`);
+    console.log(`🎬 Escena ${idx} solicitada -> diagrama: ${esc.diagrama || 'N/A'}, cuerpo: ${esc.cuerpo || 'N/A'}, cara: ${esc.cara || 'N/A'}, prop: ${esc.prop || 'N/A'}`);
 
     let svgInterno = '';
 
@@ -192,4 +192,161 @@ async function main() {
       .caption.active-caption {
         display: block;
       }
-      .highlight-red { color: #ff2a5f; text-shadow: 0 0 25px rgba(255, 42, 95, 0.95), 0 5
+      .highlight-red { color: #ff2a5f; text-shadow: 0 0 25px rgba(255, 42, 95, 0.95), 0 5px 0 #000; }
+      .highlight-yellow { color: #ffd000; text-shadow: 0 0 25px rgba(255, 208, 0, 0.95), 0 5px 0 #000; }
+    </style>
+  </head>
+  <body>
+    <div class="grid-bg"></div>
+    <div class="progress-bar" id="pbar"></div>
+    <div class="top-tag">${payload.categoria || 'Psicología • Sesgos Cognitivos'}</div>
+
+    <div id="scenes-wrapper">
+      ${escenasProcesadas.map(e => `
+        <div class="scene plano-${e.plano}" id="scene-${e.id}">
+          <div class="scene-inner" id="inner-${e.id}">
+            <svg viewBox="0 0 200 240">${e.svgInterno}</svg>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="captions-box">
+      ${escenasProcesadas.map(e => `
+        <div id="caps-scene-${e.id}">
+          ${e.subCaptions.map(sub => `
+            <div class="caption" id="sub-${e.id}-${sub.id}">${sub.html}</div>
+          `).join('')}
+        </div>
+      `).join('')}
+    </div>
+
+    <script>
+      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, subCaptions: e.subCaptions })))};
+      const duracionTotal = ${duracionTotal};
+
+      // Preparar todos los elementos geométricos de cada SVG para el efecto de dibujado (Whiteboard)
+      document.querySelectorAll('.scene svg').forEach(svg => {
+        const shapes = svg.querySelectorAll('path, line, polyline, polygon, circle, rect, ellipse');
+        shapes.forEach(shape => {
+          // Si un elemento no tiene ni stroke ni fill definidos, le ponemos trazo blanco por defecto
+          const computed = window.getComputedStyle(shape);
+          if ((computed.stroke === 'none' || !computed.stroke) && (computed.fill === 'none' || !computed.fill)) {
+            shape.style.stroke = '#ffffff';
+            shape.style.strokeWidth = '6px';
+            shape.style.fill = 'none';
+          }
+          try {
+            if (typeof shape.getTotalLength === 'function') {
+              const len = shape.getTotalLength();
+              if (len > 0) {
+                shape.dataset.pathLen = len;
+                shape.style.strokeDasharray = len;
+                shape.style.strokeDashoffset = len;
+              }
+            }
+          } catch (err) {}
+        });
+      });
+
+      // Función matemática de rebote elástico para entradas dinámicas (sustituye a CSS transition en Puppeteer)
+      function easeOutBack(x) {
+        const c1 = 1.70158;
+        const c3 = c1 + 1;
+        return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+      }
+
+      window.setFrameTime = function(t) {
+        document.getElementById('pbar').style.width = Math.min(100, (t / duracionTotal) * 100) + '%';
+
+        escenas.forEach(e => {
+          const sc = document.getElementById('scene-' + e.id);
+          const inner = document.getElementById('inner-' + e.id);
+
+          // 1. Controlar Subtítulos (independientes gracias al adelanto de 0.55s)
+          e.subCaptions.forEach(sub => {
+            const subEl = document.getElementById('sub-' + e.id + '-' + sub.id);
+            if (t >= sub.inicio && t < sub.fin) {
+              subEl.classList.add('active-caption');
+              const subLocalT = t - sub.inicio;
+              const popProgress = Math.min(1, subLocalT / 0.14);
+              const subScale = 0.75 + 0.25 * easeOutBack(popProgress);
+              subEl.style.transform = 'scale(' + subScale + ')';
+            } else {
+              subEl.classList.remove('active-caption');
+            }
+          });
+
+          // 2. Controlar Escena Visual y Animaciones SVG
+          if (t >= e.inicio && t < e.fin) {
+            const localT = t - e.inicio;
+            sc.style.opacity = '1';
+
+            // A) Entrada elástica + Flotación + Respiración continua en TODO el dibujo
+            const entryProgress = Math.min(1, localT / 0.35);
+            const baseScale = easeOutBack(entryProgress);
+            const floatY = Math.sin(localT * 4.5) * 12;
+            const swayRot = Math.sin(localT * 2.5) * 2.5;
+            const breathScale = 1 + Math.sin(localT * 7) * 0.035;
+
+            inner.style.transform = \`translateY(\${floatY}px) scale(\${baseScale * breathScale}) rotate(\${swayRot}deg)\`;
+
+            // B) Efecto Whiteboard: dibujar progresivamente todas las líneas del SVG en los primeros 0.85s
+            const drawProgress = Math.min(1, localT / 0.85);
+            const shapes = sc.querySelectorAll('[data-path-len]');
+            shapes.forEach((shape, sIdx) => {
+              const len = parseFloat(shape.dataset.pathLen);
+              // Pequeño escalonado entre trazos para que se vea más orgánico
+              const delay = Math.min(0.3, sIdx * 0.03);
+              const p = Math.max(0, Math.min(1, (localT - delay) / 0.65));
+              shape.style.strokeDashoffset = len * (1 - p);
+            });
+
+            // C) Movimiento secundario para el prop/accesorio si existe
+            const propLayer = sc.querySelector('.anim-layer-prop');
+            if (propLayer) {
+              const propPulse = 1 + Math.sin(localT * 10) * 0.12;
+              propLayer.style.transformOrigin = 'center';
+              propLayer.style.transformBox = 'fill-box';
+              propLayer.style.transform = \`scale(\${propPulse}) rotate(\${Math.cos(localT * 6) * 6}deg)\`;
+            }
+          } else {
+            sc.style.opacity = '0';
+          }
+        });
+      };
+    </script>
+  </body>
+  </html>`;
+
+  fs.writeFileSync('index.html', htmlContent);
+  if (!fs.existsSync('frames')) fs.mkdirSync('frames');
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 720, height: 1280 });
+  await page.goto('file://' + path.resolve('index.html'), { waitUntil: 'networkidle0' });
+
+  console.log('🎬 Grabando ' + totalFrames + ' fotogramas...');
+  for (let i = 0; i < totalFrames; i++) {
+    const currentTime = i / fps;
+    await page.evaluate((t) => window.setFrameTime(t), currentTime);
+    const frameNum = String(i).padStart(5, '0');
+    await page.screenshot({ path: `frames/frame_${frameNum}.jpg`, type: 'jpeg', quality: 92 });
+  }
+
+  await browser.close();
+
+  console.log('🔊 Ensamblando MP4 con FFmpeg...');
+  execSync('ffmpeg -y -framerate 30 -i frames/frame_%05d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest output.mp4', { stdio: 'inherit' });
+
+  console.log('✅ ¡Vídeo output.mp4 generado con éxito!');
+}
+
+main().catch(err => {
+  console.error('❌ Error en el renderizado:', err);
+  process.exit(1);
+});
