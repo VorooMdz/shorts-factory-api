@@ -4,11 +4,10 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado narrativo v3...');
+  console.log('🚀 Iniciando motor de renderizado con subtítulos perfectamente sincronizados...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
-  const claves = Object.keys(catalogo);
 
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
@@ -20,22 +19,18 @@ async function main() {
   const totalFrames = Math.ceil(duracionTotal * fps);
 
   // ============================================================================
-  // 1. MOTOR DE DIRECCIÓN DE ARTE: Analiza qué se dice en la escena y elige la
-  //    mejor combinación de Diagrama o Stickman (Cuerpo + Cara + Prop) del catálogo
+  // 1. MOTOR DE DIRECCIÓN DE ARTE (Diagramas y Stickmans contextuales)
   // ============================================================================
   const usadosDiag = new Set();
 
   function resolverArteEscena(esc, idx) {
     const sub = (esc.subtitulo || '').toLowerCase();
 
-    // A) Si n8n mandó un diagrama válido directamente, lo respetamos
     if (esc.diagrama && catalogo[esc.diagrama]) {
       usadosDiag.add(esc.diagrama);
       return { tipo: 'diagrama', diag: esc.diagrama };
     }
 
-    // B) Reglas narrativas de alta precisión: si el guion menciona conceptos clave,
-    //    usamos los diagramas conceptuales del catálogo para que case al 100% con la voz
     const reglasDiagramas = [
       { regex: /dos fotos|dos retratos|elegir.*entre|compar|vs|más atractiv/, diag: 'diag_comparacion_vs', t1: 'FOTO A', t2: 'FOTO B' },
       { regex: /prestidigitaci|truco|secreto|intercambi|cambiaron|dos puertas/, diag: 'diag_dos_puertas', t1: 'ELEGIDA', t2: 'TRAMPA' },
@@ -49,7 +44,6 @@ async function main() {
       { regex: /laberinto|salida|atrapad/, diag: 'diag_laberinto_mente' }
     ];
 
-    // Intercalamos diagramas cuando el texto encaja y no hemos repetido ese diagrama
     for (const r of reglasDiagramas) {
       if (r.regex.test(sub) && catalogo[r.diag] && !usadosDiag.has(r.diag)) {
         usadosDiag.add(r.diag);
@@ -57,12 +51,10 @@ async function main() {
       }
     }
 
-    // C) Si es escena de Stickman, seleccionamos Cuerpo + Cara + Prop coherentes con la frase
     let cuerpo = (esc.cuerpo && catalogo[esc.cuerpo]) ? esc.cuerpo : null;
     let cara = (esc.cara && catalogo[esc.cara]) ? esc.cara : null;
     let prop = (esc.prop && catalogo[esc.prop]) ? esc.prop : null;
 
-    // Corregir o enriquecer según el significado real de la frase
     if (/cerebro|mente|inventa|excusa/.test(sub)) {
       cuerpo = cuerpo || 'cuerpo_rascando_cabeza';
       cara = 'cara_cerebro_visible';
@@ -93,7 +85,6 @@ async function main() {
       prop = 'prop_bombilla';
     }
 
-    // Fallbacks seguros si aún faltan cuerpo o cara (NUNCA asignamos prop aleatorio si no pega)
     if (!cuerpo) cuerpo = 'cuerpo_indeciso_dividido';
     if (!cara) cara = 'cara_duda';
 
@@ -101,7 +92,7 @@ async function main() {
   }
 
   // ============================================================================
-  // 2. PROCESAR ESCENAS Y SUBTÍTULOS (Sin solapamientos y conservando colores)
+  // 2. PROCESAR ESCENAS Y SINCRONIZACIÓN PRECISA DE SUBTÍTULOS
   // ============================================================================
   const todosLosSubtitulos = [];
 
@@ -111,10 +102,8 @@ async function main() {
     let svgInterno = '';
 
     if (arte.tipo === 'diagrama') {
-      console.log(`🎬 Escena ${idx} [DIAGRAMA]: ${arte.diag}`);
       svgInterno = `<g class="layer-main">${catalogo[arte.diag]}</g>`;
     } else {
-      console.log(`🎬 Escena ${idx} [STICKMAN]: ${arte.cuerpo} + ${arte.cara} + ${arte.prop || 'sin_prop'}`);
       svgInterno += `<g class="layer-body">${catalogo[arte.cuerpo]}</g>`;
       svgInterno += `<g class="layer-face">${catalogo[arte.cara]}</g>`;
       if (arte.prop && catalogo[arte.prop]) {
@@ -122,7 +111,6 @@ async function main() {
       }
     }
 
-    // Rellenar variables {{TEXTO_1}}, {{TEXTO_2}}, {{TEXTO_3}} de forma inteligente
     const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim().toUpperCase());
     const t1 = esc.texto_1 || arte.t1 || matchesDestacados[0] || 'REALIDAD';
     const t2 = esc.texto_2 || arte.t2 || matchesDestacados[1] || 'ILUSIÓN';
@@ -133,7 +121,7 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, t2)
       .replace(/\{\{TEXTO_3\}\}/g, t3);
 
-    // Tokenizar palabras conservando el color rojo (**) o amarillo (*) aunque se partan en diferentes bloques
+    // Formateo limpio de colores conservando negritas
     let enRojo = false;
     let enAmarillo = false;
     const palabrasCrudas = subTexto.trim().split(/\s+/);
@@ -142,21 +130,14 @@ async function main() {
       let p = palabra;
       let color = 'none';
 
-      // Detectar inicio de ** o *
       if (p.startsWith('**')) { enRojo = true; p = p.slice(2); }
       else if (p.startsWith('*')) { enAmarillo = true; p = p.slice(1); }
 
       if (enRojo) color = 'red';
       else if (enAmarillo) color = 'yellow';
 
-      // Detectar cierre de ** o * (incluso si hay signos de puntuación pegados como "tomaste.**" o "**palabra**,")
-      if (p.includes('**')) {
-        enRojo = false;
-        p = p.replace(/\*\*/g, '');
-      } else if (p.includes('*')) {
-        enAmarillo = false;
-        p = p.replace(/\*/g, '');
-      }
+      if (p.includes('**')) { enRojo = false; p = p.replace(/\*\*/g, ''); }
+      else if (p.includes('*')) { enAmarillo = false; p = p.replace(/\*/g, ''); }
 
       if (color === 'red') return `<span class="highlight-red">${p}</span>`;
       if (color === 'yellow') return `<span class="highlight-yellow">${p}</span>`;
@@ -171,11 +152,11 @@ async function main() {
 
     const duracionEscena = (esc.fin - esc.inicio);
     const tiempoPorChunk = duracionEscena / subChunks.length;
-    const offset = 0.55; // Adelanto exacto de 0.55s que te gustó
 
+    // Sincronización directa proporcional al tiempo de la escena (sin desfases artificiales)
     subChunks.forEach((chunkHtml, cIdx) => {
-      const sInicio = Math.max(0, esc.inicio + (cIdx * tiempoPorChunk) - offset);
-      const sFin = (cIdx === subChunks.length - 1) ? (esc.fin + 0.4 - offset) : (sInicio + tiempoPorChunk);
+      const sInicio = esc.inicio + (cIdx * tiempoPorChunk);
+      const sFin = (cIdx === subChunks.length - 1) ? esc.fin : (sInicio + tiempoPorChunk);
 
       todosLosSubtitulos.push({
         uid: `sub-${idx}-${cIdx}`,
@@ -197,13 +178,12 @@ async function main() {
     };
   });
 
-  // REGLA DE ORO ANTI-SOLAPAMIENTO: Garantizar que un subtítulo termina exactamente cuando empieza el siguiente
+  // Ajuste fino para evitar huecos en blanco entre subtítulos
   for (let i = 0; i < todosLosSubtitulos.length - 1; i++) {
     if (todosLosSubtitulos[i].fin > todosLosSubtitulos[i + 1].inicio) {
       todosLosSubtitulos[i].fin = todosLosSubtitulos[i + 1].inicio;
     }
   }
-  // Asegurar que el último subtítulo del vídeo se mantenga hasta el final para poder leerlo entero
   if (todosLosSubtitulos.length > 0) {
     todosLosSubtitulos[todosLosSubtitulos.length - 1].fin = duracionTotal;
   }
@@ -267,7 +247,6 @@ async function main() {
       .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
       .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
 
-      /* Contenedor de Subtítulos Blindado (1 solo bloque centrado siempre) */
       .captions-box {
         position: absolute; bottom: 130px; left: 5%; width: 90%;
         text-align: center; z-index: 25; height: 180px;
@@ -315,14 +294,12 @@ async function main() {
       const subtitulos = ${JSON.stringify(todosLosSubtitulos)};
       const duracionTotal = ${duracionTotal};
 
-      // Aplicar efecto Whiteboard SOLO a líneas y trazos (no a círculos rellenos ni ojos)
       document.querySelectorAll('.scene svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
         let idx = 0;
         shapes.forEach(shape => {
           const fillAttr = shape.getAttribute('fill');
           const hasSolidFill = fillAttr && fillAttr !== 'none' && !fillAttr.startsWith('rgba');
-          // Si es un ojo o figura pequeña rellena, no le aplicamos dasharray para que no se deforme
           if (hasSolidFill && !shape.classList.contains('draw')) return;
 
           shape.setAttribute('pathLength', '100');
@@ -344,7 +321,7 @@ async function main() {
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
-        // 1. Renderizar UN ÚNICO subtítulo activo en cada instante
+        // Renderizado sincronizado de subtítulos exactos a la voz
         subtitulos.forEach(sub => {
           const subEl = document.getElementById(sub.uid);
           if (t >= sub.inicio && t < sub.fin) {
@@ -358,7 +335,6 @@ async function main() {
           }
         });
 
-        // 2. Renderizar Escenas y Animaciones Dinámicas
         escenas.forEach((e, idx) => {
           const sc = document.getElementById('scene-' + e.id);
           const inner = document.getElementById('inner-' + e.id);
@@ -369,7 +345,6 @@ async function main() {
             const durEscena = finReal - e.inicio;
             sc.style.opacity = '1';
 
-            // Entrada con rebote elástico + Zoom Punch a mitad de la escena para mantener retención
             const entryProgress = Math.min(1, localT / 0.35);
             let scale = 0.45 + 0.55 * easeOutBack(entryProgress);
 
@@ -382,7 +357,6 @@ async function main() {
             const tiltDeg = Math.sin(localT * 2.4) * (e.esDiagrama ? 1.2 : 2.2);
             inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
 
-            // Efecto Whiteboard progresivo en los trazos
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
               const delay = Math.min(0.25, dIdx * 0.03);
@@ -390,7 +364,6 @@ async function main() {
               shape.style.strokeDashoffset = String(100 * (1 - drawP));
             });
 
-            // Animación expresiva en la cara
             const faceLayer = sc.querySelector('.layer-face');
             if (faceLayer) {
               const faceY = Math.sin(localT * 7) * 3;
@@ -399,7 +372,6 @@ async function main() {
               faceLayer.style.transform = \`translateY(\${faceY}px) rotate(\${faceRot}deg)\`;
             }
 
-            // Animación viva en el prop (objeto flotante)
             const propLayer = sc.querySelector('.layer-prop');
             if (propLayer) {
               const propY = Math.sin(localT * 6 + 1) * 8;
@@ -409,7 +381,6 @@ async function main() {
               propLayer.style.transform = \`translateY(\${propY}px) scale(\${propScale})\`;
             }
 
-            // Clases internas del catálogo (.float y .pulse)
             sc.querySelectorAll('.float').forEach(el => {
               const fOffset = Math.sin(localT * 6) * 7;
               el.style.transform = \`translateY(\${fOffset}px)\`;
