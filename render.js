@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado universal con sincronización maestra de audio y subtítulos...');
+  console.log('🚀 Iniciando motor de renderizado universal con arte dinámico inteligente...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -39,26 +39,59 @@ async function main() {
   const escenasOriginales = payload.escenas || [];
 
   // ============================================================================
-  // 2. SELECCIÓN DE ARTE DINÁMICA (Anti-repetición universal)
+  // 2. SELECCIÓN DE ARTE INTELIGENTE Y UNIVERSAL (Sin hardcoding)
   // ============================================================================
   function seleccionarArteDinamico(esc, idx) {
+    // Si la IA mandó un diagrama válido y explícito, lo usamos
     if (esc.diagrama && catalogo[esc.diagrama]) {
       return { tipo: 'diagrama', diag: esc.diagrama };
     }
-    if (idx > 0 && idx % 3 === 0 && diagsDisponibles.length > 0) {
-      const diagAleatorio = diagsDisponibles[(idx * 7) % diagsDisponibles.length];
-      if (catalogo[diagAleatorio]) return { tipo: 'diagrama', diag: diagAleatorio };
+
+    const sub = (esc.subtitulo || '').toLowerCase();
+    const palabrasSub = sub.replace(/[^a-záéíóúñ]/g, ' ').split(/\s+/).filter(w => w.length > 3);
+
+    // Función para cruzar las palabras del subtítulo con las claves del catálogo
+    function buscarPorKeywords(lista) {
+      for (const palabra of palabrasSub) {
+        const match = lista.find(k => k.toLowerCase().includes(palabra));
+        if (match) return match;
+      }
+      return null;
     }
 
-    const cuerpoPorDefecto = cuerposDisponibles[(idx * 3) % cuerposDisponibles.length];
-    const caraPorDefecto = carasDisponibles[(idx * 5) % carasDisponibles.length];
-    const propPorDefecto = propsDisponibles[(idx * 2) % propsDisponibles.length];
+    // Respetar lo que mandó la IA si es válido y no un marcador vacío/genérico
+    let cuerpo = (esc.cuerpo && catalogo[esc.cuerpo] && esc.cuerpo !== 'cuerpo_base_quieto') ? esc.cuerpo : null;
+    let cara = (esc.cara && catalogo[esc.cara] && esc.cara !== 'cara_duda') ? esc.cara : null;
+    let prop = (esc.prop && catalogo[esc.prop] && esc.prop !== 'prop_interrogaciones') ? esc.prop : null;
 
-    const cuerpoFinal = (esc.cuerpo && catalogo[esc.cuerpo] && esc.cuerpo !== 'cuerpo_base_quieto') ? esc.cuerpo : cuerpoPorDefecto;
-    const caraFinal = (esc.cara && catalogo[esc.cara] && esc.cara !== 'cara_duda') ? esc.cara : caraPorDefecto;
-    const propFinal = (esc.prop && catalogo[esc.prop] && esc.prop !== 'prop_interrogaciones') ? esc.prop : propPorDefecto;
+    // Si faltan, los buscamos de forma inteligente mediante el significado del texto
+    if (!cuerpo) cuerpo = buscarPorKeywords(cuerposDisponibles);
+    if (!cara) cara = buscarPorKeywords(carasDisponibles);
+    if (!prop) prop = buscarPorKeywords(propsDisponibles);
 
-    return { tipo: 'stickman', cuerpo: cuerpoFinal, cara: caraFinal, prop: propFinal };
+    // Si aún así no hay coincidencia directa, generamos un hash único basado en el texto para asegurar variedad absoluta
+    if (!cuerpo) {
+      const hash = sub.split('').reduce((acc, char) => acc + char.charCodeAt(0), idx);
+      cuerpo = cuerposDisponibles[hash % cuerposDisponibles.length];
+    }
+    if (!cara) {
+      const hash = sub.split('').reduce((acc, char) => acc + char.charCodeAt(0), idx * 3);
+      cara = carasDisponibles[hash % carasDisponibles.length];
+    }
+    if (!prop) {
+      const hash = sub.split('').reduce((acc, char) => acc + char.charCodeAt(0), idx * 7);
+      prop = propsDisponibles[hash % propsDisponibles.length];
+    }
+
+    // Inyectar un diagrama visual relevante de forma orgánica cada pocas escenas si el texto acompaña
+    if (idx % 4 === 2 && diagsDisponibles.length > 0) {
+      const diagMatch = buscarPorKeywords(diagsDisponibles);
+      if (diagMatch && catalogo[diagMatch]) {
+        return { tipo: 'diagrama', diag: diagMatch };
+      }
+    }
+
+    return { tipo: 'stickman', cuerpo, cara, prop };
   }
 
   // ============================================================================
@@ -67,7 +100,6 @@ async function main() {
   const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
   const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
 
-  // Recopilar y trocear todas las palabras de todas las escenas para un flujo de lectura uniforme
   let listaGlobalChunks = [];
 
   escenasOriginales.forEach(esc => {
@@ -102,10 +134,9 @@ async function main() {
     }
   });
 
-  // Distribuir el tiempo real del audio de forma proporcional entre todos los bloques de texto
   const tiempoPorBloque = realAudioDuration / Math.max(1, listaGlobalChunks.length);
   const todosLosSubtitulos = [];
-  const offsetAdelanto = 0.35; // Adelanto suave y constante para que golpee con la voz
+  const offsetAdelanto = 0.35;
 
   listaGlobalChunks.forEach((chunkHtml, idx) => {
     const sInicio = Math.max(0, (idx * tiempoPorBloque) - offsetAdelanto);
