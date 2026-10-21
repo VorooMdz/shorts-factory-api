@@ -202,4 +202,123 @@ async function main() {
       }
 
       window.setFrameData = function(frameIdx, t) {
-        // La barra de progreso se
+        // La barra de progreso se calcula directamente con el índice de fotograma: 0% en el primer frame, 100% en el último
+        const progressPct = ((frameIdx + 1) / totalFrames) * 100;
+        document.getElementById('pbar').style.width = Math.min(100, progressPct) + '%';
+        
+        const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
+        document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
+
+        // Buscamos la escena activa (si t roza el final, mantenemos activa la última escena para que nunca quede pantalla vacía)
+        let activeIdx = escenas.findIndex((e, idx) => {
+          if (idx === escenas.length - 1) return t >= e.inicio;
+          return t >= e.inicio && t < e.fin;
+        });
+        if (activeIdx === -1 && escenas.length > 0) activeIdx = escenas.length - 1;
+
+        escenas.forEach((e, idx) => {
+          const sc = document.getElementById('scene-' + e.id);
+          const inner = document.getElementById('inner-' + e.id);
+
+          if (idx === activeIdx) {
+            const localT = Math.max(0, t - e.inicio);
+            const durEscena = Math.max(0.1, e.fin - e.inicio);
+            sc.style.opacity = '1';
+
+            const entryProgress = Math.min(1, localT / 0.35);
+            let scale = 0.45 + 0.55 * easeOutBack(entryProgress);
+
+            if (localT > durEscena * 0.5) {
+              const midProgress = Math.min(1, (localT - durEscena * 0.5) / 0.25);
+              scale *= (1 + 0.09 * easeOutBack(midProgress));
+            }
+
+            const floatY = Math.sin(localT * 4.5) * 10;
+            const tiltDeg = Math.sin(localT * 2.4) * (e.esDiagrama ? 1.2 : 2.2);
+            inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
+
+            sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
+              const dIdx = parseInt(shape.dataset.drawIdx, 10);
+              const delay = Math.min(0.25, dIdx * 0.03);
+              const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.45));
+              shape.style.strokeDashoffset = String(100 * (1 - drawP));
+            });
+
+            const faceLayer = sc.querySelector('.layer-face');
+            if (faceLayer) {
+              const faceY = Math.sin(localT * 7) * 3;
+              const faceRot = Math.sin(localT * 4.5) * 3.5;
+              faceLayer.style.transformOrigin = '100px 65px';
+              faceLayer.style.transform = \`translateY(\${faceY}px) rotate(\${faceRot}deg)\`;
+            }
+
+            const propLayer = sc.querySelector('.layer-prop');
+            if (propLayer) {
+              const propY = Math.sin(localT * 6 + 1) * 8;
+              const propScale = 1 + Math.sin(localT * 9) * 0.08;
+              propLayer.style.transformOrigin = 'center';
+              propLayer.style.transformBox = 'fill-box';
+              propLayer.style.transform = \`translateY(\${propY}px) scale(\${propScale})\`;
+            }
+
+            sc.querySelectorAll('.float').forEach(el => {
+              const fOffset = Math.sin(localT * 6) * 7;
+              el.style.transform = \`translateY(\${fOffset}px)\`;
+            });
+
+            sc.querySelectorAll('.pulse').forEach(el => {
+              const pScale = 1 + Math.sin(localT * 10) * 0.12;
+              el.style.transformOrigin = 'center';
+              el.style.transformBox = 'fill-box';
+              el.style.transform = \`scale(\${pScale})\`;
+            });
+
+          } else {
+            sc.style.opacity = '0';
+          }
+        });
+      };
+    </script>
+  </body>
+  </html>`;
+
+  fs.writeFileSync('index.html', htmlContent);
+
+  // Limpiamos SIEMPRE el directorio frames por si hubiera fotogramas residuales
+  if (fs.existsSync('frames')) {
+    fs.rmSync('frames', { recursive: true, force: true });
+  }
+  fs.mkdirSync('frames');
+
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  const page = await browser.newPage();
+  await page.setViewport({ width: 720, height: 1280 });
+  await page.goto('file://' + path.resolve('index.html'), { waitUntil: 'networkidle0' });
+
+  console.log(`🎬 Grabando exactamente ${totalFrames} fotogramas (${duracionExactaVideo.toFixed(2)}s)...`);
+  for (let i = 0; i < totalFrames; i++) {
+    const currentTime = i / fps;
+    await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
+    const frameNum = String(i).padStart(5, '0');
+    await page.screenshot({ path: `frames/frame_${frameNum}.jpg`, type: 'jpeg', quality: 92 });
+  }
+
+  await browser.close();
+
+  console.log('🔊 Ensamblando MP4 final sincronizado al milisegundo...');
+  // Usamos audio.wav (que ya mide exactamente lo mismo que los fotogramas) y cerramos exactamente en duracionExactaVideo
+  execSync(
+    `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
+    { stdio: 'inherit' }
+  );
+
+  console.log('✅ ¡Vídeo output.mp4 generado con barra al 100% y audio íntegro!');
+}
+
+main().catch(err => {
+  console.error('❌ Error en el renderizado:', err);
+  process.exit(1);
+});
