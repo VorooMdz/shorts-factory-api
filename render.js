@@ -4,50 +4,60 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado (Enfoque definitivo de desbordamiento controlado)...');
+  console.log('🚀 Iniciando motor de renderizado con sincronización WAV exacta...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
 
+  // 1. Guardar MP3 original y convertir a WAV limpio (con 0.25s de respiro final para evitar cortes abruptos)
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
-  fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
+  fs.writeFileSync('audio_raw.mp3', Buffer.from(audioBase64, 'base64'));
+
+  // Convertimos a WAV añadiendo 0.25s de silencio al final para que la última sílaba jamás quede truncada
+  execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.25" -c:a pcm_s16le audio.wav', { stdio: 'ignore' });
 
   // ============================================================================
-  // 1. OBTENCIÓN DE LA DURACIÓN REAL DEL AUDIO CON FFPROBE
+  // 2. OBTENCIÓN DE LA DURACIÓN REAL EXACTA (CORREGIDO: nk=1 sobre WAV)
   // ============================================================================
-  let realAudioDuration = payload.duracion_total || 35;
+  let realAudioDuration = 35;
   try {
-    const probeOutput = execSync('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:n=1 audio.mp3', { encoding: 'utf8' });
+    // NOTA: 'nk=1' (nokey=1) devuelve solo el número. Antes ponía 'n=1' y parseFloat daba NaN.
+    const probeOutput = execSync(
+      'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nk=1 audio.wav',
+      { encoding: 'utf8' }
+    );
     const parsed = parseFloat(probeOutput.trim());
     if (!isNaN(parsed) && parsed > 0) {
       realAudioDuration = parsed;
-      console.log(`🎙️ Duración real de audio detectada por ffprobe: ${realAudioDuration}s`);
+      console.log(`🎙️ Duración real exacta medida en WAV: ${realAudioDuration.toFixed(3)}s`);
+    } else {
+      throw new Error(`Salida de ffprobe no numérica: ${probeOutput}`);
     }
   } catch (err) {
-    console.log('⚠️ Usando duración estimada del payload.');
+    console.error('⚠️ Fallo al medir con ffprobe, usando fallback:', err.message);
+    realAudioDuration = Number(payload.duracion_total) || 35;
   }
 
-  // ENFOQUE CLAVE: Forzamos que el vídeo dure SIEMPRE 2 segundos más que el audio.
-  // Así garantizamos que el flujo de vídeo NUNCA termine antes, permitiendo que -shortest 
-  // corte el vídeo exactamente al finalizar el audio sin recortar la voz.
-  const duracionVideoRender = realAudioDuration + 2.0;
+  // El vídeo durará EXACTAMENTE lo que dura el audio WAV (ni más ni menos)
   const fps = 30;
-  const totalFrames = Math.ceil(duracionVideoRender * fps);
-  const escenasOriginales = payload.escenas || [];
+  const totalFrames = Math.ceil(realAudioDuration * fps);
+  const duracionExactaVideo = totalFrames / fps;
 
   // ============================================================================
-  // 2. MAPEO DE ESCENAS PROPORCIONALES AL AUDIO REAL
+  // 3. ESCALADO PROPORCIONAL EXACTO DE ESCENAS DE 0 A 100% DEL TIEMPO
   // ============================================================================
-  const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
-  const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
+  const escenasOriginales = payload.escenas || [];
+  const ultimaEscenaFinOriginal = escenasOriginales.length > 0
+    ? Number(escenasOriginales[escenasOriginales.length - 1].fin)
+    : duracionExactaVideo;
+
+  const timeScale = duracionExactaVideo / Math.max(0.1, ultimaEscenaFinOriginal);
 
   const escenasProcesadas = escenasOriginales.map((esc, idx) => {
-    let inicioEscena = esc.inicio * timeScale;
-    let finEscena = esc.fin * timeScale;
-
-    if (idx === escenasOriginales.length - 1) {
-      finEscena = realAudioDuration;
-    }
+    const inicioEscena = (idx === 0) ? 0 : Number(esc.inicio) * timeScale;
+    const finEscena = (idx === escenasOriginales.length - 1)
+      ? duracionExactaVideo
+      : Number(esc.fin) * timeScale;
 
     let svgInterno = '';
 
@@ -72,7 +82,10 @@ async function main() {
     svgInterno = svgInterno
       .replace(/\{\{TEXTO_1\}\}/g, t1)
       .replace(/\{\{TEXTO_2\}\}/g, t2)
-      .replace(/\{\{TEXTO_3\}\}/g, t3);
+      .replace(/\{\{TEXTO_3\}\}/g, t3)
+      .replace(/\{TEXTO_1\}/g, t1)
+      .replace(/\{TEXTO_2\}/g, t2)
+      .replace(/\{TEXTO_3\}/g, t3);
 
     const planosRotativos = ['medio', 'general', 'primer_plano', 'medio'];
     const planoElegido = esc.plano || planosRotativos[idx % planosRotativos.length];
@@ -128,7 +141,6 @@ async function main() {
         border: 2px solid rgba(255,255,255,0.18); white-space: nowrap;
         box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 20;
       }
-      
       .scene {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
@@ -166,7 +178,7 @@ async function main() {
 
     <script>
       const escenas = ${JSON.stringify(escenasProcesadas)};
-      const realAudioDuration = ${realAudioDuration};
+      const totalFrames = ${totalFrames};
 
       document.querySelectorAll('.scene svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
@@ -189,109 +201,5 @@ async function main() {
         return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
       }
 
-      window.setFrameTime = function(t) {
-        // La barra avanza en función del audio real para que llegue al 100% exacto
-        document.getElementById('pbar').style.width = Math.min(100, (t / realAudioDuration) * 100) + '%';
-        
-        const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
-        document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
-
-        escenas.forEach((e, idx) => {
-          const sc = document.getElementById('scene-' + e.id);
-          const inner = document.getElementById('inner-' + e.id);
-          const finReal = (idx === escenas.length - 1) ? realAudioDuration : e.fin;
-
-          if (t >= e.inicio && t < finReal) {
-            const localT = t - e.inicio;
-            const durEscena = finReal - e.inicio;
-            sc.style.opacity = '1';
-
-            const entryProgress = Math.min(1, localT / 0.35);
-            let scale = 0.45 + 0.55 * easeOutBack(entryProgress);
-
-            if (localT > durEscena * 0.5) {
-              const midProgress = Math.min(1, (localT - durEscena * 0.5) / 0.25);
-              scale *= (1 + 0.09 * easeOutBack(midProgress));
-            }
-
-            const floatY = Math.sin(localT * 4.5) * 10;
-            const tiltDeg = Math.sin(localT * 2.4) * (e.esDiagrama ? 1.2 : 2.2);
-            inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
-
-            sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
-              const dIdx = parseInt(shape.dataset.drawIdx, 10);
-              const delay = Math.min(0.25, dIdx * 0.03);
-              const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.45));
-              shape.style.strokeDashoffset = String(100 * (1 - drawP));
-            });
-
-            const faceLayer = sc.querySelector('.layer-face');
-            if (faceLayer) {
-              const faceY = Math.sin(localT * 7) * 3;
-              const faceRot = Math.sin(localT * 4.5) * 3.5;
-              faceLayer.style.transformOrigin = '100px 65px';
-              faceLayer.style.transform = \`translateY(\${faceY}px) rotate(\${faceRot}deg)\`;
-            }
-
-            const propLayer = sc.querySelector('.layer-prop');
-            if (propLayer) {
-              const propY = Math.sin(localT * 6 + 1) * 8;
-              const propScale = 1 + Math.sin(localT * 9) * 0.08;
-              propLayer.style.transformOrigin = 'center';
-              propLayer.style.transformBox = 'fill-box';
-              propLayer.style.transform = \`translateY(\${propY}px) scale(\${propScale})\`;
-            }
-
-            sc.querySelectorAll('.float').forEach(el => {
-              const fOffset = Math.sin(localT * 6) * 7;
-              el.style.transform = \`translateY(\${fOffset}px)\`;
-            });
-
-            sc.querySelectorAll('.pulse').forEach(el => {
-              const pScale = 1 + Math.sin(localT * 10) * 0.12;
-              el.style.transformOrigin = 'center';
-              el.style.transformBox = 'fill-box';
-              el.style.transform = \`scale(\${pScale})\`;
-            });
-
-          } else {
-            sc.style.opacity = '0';
-          }
-        });
-      };
-    </script>
-  </body>
-  </html>`;
-
-  fs.writeFileSync('index.html', htmlContent);
-  if (!fs.existsSync('frames')) fs.mkdirSync('frames');
-
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  const page = await browser.newPage();
-  await page.setViewport({ width: 720, height: 1280 });
-  await page.goto('file://' + path.resolve('index.html'), { waitUntil: 'networkidle0' });
-
-  console.log(`🎬 Grabando ${totalFrames} fotogramas (con margen de seguridad de vídeo)...`);
-  for (let i = 0; i < totalFrames; i++) {
-    const currentTime = i / fps;
-    await page.evaluate((t) => window.setFrameTime(t), currentTime);
-    const frameNum = String(i).padStart(5, '0');
-    await page.screenshot({ path: `frames/frame_${frameNum}.jpg`, type: 'jpeg', quality: 92 });
-  }
-
-  await browser.close();
-
-  console.log('🔊 Ensamblando MP4 definitivo con el audio como pista maestra (-shortest)...');
-  // Al ser el vídeo más largo que el audio, -shortest cortará estrictamente en el fin del audio.mp3
-  execSync('ffmpeg -y -framerate 30 -i frames/frame_%05d.jpg -i audio.mp3 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -shortest output.mp4', { stdio: 'inherit' });
-
-  console.log('✅ ¡Vídeo output.mp4 generado y sincronizado perfectamente!');
-}
-
-main().catch(err => {
-  console.error('❌ Error en el renderizado:', err);
-  process.exit(1);
-});
+      window.setFrameData = function(frameIdx, t) {
+        // La barra de progreso se
