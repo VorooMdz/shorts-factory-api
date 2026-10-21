@@ -47,7 +47,13 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: |
-          python upload.py output.mp4 "Psicología Fascinante"
+          # Extraemos dinámicamente el título del payload generado por la IA
+          TITULO_SHORT=$(node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync('payload.json', 'utf8')); console.log(data.tema_titulo || 'Psicología Fascinante');")
+          
+          echo "Título detectado: $TITULO_SHORT"
+          
+          # Pasamos el título extraído como argumento al script de Python
+          python upload.py output.mp4 "$TITULO_SHORT"
 
       - name: 10. Enviar aviso informativo a Telegram
         env:
@@ -59,5 +65,5 @@ jobs:
 
           curl -v -F chat_id="$CLEAN_CHAT_ID" \
                -F video=@output.mp4 \
-               -F caption="🕒 ¡Short renderizado, subido y programado automáticamente para las 18:00!" \
+               -F caption="🕒 ¡Short renderizado, subido y programado automáticamente para las 18:00 con su título optimizado!" \
                "https://api.telegram.org/bot$CLEAN_TOKEN/sendVideo"
