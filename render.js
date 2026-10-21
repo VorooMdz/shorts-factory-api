@@ -4,10 +4,11 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con subtítulos perfectamente sincronizados...');
+  console.log('🚀 Iniciando motor de renderizado con subtítulos perfectamente sincronizados a la voz...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
+  const claves = Object.keys(catalogo);
 
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
@@ -92,7 +93,7 @@ async function main() {
   }
 
   // ============================================================================
-  // 2. PROCESAR ESCENAS Y SINCRONIZACIÓN PRECISA DE SUBTÍTULOS
+  // 2. PROCESAR ESCENAS Y SUBTÍTULOS CON ADELANTO TEMPORAL PRECISO
   // ============================================================================
   const todosLosSubtitulos = [];
 
@@ -121,7 +122,6 @@ async function main() {
       .replace(/\{\{TEXTO_2\}\}/g, t2)
       .replace(/\{\{TEXTO_3\}\}/g, t3);
 
-    // Formateo limpio de colores conservando negritas
     let enRojo = false;
     let enAmarillo = false;
     const palabrasCrudas = subTexto.trim().split(/\s+/);
@@ -152,11 +152,13 @@ async function main() {
 
     const duracionEscena = (esc.fin - esc.inicio);
     const tiempoPorChunk = duracionEscena / subChunks.length;
+    
+    // Aplicamos un adelanto óptimo de 0.50s para que la letra golpee exactamente al unísono con la voz
+    const offset = 0.50;
 
-    // Sincronización directa proporcional al tiempo de la escena (sin desfases artificiales)
     subChunks.forEach((chunkHtml, cIdx) => {
-      const sInicio = esc.inicio + (cIdx * tiempoPorChunk);
-      const sFin = (cIdx === subChunks.length - 1) ? esc.fin : (sInicio + tiempoPorChunk);
+      const sInicio = Math.max(0, esc.inicio + (cIdx * tiempoPorChunk) - offset);
+      const sFin = (cIdx === subChunks.length - 1) ? (esc.fin + 0.3 - offset) : (sInicio + tiempoPorChunk);
 
       todosLosSubtitulos.push({
         uid: `sub-${idx}-${cIdx}`,
@@ -178,7 +180,7 @@ async function main() {
     };
   });
 
-  // Ajuste fino para evitar huecos en blanco entre subtítulos
+  // Evitar solapamientos y asegurar lectura completa al final
   for (let i = 0; i < todosLosSubtitulos.length - 1; i++) {
     if (todosLosSubtitulos[i].fin > todosLosSubtitulos[i + 1].inicio) {
       todosLosSubtitulos[i].fin = todosLosSubtitulos[i + 1].inicio;
@@ -321,7 +323,7 @@ async function main() {
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
-        // Renderizado sincronizado de subtítulos exactos a la voz
+        // Renderizado sincronizado con el adelanto perfecto de subtítulos
         subtitulos.forEach(sub => {
           const subEl = document.getElementById(sub.uid);
           if (t >= sub.inicio && t < sub.fin) {
