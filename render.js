@@ -4,7 +4,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con subtítulos perfectamente sincronizados a la voz...');
+  console.log('🚀 Iniciando motor de renderizado con corrección de desfase progresivo...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -93,9 +93,10 @@ async function main() {
   }
 
   // ============================================================================
-  // 2. PROCESAR ESCENAS Y SUBTÍTULOS CON ADELANTO TEMPORAL PRECISO
+  // 2. PROCESAR ESCENAS Y SUBTÍTULOS CON COMPENSACIÓN DE RETRASO
   // ============================================================================
   const todosLosSubtitulos = [];
+  const totalEscenas = escenas.length;
 
   const escenasProcesadas = escenas.map((esc, idx) => {
     const subTexto = esc.subtitulo || '';
@@ -150,15 +151,16 @@ async function main() {
       subChunks.push(palabrasColoreadas.slice(i, i + chunkSize).join(' '));
     }
 
-    const duracionEscena = (esc.fin - esc.inicio);
+    // Factor de corrección progresiva: elimina el retraso acumulativo hacia el final del vídeo[cite: 16]
+    const driftCorrection = 1.0 - (idx / Math.max(1, totalEscenas)) * 0.06;
+    const duracionEscena = (esc.fin - esc.inicio) * driftCorrection;
     const tiempoPorChunk = duracionEscena / subChunks.length;
-    
-    // Aplicamos un adelanto óptimo de 0.50s para que la letra golpee exactamente al unísono con la voz
-    const offset = 0.50;
+    const offset = 0.55;
 
     subChunks.forEach((chunkHtml, cIdx) => {
-      const sInicio = Math.max(0, esc.inicio + (cIdx * tiempoPorChunk) - offset);
-      const sFin = (cIdx === subChunks.length - 1) ? (esc.fin + 0.3 - offset) : (sInicio + tiempoPorChunk);
+      const baseTime = esc.inicio * driftCorrection;
+      const sInicio = Math.max(0, baseTime + (cIdx * tiempoPorChunk) - offset);
+      const sFin = (cIdx === subChunks.length - 1) ? (baseTime + duracionEscena + 0.3 - offset) : (sInicio + tiempoPorChunk);
 
       todosLosSubtitulos.push({
         uid: `sub-${idx}-${cIdx}`,
@@ -323,7 +325,7 @@ async function main() {
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
-        // Renderizado sincronizado con el adelanto perfecto de subtítulos
+        // Renderizado sincronizado de subtítulos con corrección temporal acumulativa
         subtitulos.forEach(sub => {
           const subEl = document.getElementById(sub.uid);
           if (t >= sub.inicio && t < sub.fin) {
