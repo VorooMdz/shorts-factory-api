@@ -33,7 +33,23 @@ jobs:
       - name: 6. Ejecutar motor de renderizado (render.js)
         run: npm run render
 
-      - name: 7. Enviar vídeo .mp4 final a tu Telegram
+      - name: 7. Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 8. Instalar dependencias de Python para YouTube
+        run: pip install google-auth-oauthlib google-api-python-client
+
+      - name: 9. Subir vídeo a YouTube como No Listado
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: |
+          python upload.py output.mp4 "Psicología Fascinante"
+
+      - name: 10. Enviar vídeo .mp4 y notificación interactiva a Telegram
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -42,7 +58,9 @@ jobs:
           CLEAN_TOKEN=$(echo "$TELEGRAM_TOKEN" | tr -d '[:space:]')
           CLEAN_CHAT_ID=$(echo "$TELEGRAM_CHAT_ID" | tr -d '[:space:]')
 
+          # Enviamos el vídeo junto con los botones interactivos de Telegram
           curl -v -F chat_id="$CLEAN_CHAT_ID" \
                -F video=@output.mp4 \
-               -F caption="🎬 ¡Short renderizado con éxito en la nube! Revisa si te gusta o pídelo de nuevo." \
+               -F caption="🎬 ¡Short renderizado y subido a YouTube (No Listado)! ¿Qué deseas hacer con él?" \
+               -F reply_markup='{"inline_keyboard":[[{"text":"🚀 Publicar en Público","callback_data":"publish_yt"},{"text":"❌ Descartar","callback_data":"delete_yt"}]]}' \
                "https://api.telegram.org/bot$CLEAN_TOKEN/sendVideo"
