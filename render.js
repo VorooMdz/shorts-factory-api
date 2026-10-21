@@ -4,22 +4,16 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado universal con arte dinámico inteligente...');
+  console.log('🚀 Iniciando motor de renderizado puro (leyendo dirección de arte del guionista)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
-  const claves = Object.keys(catalogo);
-
-  const carasDisponibles = claves.filter(k => k.startsWith('cara_'));
-  const cuerposDisponibles = claves.filter(k => k.startsWith('cuerpo_'));
-  const propsDisponibles = claves.filter(k => k.startsWith('prop_'));
-  const diagsDisponibles = claves.filter(k => k.startsWith('diag_'));
 
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
 
   // ============================================================================
-  // 1. OBTENER DURACIÓN REAL DEL AUDIO CON FFPROBE
+  // 1. BLINDAJE DE AUDIO REAL CON FFPROBE (Cero cortes al final)
   // ============================================================================
   let realAudioDuration = payload.duracion_total || 35;
   try {
@@ -30,142 +24,35 @@ async function main() {
       console.log(`🎙️ Duración real de audio detectada: ${realAudioDuration}s`);
     }
   } catch (err) {
-    console.log('⚠️ No se pudo usar ffprobe, usando duración estimada.');
+    console.log('⚠️ No se pudo usar ffprobe, usando duración estimada del payload.');
   }
 
-  const duracionTotal = realAudioDuration + 0.8;
+  const duracionTotal = realAudioDuration + 0.6;
   const fps = 30;
   const totalFrames = Math.ceil(duracionTotal * fps);
   const escenasOriginales = payload.escenas || [];
 
   // ============================================================================
-  // 2. SELECCIÓN DE ARTE INTELIGENTE Y UNIVERSAL (Sin hardcoding)
+  // 2. MONTAJE DIRECTO DE LA ARQUITECTURA VISUAL ELEGIDA POR EL GUIONISTA
   // ============================================================================
-  function seleccionarArteDinamico(esc, idx) {
-    // Si la IA mandó un diagrama válido y explícito, lo usamos
-    if (esc.diagrama && catalogo[esc.diagrama]) {
-      return { tipo: 'diagrama', diag: esc.diagrama };
-    }
-
-    const sub = (esc.subtitulo || '').toLowerCase();
-    const palabrasSub = sub.replace(/[^a-záéíóúñ]/g, ' ').split(/\s+/).filter(w => w.length > 3);
-
-    // Función para cruzar las palabras del subtítulo con las claves del catálogo
-    function buscarPorKeywords(lista) {
-      for (const palabra of palabrasSub) {
-        const match = lista.find(k => k.toLowerCase().includes(palabra));
-        if (match) return match;
-      }
-      return null;
-    }
-
-    // Respetar lo que mandó la IA si es válido y no un marcador vacío/genérico
-    let cuerpo = (esc.cuerpo && catalogo[esc.cuerpo] && esc.cuerpo !== 'cuerpo_base_quieto') ? esc.cuerpo : null;
-    let cara = (esc.cara && catalogo[esc.cara] && esc.cara !== 'cara_duda') ? esc.cara : null;
-    let prop = (esc.prop && catalogo[esc.prop] && esc.prop !== 'prop_interrogaciones') ? esc.prop : null;
-
-    // Si faltan, los buscamos de forma inteligente mediante el significado del texto
-    if (!cuerpo) cuerpo = buscarPorKeywords(cuerposDisponibles);
-    if (!cara) cara = buscarPorKeywords(carasDisponibles);
-    if (!prop) prop = buscarPorKeywords(propsDisponibles);
-
-    // Si aún así no hay coincidencia directa, generamos un hash único basado en el texto para asegurar variedad absoluta
-    if (!cuerpo) {
-      const hash = sub.split('').reduce((acc, char) => acc + char.charCodeAt(0), idx);
-      cuerpo = cuerposDisponibles[hash % cuerposDisponibles.length];
-    }
-    if (!cara) {
-      const hash = sub.split('').reduce((acc, char) => acc + char.charCodeAt(0), idx * 3);
-      cara = carasDisponibles[hash % carasDisponibles.length];
-    }
-    if (!prop) {
-      const hash = sub.split('').reduce((acc, char) => acc + char.charCodeAt(0), idx * 7);
-      prop = propsDisponibles[hash % propsDisponibles.length];
-    }
-
-    // Inyectar un diagrama visual relevante de forma orgánica cada pocas escenas si el texto acompaña
-    if (idx % 4 === 2 && diagsDisponibles.length > 0) {
-      const diagMatch = buscarPorKeywords(diagsDisponibles);
-      if (diagMatch && catalogo[diagMatch]) {
-        return { tipo: 'diagrama', diag: diagMatch };
-      }
-    }
-
-    return { tipo: 'stickman', cuerpo, cara, prop };
-  }
-
-  // ============================================================================
-  // 3. PROCESAMIENTO DE ESCENAS Y REPARTO PROPORCIONAL DE SUBTÍTULOS
-  // ============================================================================
-  const ultimaEscenaFinOriginal = escenasOriginales.length > 0 ? escenasOriginales[escenasOriginales.length - 1].fin : realAudioDuration;
-  const timeScale = realAudioDuration / Math.max(1, ultimaEscenaFinOriginal);
-
-  let listaGlobalChunks = [];
-
-  escenasOriginales.forEach(esc => {
-    const subTexto = esc.subtitulo || '';
-    if (!subTexto.trim()) return;
-
-    let enRojo = false;
-    let enAmarillo = false;
-    const palabrasCrudas = subTexto.trim().split(/\s+/);
-
-    const palabrasColoreadas = palabrasCrudas.map(palabra => {
-      let p = palabra;
-      let color = 'none';
-
-      if (p.startsWith('**')) { enRojo = true; p = p.slice(2); }
-      else if (p.startsWith('*')) { enAmarillo = true; p = p.slice(1); }
-
-      if (enRojo) color = 'red';
-      else if (enAmarillo) color = 'yellow';
-
-      if (p.includes('**')) { enRojo = false; p = p.replace(/\*\*/g, ''); }
-      else if (p.includes('*')) { enAmarillo = false; p = p.replace(/\*/g, ''); }
-
-      if (color === 'red') return `<span class="highlight-red">${p}</span>`;
-      if (color === 'yellow') return `<span class="highlight-yellow">${p}</span>`;
-      return p;
-    });
-
-    const chunkSize = 3;
-    for (let i = 0; i < palabrasColoreadas.length; i += chunkSize) {
-      listaGlobalChunks.push(palabrasColoreadas.slice(i, i + chunkSize).join(' '));
-    }
-  });
-
-  const tiempoPorBloque = realAudioDuration / Math.max(1, listaGlobalChunks.length);
-  const todosLosSubtitulos = [];
-  const offsetAdelanto = 0.35;
-
-  listaGlobalChunks.forEach((chunkHtml, idx) => {
-    const sInicio = Math.max(0, (idx * tiempoPorBloque) - offsetAdelanto);
-    const sFin = Math.min(realAudioDuration, ((idx + 1) * tiempoPorBloque) - offsetAdelanto + 0.1);
-
-    todosLosSubtitulos.push({
-      uid: `sub-global-${idx}`,
-      inicio: sInicio,
-      fin: Math.max(sInicio + 0.25, sFin),
-      html: chunkHtml
-    });
-  });
-
   const escenasProcesadas = escenasOriginales.map((esc, idx) => {
-    const inicioEscena = esc.inicio * timeScale;
-    const finEscena = esc.fin * timeScale;
-    const arte = seleccionarArteDinamico(esc, idx);
     let svgInterno = '';
 
-    if (arte.tipo === 'diagrama') {
-      svgInterno = `<g class="layer-main">${catalogo[arte.diag]}</g>`;
+    // Si el guionista eligió un diagrama, lo montamos directamente
+    if (esc.diagrama && catalogo[esc.diagrama]) {
+      svgInterno = `<g class="layer-main">${catalogo[esc.diagrama]}</g>`;
     } else {
-      svgInterno += `<g class="layer-body">${catalogo[arte.cuerpo]}</g>`;
-      svgInterno += `<g class="layer-face">${catalogo[arte.cara]}</g>`;
-      if (arte.prop && catalogo[arte.prop]) {
-        svgInterno += `<g class="layer-prop">${catalogo[arte.prop]}</g>`;
-      }
+      // Si no, montamos el stickman usando exactamente las piezas que indicó la IA
+      const cuerpoKey = (esc.cuerpo && catalogo[esc.cuerpo]) ? esc.cuerpo : 'cuerpo_base_quieto';
+      const caraKey = (esc.cara && catalogo[esc.cara]) ? esc.cara : 'cara_duda';
+      const propKey = (esc.prop && catalogo[esc.prop]) ? esc.prop : null;
+
+      if (catalogo[cuerpoKey]) svgInterno += `<g class="layer-body">${catalogo[cuerpoKey]}</g>`;
+      if (catalogo[caraKey]) svgInterno += `<g class="layer-face">${catalogo[caraKey]}</g>`;
+      if (propKey && catalogo[propKey]) svgInterno += `<g class="layer-prop">${catalogo[propKey]}</g>`;
     }
 
+    // Inyectar textos dinámicos si el SVG del catálogo los requiere
     const subTexto = esc.subtitulo || '';
     const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim().toUpperCase());
     const t1 = esc.texto_1 || matchesDestacados[0] || 'REALIDAD';
@@ -183,10 +70,8 @@ async function main() {
     return {
       ...esc,
       id: idx,
-      inicio: inicioEscena,
-      fin: finEscena,
       svgInterno,
-      esDiagrama: arte.tipo === 'diagrama',
+      esDiagrama: !!esc.diagrama,
       plano: planoElegido
     };
   });
@@ -235,7 +120,7 @@ async function main() {
       .scene {
         position: absolute; inset: 0;
         display: flex; justify-content: center; align-items: center;
-        padding-bottom: 230px; opacity: 0; z-index: 10;
+        opacity: 0; z-index: 10;
       }
       .scene-inner {
         display: flex; justify-content: center; align-items: center;
@@ -249,25 +134,6 @@ async function main() {
       .stroke-white { stroke: #ffffff; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,255,255,0.35)); }
       .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
       .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
-
-      .captions-box {
-        position: absolute; bottom: 130px; left: 5%; width: 90%;
-        text-align: center; z-index: 25; height: 180px;
-        display: flex; align-items: center; justify-content: center;
-      }
-      .caption {
-        position: absolute;
-        display: none;
-        font-size: 54px; font-weight: 900; color: #ffffff;
-        text-transform: uppercase; line-height: 1.22;
-        text-shadow: 0 10px 30px rgba(0,0,0,0.95), 0 5px 0 #000;
-        width: 100%; max-width: 660px;
-      }
-      .caption.active-caption {
-        display: block;
-      }
-      .highlight-red { color: #ff2a5f; text-shadow: 0 0 25px rgba(255, 42, 95, 0.95), 0 5px 0 #000; }
-      .highlight-yellow { color: #ffd000; text-shadow: 0 0 25px rgba(255, 208, 0, 0.95), 0 5px 0 #000; }
     </style>
   </head>
   <body>
@@ -286,15 +152,8 @@ async function main() {
       `).join('')}
     </div>
 
-    <div class="captions-box">
-      ${todosLosSubtitulos.map(sub => `
-        <div class="caption" id="${sub.uid}">${sub.html}</div>
-      `).join('')}
-    </div>
-
     <script>
-      const escenas = ${JSON.stringify(escenasProcesadas.map(e => ({ id: e.id, inicio: e.inicio, fin: e.fin, esDiagrama: e.esDiagrama })))};
-      const subtitulos = ${JSON.stringify(todosLosSubtitulos)};
+      const escenas = ${JSON.stringify(escenasProcesadas)};
       const duracionTotal = ${duracionTotal};
 
       document.querySelectorAll('.scene svg').forEach(svg => {
@@ -323,19 +182,6 @@ async function main() {
         
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
-
-        subtitulos.forEach(sub => {
-          const subEl = document.getElementById(sub.uid);
-          if (t >= sub.inicio && t < sub.fin) {
-            subEl.classList.add('active-caption');
-            const subLocalT = t - sub.inicio;
-            const popProgress = Math.min(1, subLocalT / 0.12);
-            const subScale = 0.78 + 0.22 * easeOutBack(popProgress);
-            subEl.style.transform = 'scale(' + subScale + ')';
-          } else {
-            subEl.classList.remove('active-caption');
-          }
-        });
 
         escenas.forEach((e, idx) => {
           const sc = document.getElementById('scene-' + e.id);
