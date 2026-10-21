@@ -4,11 +4,16 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con corrección de desfase progresivo...');
+  console.log('🚀 Iniciando motor de renderizado universal v4...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
   const claves = Object.keys(catalogo);
+
+  const carasDisponibles = claves.filter(k => k.startsWith('cara_'));
+  const cuerposDisponibles = claves.filter(k => k.startsWith('cuerpo_'));
+  const propsDisponibles = claves.filter(k => k.startsWith('prop_'));
+  const diagsDisponibles = claves.filter(k => k.startsWith('diag_'));
 
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio.mp3', Buffer.from(audioBase64, 'base64'));
@@ -20,109 +25,57 @@ async function main() {
   const totalFrames = Math.ceil(duracionTotal * fps);
 
   // ============================================================================
-  // 1. MOTOR DE DIRECCIÓN DE ARTE (Diagramas y Stickmans contextuales)
+  // 1. SELECTOR UNIVERSAL DE ARTE (Lee directamente lo que pide n8n)
   // ============================================================================
-  const usadosDiag = new Set();
-
-  function resolverArteEscena(esc, idx) {
-    const sub = (esc.subtitulo || '').toLowerCase();
-
-    if (esc.diagrama && catalogo[esc.diagrama]) {
-      usadosDiag.add(esc.diagrama);
-      return { tipo: 'diagrama', diag: esc.diagrama };
+  function obtenerPiezaSegura(nombre, listaStock, tipoPrefijo, fallbackIdx) {
+    if (nombre && catalogo[nombre]) return nombre;
+    if (nombre) {
+      const limpia = nombre.toLowerCase().trim();
+      const match = listaStock.find(k => k.toLowerCase().includes(limpia) || limpia.includes(k.toLowerCase()));
+      if (match) return match;
     }
-
-    const reglasDiagramas = [
-      { regex: /dos fotos|dos retratos|elegir.*entre|compar|vs|más atractiv/, diag: 'diag_comparacion_vs', t1: 'FOTO A', t2: 'FOTO B' },
-      { regex: /prestidigitaci|truco|secreto|intercambi|cambiaron|dos puertas/, diag: 'diag_dos_puertas', t1: 'ELEGIDA', t2: 'TRAMPA' },
-      { regex: /\d+\s*%|por ciento|estadístic|mayoría|notó el/, diag: 'diag_diana_foco', t1: 'NO LO NOTÓ' },
-      { regex: /lógica.*emoci|excusas|justific|pasión|coherencia/, diag: 'diag_cerebro_dual' },
-      { regex: /compras|votos|opiniones|rebaño|todos los días|a diario/, diag: 'diag_efecto_rebano' },
-      { regex: /azar|automátic|espectador|sin pensar/, diag: 'diag_piloto_automatico', t1: 'PILOTO AUTO' },
-      { regex: /precio|descuento|oferta|caro|barato/, diag: 'diag_ancla_precio', t1: 'PRECIO ANCLA' },
-      { regex: /señuelo|tres opciones/, diag: 'diag_3_opciones_senuelo', t1: 'A', t2: 'B', t3: 'C' },
-      { regex: /iceberg|oculto|subconsciente/, diag: 'diag_iceberg', t1: 'TÚ CREES', t2: 'REALIDAD' },
-      { regex: /laberinto|salida|atrapad/, diag: 'diag_laberinto_mente' }
-    ];
-
-    for (const r of reglasDiagramas) {
-      if (r.regex.test(sub) && catalogo[r.diag] && !usadosDiag.has(r.diag)) {
-        usadosDiag.add(r.diag);
-        return { tipo: 'diagrama', diag: r.diag, t1: r.t1, t2: r.t2, t3: r.t3 };
-      }
-    }
-
-    let cuerpo = (esc.cuerpo && catalogo[esc.cuerpo]) ? esc.cuerpo : null;
-    let cara = (esc.cara && catalogo[esc.cara]) ? esc.cara : null;
-    let prop = (esc.prop && catalogo[esc.prop]) ? esc.prop : null;
-
-    if (/cerebro|mente|inventa|excusa/.test(sub)) {
-      cuerpo = cuerpo || 'cuerpo_rascando_cabeza';
-      cara = 'cara_cerebro_visible';
-      prop = 'prop_interrogaciones';
-    } else if (/dueño|control|espectador|enga|manipul|hackear/.test(sub)) {
-      cuerpo = 'cuerpo_atrapado_hilos';
-      cara = 'cara_hipnotizado';
-      prop = 'prop_cruceta_marioneta';
-    } else if (/ceguera|ciego|no notó|sin ver/.test(sub)) {
-      cuerpo = 'cuerpo_caminando_ciego';
-      cara = 'cara_vendada';
-      prop = 'prop_interrogaciones';
-    } else if (/rechazad|falso|secreto|truco/.test(sub)) {
-      cuerpo = 'cuerpo_sosteniendo_objeto';
-      cara = 'cara_sonrisa_falsa';
-      prop = 'prop_mascara_feliz';
-    } else if (/compra|dinero|gasto/.test(sub)) {
-      cuerpo = 'cuerpo_sosteniendo_objeto';
-      cara = 'cara_ambicion';
-      prop = 'prop_bolsa_dinero';
-    } else if (/estudio|científic|experimento|investig/.test(sub)) {
-      cuerpo = 'cuerpo_hablando_pizarra';
-      cara = 'cara_gafas_intelectual';
-      prop = 'prop_lupa';
-    } else if (/despertar|sígueme|solución|verdad/.test(sub)) {
-      cuerpo = 'cuerpo_victoria';
-      cara = 'cara_eureka';
-      prop = 'prop_bombilla';
-    }
-
-    if (!cuerpo) cuerpo = 'cuerpo_indeciso_dividido';
-    if (!cara) cara = 'cara_duda';
-
-    return { tipo: 'stickman', cuerpo, cara, prop };
+    // Rotativo inteligente de respaldo si n8n no especificó este campo en la escena
+    return listaStock[(fallbackIdx * 2) % listaStock.length] || null;
   }
 
   // ============================================================================
-  // 2. PROCESAR ESCENAS Y SUBTÍTULOS CON COMPENSACIÓN DE RETRASO
+  // 2. PROCESAR ESCENAS Y SUBTÍTULOS ADAPTADOS AL NUEVO PAYLOAD
   // ============================================================================
   const todosLosSubtitulos = [];
-  const totalEscenas = escenas.length;
 
   const escenasProcesadas = escenas.map((esc, idx) => {
     const subTexto = esc.subtitulo || '';
-    const arte = resolverArteEscena(esc, idx);
     let svgInterno = '';
 
-    if (arte.tipo === 'diagrama') {
-      svgInterno = `<g class="layer-main">${catalogo[arte.diag]}</g>`;
+    // Si n8n solicita un diagrama específico y existe, lo usamos
+    if (esc.diagrama && catalogo[esc.diagrama]) {
+      console.log(`🎬 Escena ${idx} [DIAGRAMA]: ${esc.diagrama}`);
+      svgInterno = `<g class="layer-main">${catalogo[esc.diagrama]}</g>`;
     } else {
-      svgInterno += `<g class="layer-body">${catalogo[arte.cuerpo]}</g>`;
-      svgInterno += `<g class="layer-face">${catalogo[arte.cara]}</g>`;
-      if (arte.prop && catalogo[arte.prop]) {
-        svgInterno += `<g class="layer-prop">${catalogo[arte.prop]}</g>`;
-      }
+      // Si no, montamos el stickman modular utilizando lo que mandó n8n o rotando stock
+      const cuerpoKey = obtenerPiezaSegura(esc.cuerpo, cuerposDisponibles, 'cuerpo', idx);
+      const caraKey = obtenerPiezaSegura(esc.cara, carasDisponibles, 'cara', idx);
+      const propKey = obtenerPiezaSegura(esc.prop, propsDisponibles, 'prop', idx);
+
+      console.log(`🎬 Escena ${idx} [STICKMAN]: ${cuerpoKey} + ${caraKey} + ${propKey || 'sin_prop'}`);
+
+      if (cuerpoKey && catalogo[cuerpoKey]) svgInterno += `<g class="layer-body">${catalogo[cuerpoKey]}</g>`;
+      if (caraKey && catalogo[caraKey]) svgInterno += `<g class="layer-face">${catalogo[caraKey]}</g>`;
+      if (propKey && catalogo[propKey]) svgInterno += `<g class="layer-prop">${catalogo[propKey]}</g>`;
     }
 
+    // Rellenar variables de texto dinámicas si el SVG las requiere
     const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim().toUpperCase());
-    const t1 = esc.texto_1 || arte.t1 || matchesDestacados[0] || 'REALIDAD';
-    const t2 = esc.texto_2 || arte.t2 || matchesDestacados[1] || 'ILUSIÓN';
-    const t3 = esc.texto_3 || arte.t3 || matchesDestacados[2] || 'SESGO';
+    const t1 = esc.texto_1 || matchesDestacados[0] || 'OPCIÓN A';
+    const t2 = esc.texto_2 || matchesDestacados[1] || 'OPCIÓN B';
+    const t3 = esc.texto_3 || matchesDestacados[2] || 'SESGO';
 
     svgInterno = svgInterno
       .replace(/\{\{TEXTO_1\}\}/g, t1)
       .replace(/\{\{TEXTO_2\}\}/g, t2)
       .replace(/\{\{TEXTO_3\}\}/g, t3);
 
+    // Formateo de subtítulos conservando colores de énfasis (**) y (*)
     let enRojo = false;
     let enAmarillo = false;
     const palabrasCrudas = subTexto.trim().split(/\s+/);
@@ -151,38 +104,35 @@ async function main() {
       subChunks.push(palabrasColoreadas.slice(i, i + chunkSize).join(' '));
     }
 
-    // Factor de corrección progresiva: elimina el retraso acumulativo hacia el final del vídeo[cite: 16]
-    const driftCorrection = 1.0 - (idx / Math.max(1, totalEscenas)) * 0.06;
-    const duracionEscena = (esc.fin - esc.inicio) * driftCorrection;
-    const tiempoPorChunk = duracionEscena / subChunks.length;
-    const offset = 0.55;
+    const duracionEscena = (esc.fin - esc.inicio);
+    const tiempoPorChunk = duracionEscena / Math.max(1, subChunks.length);
+    const offset = 0.45; // Sincronización precisa con el audio
 
     subChunks.forEach((chunkHtml, cIdx) => {
-      const baseTime = esc.inicio * driftCorrection;
-      const sInicio = Math.max(0, baseTime + (cIdx * tiempoPorChunk) - offset);
-      const sFin = (cIdx === subChunks.length - 1) ? (baseTime + duracionEscena + 0.3 - offset) : (sInicio + tiempoPorChunk);
+      const sInicio = Math.max(0, esc.inicio + (cIdx * tiempoPorChunk) - offset);
+      const sFin = (cIdx === subChunks.length - 1) ? (esc.fin + 0.2 - offset) : (sInicio + tiempoPorChunk);
 
       todosLosSubtitulos.push({
         uid: `sub-${idx}-${cIdx}`,
         inicio: sInicio,
-        fin: sFin,
+        fin: Math.max(sInicio + 0.2, sFin),
         html: chunkHtml
       });
     });
 
     const planosRotativos = ['medio', 'general', 'primer_plano', 'medio'];
-    const planoElegido = (arte.tipo === 'diagrama') ? 'general' : (esc.plano || planosRotativos[idx % planosRotativos.length]);
+    const planoElegido = esc.plano || planosRotativos[idx % planosRotativos.length];
 
     return {
       ...esc,
       id: idx,
       svgInterno,
-      esDiagrama: arte.tipo === 'diagrama',
+      esDiagrama: !!esc.diagrama,
       plano: planoElegido
     };
   });
 
-  // Evitar solapamientos y asegurar lectura completa al final
+  // Prevención estricta de solapamientos entre bloques de texto
   for (let i = 0; i < todosLosSubtitulos.length - 1; i++) {
     if (todosLosSubtitulos[i].fin > todosLosSubtitulos[i + 1].inicio) {
       todosLosSubtitulos[i].fin = todosLosSubtitulos[i + 1].inicio;
@@ -325,7 +275,7 @@ async function main() {
         const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
-        // Renderizado sincronizado de subtítulos con corrección temporal acumulativa
+        // Renderizado de subtítulos sincronizados al milisegundo
         subtitulos.forEach(sub => {
           const subEl = document.getElementById(sub.uid);
           if (t >= sub.inicio && t < sub.fin) {
