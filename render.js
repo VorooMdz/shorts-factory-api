@@ -20,7 +20,7 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   }
 
   const cleanRedundant = (str) => str
-    .replace(/\(\s*(señuelo\vert{}ganador\vert{}trampa\vert{}premio)\s*\)/gi, '')
+    .replace(/\(\s*(señuelo|ganador|trampa|premio)\s*\)/gi, '')
     .replace(/\b(vs\.?|versus)\b/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -229,25 +229,27 @@ function buildSubtitleChunks(escenas, alignmentData) {
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado Viral v2 (Audio Dinámico + Subtítulos Anti-Solapamiento)...');
+  console.log('🚀 Iniciando motor de renderizado Viral (SVGs Intactos + Audio/Música Blindados)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
   if (Array.isArray(payload) && payload.length > 0) payload = payload[0];
   if (payload.json) payload = payload.json;
 
-  // 1. Guardar MP3 original y limpiar silencios muertos para dar ritmo de Short viral
-  const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
-  fs.writeFileSync('audio_raw.mp3', Buffer.from(audioBase64, 'base64'));
+  // 1. Extraer y verificar audio Base64 de ElevenLabs
+  const rawBase64 = (payload.audio_base64 || '').replace(/^data:audio\/\w+;base64,/, '').trim();
+  if (!rawBase64 || rawBase64.length < 100) {
+    throw new Error('❌ CRÍTICO: payload.audio_base64 llegó vacío desde n8n. Revisa la salida de ElevenLabs.');
+  }
+  fs.writeFileSync('audio_raw.mp3', Buffer.from(rawBase64, 'base64'));
+  console.log(`📦 Audio MP3 decodificado correctamente (${fs.statSync('audio_raw.mp3').size} bytes).`);
 
   const hasExactTimestamps = !!(payload.alignment && payload.alignment.characters);
 
   if (hasExactTimestamps) {
-    // Si hay timestamps exactos de ElevenLabs, respetamos la línea temporal exacta del audio
-    execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'ignore' });
+    execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'inherit' });
   } else {
-    // Si no hay timestamps, recortamos silencios muertos (>0.22s) y aceleramos un 4% para máxima retención
-    execSync('ffmpeg -y -i audio_raw.mp3 -af "silenceremove=stop_periods=-1:stop_duration=0.22:stop_threshold=-38dB,atempo=1.04,apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'ignore' });
+    execSync('ffmpeg -y -i audio_raw.mp3 -af "silenceremove=stop_periods=-1:stop_duration=0.22:stop_threshold=-38dB,atempo=1.04,apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'inherit' });
   }
 
   // ============================================================================
@@ -274,24 +276,44 @@ async function main() {
   const duracionExactaVideo = totalFrames / fps;
 
   // ============================================================================
-  // 2.5 DISEÑO SONORO AUTOMÁTICO (Colchón Dark Ambient + Pulso de Tensión)
+  // 2.5 MEZCLA DE MÚSICA DE FONDO EN 2 PASOS SEGUROS (A prueba de fallos en Linux)
   // ============================================================================
   try {
-    console.log('🎵 Generando colchón musical Dark Ambient procedimental para subir retención...');
-    // Si el usuario sube algún día un bg_music.mp3 al repo, lo usa; si no, sintetiza un dron oscuro psicologico
-    if (fs.existsSync('bg_music.mp3')) {
+    const bgMusicPath = path.resolve('bg_music.mp3');
+    if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
+      console.log(`🎵 bg_music.mp3 detectado (${fs.statSync(bgMusicPath).size} bytes). Preparando pista musical...`);
+      const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
+
+      // Paso A: Convertir bg_music.mp3 a WAV estéreo 44.1kHz de la duración exacta del vídeo con volumen al 12%
       execSync(
-        `ffmpeg -y -i voice_clean.wav -stream_loop -1 -i bg_music.mp3 -filter_complex "[0:a]volume=1.0[v];[1:a]volume=0.08,afade=t=out:st=${Math.max(0, duracionExactaVideo - 1.5).toFixed(2)}:d=1.5[bg];[v][bg]amix=inputs=2:duration=first:dropout_transition=0" -c:a pcm_s16le audio.wav`,
-        { stdio: 'ignore' }
+        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.12,afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        { stdio: 'inherit' }
       );
+
+      // Paso B: Mezclar los dos WAVs gemelos (voice_clean.wav + music_clean.wav) sin pérdida de volumen (normalize=0)
+      try {
+        execSync(
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          { stdio: 'inherit' }
+        );
+      } catch (amixErr) {
+        // Fallback por si la versión de FFmpeg de Ubuntu es antigua y no soporta normalize=0
+        execSync(
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.0[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          { stdio: 'inherit' }
+        );
+      }
+
+      if (!fs.existsSync('audio.wav') || fs.statSync('audio.wav').size < 1000) {
+        throw new Error('El archivo audio.wav mezclado quedó vacío.');
+      }
+      console.log('✅ ¡Mezcla de voz + música completada con éxito!');
     } else {
-      execSync(
-        `ffmpeg -y -i voice_clean.wav -f lavfi -i "aevalsrc='0.032*sin(2*PI*55*t)+0.020*sin(2*PI*110*t)+0.012*sin(2*PI*82.4*t)*(1+0.4*sin(2*PI*1.8*t))':s=44100:d=${duracionExactaVideo.toFixed(3)}" -filter_complex "[0:a]volume=1.05[v];[1:a]lowpass=f=260,afade=t=in:st=0:d=0.4,afade=t=out:st=${Math.max(0, duracionExactaVideo - 1.2).toFixed(2)}:d=1.2[bg];[v][bg]amix=inputs=2:duration=first:dropout_transition=0" -c:a pcm_s16le audio.wav`,
-        { stdio: 'ignore' }
-      );
+      console.log('⚠️ No se encontró bg_music.mp3 válido. Usando voz limpia.');
+      fs.copyFileSync('voice_clean.wav', 'audio.wav');
     }
   } catch (audioErr) {
-    console.warn('⚠️ Fallback a voz limpia sin sintetizador:', audioErr.message);
+    console.warn('⚠️ Error al mezclar bg_music.mp3, garantizando audio con voz limpia:', audioErr.message);
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
 
@@ -444,6 +466,7 @@ async function main() {
         stroke-linejoin: round;
       }
 
+      /* CLASES CRÍTICAS PARA QUE LOS SVGS NUNCA SALGAN NEGROS */
       .stroke-white { stroke: #ffffff; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,255,255,0.35)); }
       .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
       .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
@@ -468,7 +491,7 @@ async function main() {
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 14px 24px; /* Espaciado horizontal ampliado para evitar palabras pegadas */
+        gap: 14px 24px;
         text-align: center;
         padding: 18px 28px;
         background: rgba(8, 8, 16, 0.78);
@@ -479,7 +502,7 @@ async function main() {
       }
       .sub-word {
         display: inline-block;
-        margin: 0 3px; /* Margen extra de seguridad al escalar */
+        margin: 0 3px;
         font-size: 39px;
         font-weight: 900;
         text-transform: uppercase;
@@ -598,7 +621,7 @@ async function main() {
       let lastChunkIdx = -2;
 
       window.setFrameData = function(frameIdx, t) {
-        // Barra de progreso psicológica no lineal (avanza rápido al principio para retener)
+        // Barra de progreso psicológica no lineal
         const linearRatio = (frameIdx + 1) / totalFrames;
         const psychPct = Math.pow(linearRatio, 0.62) * 100;
         document.getElementById('pbar').style.width = Math.min(100, psychPct) + '%';
@@ -606,7 +629,7 @@ async function main() {
         const glowScale = 1 + Math.sin(t * 4.2) * 0.18;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
-        // 1. RENDERIZADO DE ESCENA VISUAL (Animación más viva y rápida)
+        // 1. RENDERIZADO DE ESCENA VISUAL
         let activeIdx = escenas.findIndex((e, idx) => {
           if (idx === escenas.length - 1) return t >= e.inicio;
           return t >= e.inicio && t < e.fin;
@@ -625,7 +648,6 @@ async function main() {
             const entryProgress = Math.min(1, localT / 0.26);
             let scale = 0.42 + 0.58 * easeOutBack(entryProgress);
 
-            // Zoom dinámico progresivo durante toda la escena (efecto Ken Burns activo)
             scale *= (1 + (localT / durEscena) * 0.08);
 
             if (localT > durEscena * 0.48) {
@@ -745,13 +767,13 @@ async function main() {
 
   await browser.close();
 
-  console.log('🔊 Ensamblando MP4 final sincronizado al milisegundo...');
+  console.log('🔊 Ensamblando MP4 final con mapeo explícito de vídeo y audio...');
   execSync(
-    `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
+    `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con subtítulos limpios, ritmo rápido y diseño sonoro!');
+  console.log('✅ ¡Vídeo output.mp4 generado con SVGs intactos, voz y música de fondo!');
 }
 
 main().catch(err => {
