@@ -3,6 +3,7 @@ import sys
 import json
 import requests
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -80,13 +81,13 @@ def upload_video():
     print(f"📌 TÍTULO DETECTADO: --> {titulo_final} <--")
 
     # =========================================================================
-    # PASO 1: ENVIAR EL VÍDEO A TELEGRAM PRIMERO (Pase lo que pase con YouTube)
+    # PASO 1: ENVIAR EL VÍDEO A TELEGRAM PRIMERO
     # =========================================================================
     caption_telegram = f"🎬 ¡Short renderizado!\n📌 Título: {titulo_final}"
     send_telegram_video(video_path, caption_telegram, telegram_token, telegram_chat_id)
 
     # =========================================================================
-    # PASO 2: INTENTAR LA SUBIDA Y PROGRAMACIÓN EN YOUTUBE
+    # PASO 2: INTENTAR LA SUBIDA Y PROGRAMACIÓN EN YOUTUBE (A las 18:00 de España)
     # =========================================================================
     try:
         credentials = Credentials(
@@ -99,12 +100,17 @@ def upload_video():
         
         youtube = build("youtube", "v3", credentials=credentials)
         
-        now = datetime.now(timezone.utc)
-        target_time = now.replace(hour=18, minute=0, second=0, microsecond=0)
-        if now >= target_time:
-            target_time = target_time + timedelta(days=1)
+        # 🕒 Calcular las 18:00 hora de España (Madrid) de forma automática
+        madrid_tz = ZoneInfo("Europe/Madrid")
+        now_madrid = datetime.now(madrid_tz)
         
-        publish_at_str = target_time.isoformat().replace("+00:00", "Z")
+        target_madrid = now_madrid.replace(hour=18, minute=0, second=0, microsecond=0)
+        if now_madrid >= target_madrid:
+            target_madrid = target_madrid + timedelta(days=1)
+        
+        # Convertir la hora de Madrid a UTC para que YouTube la entienda correctamente
+        target_utc = target_madrid.astimezone(timezone.utc)
+        publish_at_str = target_utc.isoformat().replace("+00:00", "Z")
         
         body = {
             "snippet": {
@@ -122,7 +128,7 @@ def upload_video():
         
         media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
         
-        print(f"🚀 Subiendo vídeo a YouTube y programándolo para: {publish_at_str}...")
+        print(f"🚀 Subiendo vídeo a YouTube y programándolo para las 18:00 hora peninsular ({publish_at_str} UTC)...")
         request = youtube.videos().insert(
             part="snippet,status",
             body=body,
@@ -136,16 +142,14 @@ def upload_video():
                 print(f"📥 Progreso de subida: {int(status.progress() * 100)}%")
                 
         video_id = response.get('id')
-        success_msg = f"✅ ¡Vídeo subido y programado con éxito en YouTube a las 18:00!\n🔗 https://youtu.be/{video_id}"
+        success_msg = f"✅ ¡Vídeo subido y programado con éxito en YouTube a las 18:00 (España)!\n🔗 https://youtu.be/{video_id}"
         print(success_msg)
         send_telegram_message(success_msg, telegram_token, telegram_chat_id)
 
     except Exception as yt_err:
-        # Si YouTube falla (límite superado, token expirado, etc.), informamos pero no bloqueamos
-        error_msg = f"⚠️ Aviso: El vídeo se ha guardado en Telegram, pero no se pudo subir automáticamente a YouTube.\n\nMotivo: {yt_err}\n\n💡 Súbelo a mano desde tu móvil o PC con el archivo que acabas de recibir."
+        error_msg = f"⚠️ Aviso: El vídeo se ha guardado en Telegram, pero la subida a YouTube falló.\n\nMotivo: {yt_err}"
         print(error_msg)
         send_telegram_message(error_msg, telegram_token, telegram_chat_id)
-        # Salimos con código 0 para que el workflow no casque de forma abrupta
         sys.exit(0)
 
 if __name__ == "__main__":
