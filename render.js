@@ -32,8 +32,8 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   return [raw1.toUpperCase(), raw2.toUpperCase(), raw3.toUpperCase()];
 }
 
-// 2. Motor de alineación fonética de subtítulos (Sincronización por peso de sílabas y pausas)
-function buildSubtitleChunks(escenas) {
+// 2. Motor de alineación de subtítulos (Soporta Timestamps nativos de ElevenLabs + Fallback Fonético)
+function buildSubtitleChunks(escenas, alignmentData) {
   const stopWords = new Set([
     'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
     'CON', 'NO', 'UNA', 'SU', 'PARA', 'ES', 'AL', 'LO', 'COMO', 'MAS', 'MÁS',
@@ -63,46 +63,80 @@ function buildSubtitleChunks(escenas) {
     return tokens;
   });
 
-  // Función que calcula lo que tarda la voz humana/ElevenLabs en pronunciar cada palabra + su pausa
+  // Intentar extraer tiempos exactos por palabra si ElevenLabs envió `alignment`
+  let elevenWords = [];
+  if (alignmentData && Array.isArray(alignmentData.characters) && Array.isArray(alignmentData.character_start_times_seconds)) {
+    const chars = alignmentData.characters;
+    const starts = alignmentData.character_start_times_seconds;
+    const ends = alignmentData.character_end_times_seconds || starts;
+    let curWord = '';
+    let wStart = null;
+    let wEnd = null;
+    for (let i = 0; i < chars.length; i++) {
+      const ch = chars[i];
+      if (/\s/.test(ch)) {
+        if (curWord.length > 0) {
+          elevenWords.push({ word: curWord, start: wStart, end: wEnd });
+          curWord = '';
+          wStart = null;
+        }
+      } else {
+        if (wStart === null) wStart = starts[i];
+        wEnd = ends[i];
+        curWord += ch;
+      }
+    }
+    if (curWord.length > 0) {
+      elevenWords.push({ word: curWord, start: wStart, end: wEnd });
+    }
+  }
+
   function calcTokenWeight(tk) {
     const clean = tk.text.replace(/[.,;!?¡¿"«»()]/g, '');
-    let w = Math.max(2, clean.length); // Palabras largas duran más
-    if (/[,;]/.test(tk.text)) w += 3.2; // Pausa breve en coma
-    if (/[.!?]/.test(tk.text)) w += 5.0; // Pausa larga en punto o interrogación
+    let w = Math.max(2, clean.length);
+    if (/[,;]/.test(tk.text)) w += 2.6;
+    if (/[.!?]/.test(tk.text)) w += 4.0;
     return w;
   }
 
-  // Calculamos el inicio y fin real de cada escena basándonos en el peso fonético real del guion completo
-  // (Esto corrige cualquier desfase si la IA estimó mal los segundos de alguna frase larga o corta)
-  const totalDuration = escenas.length > 0 ? escenas[escenas.length - 1].fin : 35;
+  const totalDuration = escenas.length > 0 ? escenas[escenas.length - 1].fin : 28;
   const sceneWeights = sceneTokensList.map(tokens => {
     const sum = tokens.reduce((acc, tk) => acc + calcTokenWeight(tk), 0);
-    return Math.max(4, sum);
+    return Math.max(3, sum);
   });
   const totalScriptWeight = sceneWeights.reduce((a, b) => a + b, 0);
 
   let cumulativeWeight = 0;
+  let globalWordIdx = 0;
   const allChunks = [];
 
   escenas.forEach((esc, idx) => {
     const tokens = sceneTokensList[idx];
     const sWeight = sceneWeights[idx];
 
-    // Mezclamos un 75% de peso fonético exacto + 25% de la marca de la IA para mantener anclaje perfecto
     const phoneticStart = (cumulativeWeight / totalScriptWeight) * totalDuration;
     cumulativeWeight += sWeight;
     const phoneticEnd = (cumulativeWeight / totalScriptWeight) * totalDuration;
 
-    const sceneStart = (idx === 0) ? 0 : (phoneticStart * 0.75 + esc.inicio * 0.25);
-    const sceneEnd = (idx === escenas.length - 1) ? totalDuration : (phoneticEnd * 0.75 + esc.fin * 0.25);
+    // Si tenemos timestamps de ElevenLabs, anclamos el inicio y fin de la escena a las palabras reales
+    let sceneStart = (idx === 0) ? 0 : (phoneticStart * 0.80 + esc.inicio * 0.20);
+    let sceneEnd = (idx === escenas.length - 1) ? totalDuration : (phoneticEnd * 0.80 + esc.fin * 0.20);
 
-    // Sincronizamos también los tiempos de la propia escena visual con este cálculo fonético
+    if (elevenWords.length > 0 && tokens.length > 0) {
+      const firstW = elevenWords[Math.min(globalWordIdx, elevenWords.length - 1)];
+      const lastW = elevenWords[Math.min(globalWordIdx + tokens.length - 1, elevenWords.length - 1)];
+      if (firstW && lastW) {
+        sceneStart = (idx === 0) ? 0 : Math.max(0, firstW.start - 0.05);
+        sceneEnd = (idx === escenas.length - 1) ? totalDuration : Math.min(totalDuration, lastW.end + 0.10);
+      }
+    }
+
     esc.inicio = sceneStart;
     esc.fin = sceneEnd;
 
     if (tokens.length === 0) return;
 
-    // Agrupar en bloques dinámicos de 2 a 4 palabras (cortando siempre si hay signo de puntuación)
+    // Agrupar en bloques ágiles de 2 a 3 palabras (máx 18 caracteres por línea para evitar solapamientos)
     const groups = [];
     let currentGroup = [];
     let currentChars = 0;
@@ -112,14 +146,14 @@ function buildSubtitleChunks(escenas) {
       currentChars += tk.text.length;
       const hasPunct = /[.,;!?]/.test(tk.text);
 
-      if (currentGroup.length >= 4 || currentChars >= 20 || (hasPunct && currentGroup.length >= 2)) {
+      if (currentGroup.length >= 3 || currentChars >= 18 || (hasPunct && currentGroup.length >= 2)) {
         groups.push(currentGroup);
         currentGroup = [];
         currentChars = 0;
       }
     });
     if (currentGroup.length > 0) {
-      if (groups.length > 0 && currentGroup.length === 1 && groups[groups.length - 1].length < 4) {
+      if (groups.length > 0 && currentGroup.length === 1 && groups[groups.length - 1].length < 3) {
         groups[groups.length - 1].push(currentGroup[0]);
       } else {
         groups.push(currentGroup);
@@ -144,23 +178,30 @@ function buildSubtitleChunks(escenas) {
       }
     });
 
-    // Repartir el tiempo exacto de la escena entre sus palabras según su peso fonético
     const dur = Math.max(0.2, sceneEnd - sceneStart);
     let cursor = sceneStart;
 
     groups.forEach((g, gIdx) => {
       const gWeight = g.reduce((acc, tk) => acc + calcTokenWeight(tk), 0);
       const gDur = (gWeight / sWeight) * dur;
-      const gStart = cursor;
-      const gEnd = (gIdx === groups.length - 1) ? sceneEnd : (cursor + gDur);
+      let gStart = cursor;
+      let gEnd = (gIdx === groups.length - 1) ? sceneEnd : (cursor + gDur);
 
       let wCursor = gStart;
       const timedWords = g.map((tk, wIdx) => {
-        const wWeight = calcTokenWeight(tk);
-        const wDur = (wWeight / gWeight) * (gEnd - gStart);
-        const wStart = wCursor;
-        const wEnd = (wIdx === g.length - 1) ? gEnd : (wCursor + wDur);
-        wCursor = wEnd;
+        let wStart, wEnd;
+        if (elevenWords.length > 0 && globalWordIdx < elevenWords.length) {
+          const ew = elevenWords[globalWordIdx];
+          wStart = ew.start;
+          wEnd = ew.end;
+          globalWordIdx++;
+        } else {
+          const wWeight = calcTokenWeight(tk);
+          const wDur = (wWeight / gWeight) * (gEnd - gStart);
+          wStart = wCursor;
+          wEnd = (wIdx === g.length - 1) ? gEnd : (wCursor + wDur);
+          wCursor = wEnd;
+        }
         return {
           text: tk.text,
           highlight: tk.highlight,
@@ -168,6 +209,11 @@ function buildSubtitleChunks(escenas) {
           end: wEnd
         };
       });
+
+      if (elevenWords.length > 0 && timedWords.length > 0) {
+        gStart = timedWords[0].start;
+        gEnd = timedWords[timedWords.length - 1].end + 0.08;
+      }
 
       allChunks.push({
         start: gStart,
@@ -183,41 +229,71 @@ function buildSubtitleChunks(escenas) {
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con Subtítulos Dinámicos y Color Variable...');
+  console.log('🚀 Iniciando motor de renderizado Viral v2 (Audio Dinámico + Subtítulos Anti-Solapamiento)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
-  const payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
+  let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
+  if (Array.isArray(payload) && payload.length > 0) payload = payload[0];
+  if (payload.json) payload = payload.json;
 
-  // 1. Guardar MP3 original y convertir a WAV limpio con 0.25s de respiro final
+  // 1. Guardar MP3 original y limpiar silencios muertos para dar ritmo de Short viral
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio_raw.mp3', Buffer.from(audioBase64, 'base64'));
 
-  execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.25" -c:a pcm_s16le audio.wav', { stdio: 'ignore' });
+  const hasExactTimestamps = !!(payload.alignment && payload.alignment.characters);
+
+  if (hasExactTimestamps) {
+    // Si hay timestamps exactos de ElevenLabs, respetamos la línea temporal exacta del audio
+    execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'ignore' });
+  } else {
+    // Si no hay timestamps, recortamos silencios muertos (>0.22s) y aceleramos un 4% para máxima retención
+    execSync('ffmpeg -y -i audio_raw.mp3 -af "silenceremove=stop_periods=-1:stop_duration=0.22:stop_threshold=-38dB,atempo=1.04,apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'ignore' });
+  }
 
   // ============================================================================
-  // 2. OBTENCIÓN DE LA DURACIÓN REAL EXACTA (nk=1 sobre WAV)
+  // 2. OBTENCIÓN DE LA DURACIÓN REAL EXACTA (nk=1 sobre WAV limpio)
   // ============================================================================
-  let realAudioDuration = 35;
+  let realAudioDuration = 26;
   try {
     const probeOutput = execSync(
-      'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nk=1 audio.wav',
+      'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nk=1 voice_clean.wav',
       { encoding: 'utf8' }
     );
     const parsed = parseFloat(probeOutput.trim());
     if (!isNaN(parsed) && parsed > 0) {
       realAudioDuration = parsed;
       console.log(`🎙️ Duración real exacta medida en WAV: ${realAudioDuration.toFixed(3)}s`);
-    } else {
-      throw new Error(`Salida de ffprobe no numérica: ${probeOutput}`);
     }
   } catch (err) {
     console.error('⚠️ Fallo al medir con ffprobe, usando fallback:', err.message);
-    realAudioDuration = Number(payload.duracion_total) || 35;
+    realAudioDuration = Number(payload.duracion_total) || 26;
   }
 
   const fps = 30;
   const totalFrames = Math.ceil(realAudioDuration * fps);
   const duracionExactaVideo = totalFrames / fps;
+
+  // ============================================================================
+  // 2.5 DISEÑO SONORO AUTOMÁTICO (Colchón Dark Ambient + Pulso de Tensión)
+  // ============================================================================
+  try {
+    console.log('🎵 Generando colchón musical Dark Ambient procedimental para subir retención...');
+    // Si el usuario sube algún día un bg_music.mp3 al repo, lo usa; si no, sintetiza un dron oscuro psicologico
+    if (fs.existsSync('bg_music.mp3')) {
+      execSync(
+        `ffmpeg -y -i voice_clean.wav -stream_loop -1 -i bg_music.mp3 -filter_complex "[0:a]volume=1.0[v];[1:a]volume=0.08,afade=t=out:st=${Math.max(0, duracionExactaVideo - 1.5).toFixed(2)}:d=1.5[bg];[v][bg]amix=inputs=2:duration=first:dropout_transition=0" -c:a pcm_s16le audio.wav`,
+        { stdio: 'ignore' }
+      );
+    } else {
+      execSync(
+        `ffmpeg -y -i voice_clean.wav -f lavfi -i "aevalsrc='0.032*sin(2*PI*55*t)+0.020*sin(2*PI*110*t)+0.012*sin(2*PI*82.4*t)*(1+0.4*sin(2*PI*1.8*t))':s=44100:d=${duracionExactaVideo.toFixed(3)}" -filter_complex "[0:a]volume=1.05[v];[1:a]lowpass=f=260,afade=t=in:st=0:d=0.4,afade=t=out:st=${Math.max(0, duracionExactaVideo - 1.2).toFixed(2)}:d=1.2[bg];[v][bg]amix=inputs=2:duration=first:dropout_transition=0" -c:a pcm_s16le audio.wav`,
+        { stdio: 'ignore' }
+      );
+    }
+  } catch (audioErr) {
+    console.warn('⚠️ Fallback a voz limpia sin sintetizador:', audioErr.message);
+    fs.copyFileSync('voice_clean.wav', 'audio.wav');
+  }
 
   // ============================================================================
   // 3. SELECCIÓN DE COLOR DE ÉNFASIS ÚNICO PARA CADA VÍDEO
@@ -231,14 +307,13 @@ async function main() {
     { name: 'Violeta Eléctrico', hex: '#c77dff', glow: 'rgba(199, 125, 255, 0.75)' }
   ];
 
-  // Elegimos un color distinto en cada vídeo combinando el título y un factor aleatorio
   const seedStr = (payload.tema_titulo || '') + (payload.categoria || '') + String(Date.now());
   let hash = 0;
   for (let i = 0; i < seedStr.length; i++) {
     hash = (hash * 31 + seedStr.charCodeAt(i)) % 100000;
   }
   const chosenAccent = accentPalettes[hash % accentPalettes.length];
-  console.log(`🎨 Color de resaltado de subtítulos para este vídeo: ${chosenAccent.name} (${chosenAccent.hex})`);
+  console.log(`🎨 Color de resaltado de subtítulos: ${chosenAccent.name} (${chosenAccent.hex})`);
 
   // ============================================================================
   // 4. ESCALADO PROPORCIONAL DE ESCENAS Y GENERACIÓN DE SUBTÍTULOS
@@ -282,7 +357,7 @@ async function main() {
       .replace(/\{TEXTO_2\}/g, t2)
       .replace(/\{TEXTO_3\}/g, t3);
 
-    const planosRotativos = ['medio', 'general', 'primer_plano', 'medio'];
+    const planosRotativos = ['primer_plano', 'medio', 'general', 'primer_plano'];
     const planoElegido = esc.plano || planosRotativos[idx % planosRotativos.length];
 
     return {
@@ -296,8 +371,7 @@ async function main() {
     };
   });
 
-  // Construimos los bloques de subtítulos sincronizados fonéticamente
-  const subtitleChunks = buildSubtitleChunks(escenasProcesadas);
+  const subtitleChunks = buildSubtitleChunks(escenasProcesadas, payload.alignment);
 
   const htmlContent = `
   <!DOCTYPE html>
@@ -325,30 +399,29 @@ async function main() {
         background-size: 50px 50px;
       }
       .glow-spot {
-        position: absolute; top: 35%; left: 50%; width: 480px; height: 480px;
+        position: absolute; top: 35%; left: 50%; width: 500px; height: 500px;
         transform: translate(-50%, -50%);
-        background: radial-gradient(circle, rgba(255, 42, 95, 0.15) 0%, var(--accent-glow) 35%, transparent 70%);
-        opacity: 0.45;
+        background: radial-gradient(circle, rgba(255, 42, 95, 0.16) 0%, var(--accent-glow) 38%, transparent 70%);
+        opacity: 0.50;
         pointer-events: none; z-index: 1;
       }
       .progress-bar {
-        position: absolute; top: 0; left: 0; height: 12px;
+        position: absolute; top: 0; left: 0; height: 10px;
         background: linear-gradient(90deg, #ff2a5f, var(--accent-color)); width: 0%; z-index: 30;
-        box-shadow: 0 0 20px var(--accent-glow);
+        box-shadow: 0 0 18px var(--accent-glow);
       }
       .top-tag {
-        position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+        position: absolute; top: 58px; left: 50%; transform: translateX(-50%);
         background: rgba(255, 255, 255, 0.08); color: #e0e0f0;
-        font-size: 21px; font-weight: 900; padding: 11px 28px;
+        font-size: 20px; font-weight: 900; padding: 10px 26px;
         border-radius: 40px; letter-spacing: 2px; text-transform: uppercase;
         border: 2px solid rgba(255,255,255,0.18); white-space: nowrap;
         box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 20;
       }
 
-      /* Elevamos ligeramente la zona del dibujo para dejar espacio limpio a los subtítulos abajo */
       .scene {
         position: absolute; inset: 0;
-        padding-bottom: 210px;
+        padding-bottom: 220px;
         display: flex; justify-content: center; align-items: center;
         opacity: 0; z-index: 10;
       }
@@ -356,9 +429,9 @@ async function main() {
         display: flex; justify-content: center; align-items: center;
         will-change: transform;
       }
-      svg { width: 520px; height: 620px; overflow: visible; filter: drop-shadow(0 15px 30px rgba(0,0,0,0.85)); }
-      .plano-primer_plano svg { width: 630px; height: 750px; }
-      .plano-medio svg { width: 570px; height: 680px; }
+      svg { width: 530px; height: 630px; overflow: visible; filter: drop-shadow(0 15px 30px rgba(0,0,0,0.85)); }
+      .plano-primer_plano svg { width: 640px; height: 760px; }
+      .plano-medio svg { width: 580px; height: 690px; }
       .plano-general svg { width: 520px; height: 620px; }
 
       svg text {
@@ -376,13 +449,13 @@ async function main() {
       .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
 
       /* ======================================================================
-         ESTILOS DE SUBTÍTULOS DINÁMICOS (ESTILO VIRAL HORMOZI / SHORTS)
+         SUBTÍTULOS CORREGIDOS ANTI-SOLAPAMIENTO (ESPACIADO AMPLIO Y LIMPIO)
          ====================================================================== */
       .subtitle-container {
         position: absolute;
-        bottom: 115px;
-        left: 36px;
-        right: 36px;
+        bottom: 120px;
+        left: 32px;
+        right: 32px;
         min-height: 150px;
         display: flex;
         justify-content: center;
@@ -395,22 +468,23 @@ async function main() {
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 10px 14px;
+        gap: 14px 24px; /* Espaciado horizontal ampliado para evitar palabras pegadas */
         text-align: center;
-        padding: 16px 26px;
-        background: rgba(8, 8, 16, 0.72);
-        border: 1.5px solid rgba(255, 255, 255, 0.12);
+        padding: 18px 28px;
+        background: rgba(8, 8, 16, 0.78);
+        border: 1.5px solid rgba(255, 255, 255, 0.14);
         border-radius: 26px;
-        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.85);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.88);
         will-change: transform, opacity;
       }
       .sub-word {
         display: inline-block;
-        font-size: 40px;
+        margin: 0 3px; /* Margen extra de seguridad al escalar */
+        font-size: 39px;
         font-weight: 900;
         text-transform: uppercase;
-        letter-spacing: 0.8px;
-        line-height: 1.15;
+        letter-spacing: 1px;
+        line-height: 1.18;
         color: #ffffff;
         paint-order: stroke fill;
         -webkit-text-stroke: 7px #05050a;
@@ -422,13 +496,13 @@ async function main() {
         filter: drop-shadow(0 0 14px var(--accent-glow));
       }
       .sub-word.active {
-        transform: scale(1.13) translateY(-3px);
+        transform: scale(1.09) translateY(-3px);
       }
       .sub-word.kw.active {
-        transform: scale(1.18) translateY(-4px);
+        transform: scale(1.13) translateY(-4px);
       }
       .sub-word.future {
-        opacity: 0.48;
+        opacity: 0.45;
       }
     </style>
   </head>
@@ -457,7 +531,6 @@ async function main() {
       const subtitleChunks = ${JSON.stringify(subtitleChunks)};
       const totalFrames = ${totalFrames};
 
-      // Auto-ajuste anti-solapamiento de textos dentro de los SVGs
       document.fonts.ready.then(() => {
         document.querySelectorAll('.scene svg').forEach(svg => {
           const texts = Array.from(svg.querySelectorAll('text'));
@@ -525,13 +598,15 @@ async function main() {
       let lastChunkIdx = -2;
 
       window.setFrameData = function(frameIdx, t) {
-        const progressPct = ((frameIdx + 1) / totalFrames) * 100;
-        document.getElementById('pbar').style.width = Math.min(100, progressPct) + '%';
+        // Barra de progreso psicológica no lineal (avanza rápido al principio para retener)
+        const linearRatio = (frameIdx + 1) / totalFrames;
+        const psychPct = Math.pow(linearRatio, 0.62) * 100;
+        document.getElementById('pbar').style.width = Math.min(100, psychPct) + '%';
         
-        const glowScale = 1 + Math.sin(t * 3.5) * 0.16;
+        const glowScale = 1 + Math.sin(t * 4.2) * 0.18;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
-        // 1. RENDERIZADO DE ESCENA VISUAL
+        // 1. RENDERIZADO DE ESCENA VISUAL (Animación más viva y rápida)
         let activeIdx = escenas.findIndex((e, idx) => {
           if (idx === escenas.length - 1) return t >= e.inicio;
           return t >= e.inicio && t < e.fin;
@@ -547,49 +622,52 @@ async function main() {
             const durEscena = Math.max(0.1, e.fin - e.inicio);
             sc.style.opacity = '1';
 
-            const entryProgress = Math.min(1, localT / 0.35);
-            let scale = 0.45 + 0.55 * easeOutBack(entryProgress);
+            const entryProgress = Math.min(1, localT / 0.26);
+            let scale = 0.42 + 0.58 * easeOutBack(entryProgress);
 
-            if (localT > durEscena * 0.5) {
-              const midProgress = Math.min(1, (localT - durEscena * 0.5) / 0.25);
-              scale *= (1 + 0.09 * easeOutBack(midProgress));
+            // Zoom dinámico progresivo durante toda la escena (efecto Ken Burns activo)
+            scale *= (1 + (localT / durEscena) * 0.08);
+
+            if (localT > durEscena * 0.48) {
+              const midProgress = Math.min(1, (localT - durEscena * 0.48) / 0.22);
+              scale *= (1 + 0.08 * easeOutBack(midProgress));
             }
 
-            const floatY = Math.sin(localT * 4.5) * 10;
-            const tiltDeg = Math.sin(localT * 2.4) * (e.esDiagrama ? 1.2 : 2.2);
+            const floatY = Math.sin(localT * 5.2) * 11;
+            const tiltDeg = Math.sin(localT * 2.8) * (e.esDiagrama ? 1.4 : 2.5);
             inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
 
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
-              const delay = Math.min(0.25, dIdx * 0.03);
-              const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.45));
+              const delay = Math.min(0.18, dIdx * 0.025);
+              const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.35));
               shape.style.strokeDashoffset = String(100 * (1 - drawP));
             });
 
             const faceLayer = sc.querySelector('.layer-face');
             if (faceLayer) {
-              const faceY = Math.sin(localT * 7) * 3;
-              const faceRot = Math.sin(localT * 4.5) * 3.5;
+              const faceY = Math.sin(localT * 7.5) * 3.5;
+              const faceRot = Math.sin(localT * 5.0) * 4.0;
               faceLayer.style.transformOrigin = '100px 65px';
               faceLayer.style.transform = \`translateY(\${faceY}px) rotate(\${faceRot}deg)\`;
             }
 
             const propLayer = sc.querySelector('.layer-prop');
             if (propLayer) {
-              const propY = Math.sin(localT * 6 + 1) * 8;
-              const propScale = 1 + Math.sin(localT * 9) * 0.08;
+              const propY = Math.sin(localT * 6.5 + 1) * 9;
+              const propScale = 1 + Math.sin(localT * 9.5) * 0.09;
               propLayer.style.transformOrigin = 'center';
               propLayer.style.transformBox = 'fill-box';
               propLayer.style.transform = \`translateY(\${propY}px) scale(\${propScale})\`;
             }
 
             sc.querySelectorAll('.float').forEach(el => {
-              const fOffset = Math.sin(localT * 6) * 7;
+              const fOffset = Math.sin(localT * 6.5) * 7.5;
               el.style.transform = \`translateY(\${fOffset}px)\`;
             });
 
             sc.querySelectorAll('.pulse').forEach(el => {
-              const pScale = 1 + Math.sin(localT * 10) * 0.12;
+              const pScale = 1 + Math.sin(localT * 11) * 0.13;
               el.style.transformOrigin = 'center';
               el.style.transformBox = 'fill-box';
               el.style.transform = \`scale(\${pScale})\`;
@@ -600,7 +678,7 @@ async function main() {
           }
         });
 
-        // 2. RENDERIZADO DE SUBTÍTULOS PERFECTAMENTE ALINEADOS
+        // 2. RENDERIZADO DE SUBTÍTULOS
         let cIdx = subtitleChunks.findIndex((c, idx) => {
           if (idx === subtitleChunks.length - 1) return t >= c.start;
           return t >= c.start && t < c.end;
@@ -614,10 +692,9 @@ async function main() {
         const chunk = subtitleChunks[cIdx];
         subBox.style.opacity = '1';
 
-        // Animación pop suave al cambiar de bloque de subtítulos
         const chunkLocalT = Math.max(0, t - chunk.start);
-        const popP = Math.min(1, chunkLocalT / 0.14);
-        const boxScale = 0.88 + 0.12 * easeOutBack(popP);
+        const popP = Math.min(1, chunkLocalT / 0.12);
+        const boxScale = 0.90 + 0.10 * easeOutBack(popP);
         subBox.style.transform = \`scale(\${boxScale})\`;
 
         if (cIdx !== lastChunkIdx) {
@@ -628,7 +705,6 @@ async function main() {
           }).join('');
         }
 
-        // Resaltar y escalar exactamente la palabra que se está pronunciando en este milisegundo
         chunk.words.forEach((w, wIdx) => {
           const el = document.getElementById('sw-' + wIdx);
           if (!el) return;
@@ -675,7 +751,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con subtítulos sincronizados y color dinámico!');
+  console.log('✅ ¡Vídeo output.mp4 generado con subtítulos limpios, ritmo rápido y diseño sonoro!');
 }
 
 main().catch(err => {
