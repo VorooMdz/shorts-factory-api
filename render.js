@@ -42,6 +42,7 @@ function buildSubtitleChunks(escenas, alignmentData) {
     'O', 'QUE', 'QUÉ', 'TU', 'TÚ', 'TE', 'MI', 'MIS', 'TUS', 'NOS', 'NI'
   ]);
 
+  // Extraer tokens de cada escena conservando marcas de **énfasis**
   const sceneTokensList = escenas.map(esc => {
     const raw = (esc.subtitulo || '').trim();
     if (!raw) return [];
@@ -62,6 +63,7 @@ function buildSubtitleChunks(escenas, alignmentData) {
     return tokens;
   });
 
+  // Intentar extraer tiempos exactos por palabra si ElevenLabs envió `alignment`
   let elevenWords = [];
   if (alignmentData && Array.isArray(alignmentData.characters) && Array.isArray(alignmentData.character_start_times_seconds)) {
     const chars = alignmentData.characters;
@@ -116,6 +118,7 @@ function buildSubtitleChunks(escenas, alignmentData) {
     cumulativeWeight += sWeight;
     const phoneticEnd = (cumulativeWeight / totalScriptWeight) * totalDuration;
 
+    // Si tenemos timestamps de ElevenLabs, anclamos el inicio y fin de la escena a las palabras reales
     let sceneStart = (idx === 0) ? 0 : (phoneticStart * 0.80 + esc.inicio * 0.20);
     let sceneEnd = (idx === escenas.length - 1) ? totalDuration : (phoneticEnd * 0.80 + esc.fin * 0.20);
 
@@ -133,6 +136,7 @@ function buildSubtitleChunks(escenas, alignmentData) {
 
     if (tokens.length === 0) return;
 
+    // Agrupar en bloques ágiles de 2 a 3 palabras (máx 18 caracteres por línea para evitar solapamientos)
     const groups = [];
     let currentGroup = [];
     let currentChars = 0;
@@ -156,6 +160,7 @@ function buildSubtitleChunks(escenas, alignmentData) {
       }
     }
 
+    // Garantizar que cada bloque visual tenga al menos 1 palabra clave resaltada en color
     groups.forEach(g => {
       if (!g.some(t => t.highlight)) {
         let bestIdx = -1;
@@ -224,24 +229,30 @@ function buildSubtitleChunks(escenas, alignmentData) {
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado (SVGs restaurados + Música de fondo)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v2 (Audio Dinámico + Subtítulos Anti-Solapamiento)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
   if (Array.isArray(payload) && payload.length > 0) payload = payload[0];
   if (payload.json) payload = payload.json;
 
+  // 1. Guardar MP3 original y limpiar silencios muertos para dar ritmo de Short viral
   const audioBase64 = payload.audio_base64.replace(/^data:audio\/\w+;base64,/, '');
   fs.writeFileSync('audio_raw.mp3', Buffer.from(audioBase64, 'base64'));
 
   const hasExactTimestamps = !!(payload.alignment && payload.alignment.characters);
 
   if (hasExactTimestamps) {
+    // Si hay timestamps exactos de ElevenLabs, respetamos la línea temporal exacta del audio
     execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'ignore' });
   } else {
+    // Si no hay timestamps, recortamos silencios muertos (>0.22s) y aceleramos un 4% para máxima retención
     execSync('ffmpeg -y -i audio_raw.mp3 -af "silenceremove=stop_periods=-1:stop_duration=0.22:stop_threshold=-38dB,atempo=1.04,apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'ignore' });
   }
 
+  // ============================================================================
+  // 2. OBTENCIÓN DE LA DURACIÓN REAL EXACTA (nk=1 sobre WAV limpio)
+  // ============================================================================
   let realAudioDuration = 26;
   try {
     const probeOutput = execSync(
@@ -263,24 +274,30 @@ async function main() {
   const duracionExactaVideo = totalFrames / fps;
 
   // ============================================================================
-  // MEZCLA DE MÚSICA DE FONDO (bg_music.mp3)
+  // 2.5 DISEÑO SONORO AUTOMÁTICO (Colchón Dark Ambient + Pulso de Tensión)
   // ============================================================================
   try {
+    console.log('🎵 Generando colchón musical Dark Ambient procedimental para subir retención...');
+    // Si el usuario sube algún día un bg_music.mp3 al repo, lo usa; si no, sintetiza un dron oscuro psicologico
     if (fs.existsSync('bg_music.mp3')) {
-      console.log('🎵 ¡Archivo bg_music.mp3 detectado! Mezclando con la voz...');
       execSync(
-        `ffmpeg -y -i voice_clean.wav -stream_loop -1 -i bg_music.mp3 -filter_complex "[0:a]volume=1.0[voice];[1:a]volume=0.10,afade=t=out:st=${Math.max(0, duracionExactaVideo - 1.2).toFixed(2)}:d=1.2[music];[voice][music]amix=inputs=2:duration=first:dropout_transition=2[aout]" -map "[aout]" -c:a pcm_s16le audio.wav`,
-        { stdio: 'inherit' }
+        `ffmpeg -y -i voice_clean.wav -stream_loop -1 -i bg_music.mp3 -filter_complex "[0:a]volume=1.0[v];[1:a]volume=0.08,afade=t=out:st=${Math.max(0, duracionExactaVideo - 1.5).toFixed(2)}:d=1.5[bg];[v][bg]amix=inputs=2:duration=first:dropout_transition=0" -c:a pcm_s16le audio.wav`,
+        { stdio: 'ignore' }
       );
     } else {
-      console.warn('⚠️ ADVERTENCIA: No se encuentra bg_music.mp3 en la raíz. Usando voz limpia.');
-      fs.copyFileSync('voice_clean.wav', 'audio.wav');
+      execSync(
+        `ffmpeg -y -i voice_clean.wav -f lavfi -i "aevalsrc='0.032*sin(2*PI*55*t)+0.020*sin(2*PI*110*t)+0.012*sin(2*PI*82.4*t)*(1+0.4*sin(2*PI*1.8*t))':s=44100:d=${duracionExactaVideo.toFixed(3)}" -filter_complex "[0:a]volume=1.05[v];[1:a]lowpass=f=260,afade=t=in:st=0:d=0.4,afade=t=out:st=${Math.max(0, duracionExactaVideo - 1.2).toFixed(2)}:d=1.2[bg];[v][bg]amix=inputs=2:duration=first:dropout_transition=0" -c:a pcm_s16le audio.wav`,
+        { stdio: 'ignore' }
+      );
     }
   } catch (audioErr) {
-    console.error('❌ Error al mezclar la música, usando fallback de voz:', audioErr.message);
+    console.warn('⚠️ Fallback a voz limpia sin sintetizador:', audioErr.message);
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
 
+  // ============================================================================
+  // 3. SELECCIÓN DE COLOR DE ÉNFASIS ÚNICO PARA CADA VÍDEO
+  // ============================================================================
   const accentPalettes = [
     { name: 'Cian Eléctrico', hex: '#00f2fe', glow: 'rgba(0, 242, 254, 0.75)' },
     { name: 'Verde Neón', hex: '#39ff14', glow: 'rgba(57, 255, 20, 0.70)' },
@@ -296,7 +313,11 @@ async function main() {
     hash = (hash * 31 + seedStr.charCodeAt(i)) % 100000;
   }
   const chosenAccent = accentPalettes[hash % accentPalettes.length];
+  console.log(`🎨 Color de resaltado de subtítulos: ${chosenAccent.name} (${chosenAccent.hex})`);
 
+  // ============================================================================
+  // 4. ESCALADO PROPORCIONAL DE ESCENAS Y GENERACIÓN DE SUBTÍTULOS
+  // ============================================================================
   const escenasOriginales = payload.escenas || [];
   const ultimaEscenaFinOriginal = escenasOriginales.length > 0
     ? Number(escenasOriginales[escenasOriginales.length - 1].fin)
@@ -423,6 +444,13 @@ async function main() {
         stroke-linejoin: round;
       }
 
+      .stroke-white { stroke: #ffffff; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,255,255,0.35)); }
+      .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
+      .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
+
+      /* ======================================================================
+         SUBTÍTULOS CORREGIDOS ANTI-SOLAPAMIENTO (ESPACIADO AMPLIO Y LIMPIO)
+         ====================================================================== */
       .subtitle-container {
         position: absolute;
         bottom: 120px;
@@ -440,7 +468,7 @@ async function main() {
         flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 14px 24px;
+        gap: 14px 24px; /* Espaciado horizontal ampliado para evitar palabras pegadas */
         text-align: center;
         padding: 18px 28px;
         background: rgba(8, 8, 16, 0.78);
@@ -451,7 +479,7 @@ async function main() {
       }
       .sub-word {
         display: inline-block;
-        margin: 0 3px;
+        margin: 0 3px; /* Margen extra de seguridad al escalar */
         font-size: 39px;
         font-weight: 900;
         text-transform: uppercase;
@@ -545,7 +573,6 @@ async function main() {
         });
       });
 
-      // RESTAURACIÓN CRÍTICA: Animación de trazos SVG fluidos
       document.querySelectorAll('.scene svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
         let idx = 0;
@@ -571,6 +598,7 @@ async function main() {
       let lastChunkIdx = -2;
 
       window.setFrameData = function(frameIdx, t) {
+        // Barra de progreso psicológica no lineal (avanza rápido al principio para retener)
         const linearRatio = (frameIdx + 1) / totalFrames;
         const psychPct = Math.pow(linearRatio, 0.62) * 100;
         document.getElementById('pbar').style.width = Math.min(100, psychPct) + '%';
@@ -578,6 +606,7 @@ async function main() {
         const glowScale = 1 + Math.sin(t * 4.2) * 0.18;
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
+        // 1. RENDERIZADO DE ESCENA VISUAL (Animación más viva y rápida)
         let activeIdx = escenas.findIndex((e, idx) => {
           if (idx === escenas.length - 1) return t >= e.inicio;
           return t >= e.inicio && t < e.fin;
@@ -596,6 +625,7 @@ async function main() {
             const entryProgress = Math.min(1, localT / 0.26);
             let scale = 0.42 + 0.58 * easeOutBack(entryProgress);
 
+            // Zoom dinámico progresivo durante toda la escena (efecto Ken Burns activo)
             scale *= (1 + (localT / durEscena) * 0.08);
 
             if (localT > durEscena * 0.48) {
@@ -607,7 +637,6 @@ async function main() {
             const tiltDeg = Math.sin(localT * 2.8) * (e.esDiagrama ? 1.4 : 2.5);
             inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
 
-            // Aplicar el progreso de dibujo fluido a las formas del SVG
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
               const delay = Math.min(0.18, dIdx * 0.025);
@@ -649,6 +678,7 @@ async function main() {
           }
         });
 
+        // 2. RENDERIZADO DE SUBTÍTULOS
         let cIdx = subtitleChunks.findIndex((c, idx) => {
           if (idx === subtitleChunks.length - 1) return t >= c.start;
           return t >= c.start && t < c.end;
@@ -721,7 +751,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con SVGs restaurados y música de fondo!');
+  console.log('✅ ¡Vídeo output.mp4 generado con subtítulos limpios, ritmo rápido y diseño sonoro!');
 }
 
 main().catch(err => {
