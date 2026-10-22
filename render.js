@@ -224,7 +224,7 @@ function buildSubtitleChunks(escenas, alignmentData) {
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado con Mezcla Forzada de bg_music.mp3...');
+  console.log('🚀 Iniciando motor de renderizado (SVGs restaurados + Música de fondo)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -263,12 +263,11 @@ async function main() {
   const duracionExactaVideo = totalFrames / fps;
 
   // ============================================================================
-  // MEZCLA DE MÚSICA DE FONDO (Forzando bg_music.mp3 si existe en la raíz)
+  // MEZCLA DE MÚSICA DE FONDO (bg_music.mp3)
   // ============================================================================
   try {
     if (fs.existsSync('bg_music.mp3')) {
-      console.log('🎵 ¡Archivo bg_music.mp3 detectado! Aplicando mezcla con volumen ajustado...');
-      // Mezclamos la voz con la música de fondo en bucle, aplicando un fundido de salida al final
+      console.log('🎵 ¡Archivo bg_music.mp3 detectado! Mezclando con la voz...');
       execSync(
         `ffmpeg -y -i voice_clean.wav -stream_loop -1 -i bg_music.mp3 -filter_complex "[0:a]volume=1.0[voice];[1:a]volume=0.10,afade=t=out:st=${Math.max(0, duracionExactaVideo - 1.2).toFixed(2)}:d=1.2[music];[voice][music]amix=inputs=2:duration=first:dropout_transition=2[aout]" -map "[aout]" -c:a pcm_s16le audio.wav`,
         { stdio: 'inherit' }
@@ -546,6 +545,7 @@ async function main() {
         });
       });
 
+      // RESTAURACIÓN CRÍTICA: Animación de trazos SVG fluidos
       document.querySelectorAll('.scene svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
         let idx = 0;
@@ -607,6 +607,7 @@ async function main() {
             const tiltDeg = Math.sin(localT * 2.8) * (e.esDiagrama ? 1.4 : 2.5);
             inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
 
+            // Aplicar el progreso de dibujo fluido a las formas del SVG
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
               const delay = Math.min(0.18, dIdx * 0.025);
@@ -674,7 +675,6 @@ async function main() {
           }).join('');
         }
 
-        chunk.words.greet?.forEach?.((w, wIdx) => {});
         chunk.words.forEach((w, wIdx) => {
           const el = document.getElementById('sw-' + wIdx);
           if (!el) return;
@@ -721,7 +721,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con mezcla forzada de bg_music.mp3!');
+  console.log('✅ ¡Vídeo output.mp4 generado con SVGs restaurados y música de fondo!');
 }
 
 main().catch(err => {
