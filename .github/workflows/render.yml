@@ -39,51 +39,14 @@ jobs:
           python-version: '3.10'
 
       - name: 8. Instalar dependencias de Python para YouTube
-        run: pip install google-auth-oauthlib google-api-python-client requests
+        run: pip install --upgrade google-auth-oauthlib google-api-python-client requests httplib2
 
-      - name: 9. Subir y programar vídeo en YouTube a las 18:00
+      - name: 9. Enviar a Telegram y programar en YouTube
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: |
-          # Extraemos el título manejando automáticamente arrays o estructuras de n8n
-          TITULO_SHORT=$(node -e "
-            try {
-              const fs = require('fs');
-              let raw = fs.readFileSync('payload.json', 'utf8');
-              let data = JSON.parse(raw);
-              
-              // Si n8n lo envía como array, cogemos el primer elemento
-              if (Array.isArray(data) && data.length > 0) {
-                data = data[0];
-              }
-              // Si viene envuelto en una propiedad .json interna
-              if (data.json) {
-                data = data.json;
-              }
-              
-              const titulo = data.tema_titulo || data.titulo || data.title || 'Psicología Fascinante';
-              console.log(titulo);
-            } catch(e) {
-              console.log('Psicología Fascinante');
-            }
-          ")
-          
-          echo "Título dinámico detectado para YouTube: $TITULO_SHORT"
-          
-          # Pasamos el título extraído como argumento al script de Python
-          python upload.py output.mp4 "$TITULO_SHORT"
-
-      - name: 10. Enviar aviso informativo a Telegram
-        env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          CLEAN_TOKEN=$(echo "$TELEGRAM_TOKEN" | tr -d '[:space:]')
-          CLEAN_CHAT_ID=$(echo "$TELEGRAM_CHAT_ID" | tr -d '[:space:]')
-
-          curl -v -F chat_id="$CLEAN_CHAT_ID" \
-               -F video=@output.mp4 \
-               -F caption="🕒 ¡Short renderizado, subido y programado automáticamente para las 18:00 con su título optimizado!" \
-               "https://api.telegram.org/bot$CLEAN_TOKEN/sendVideo"
+          python upload.py output.mp4
