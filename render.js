@@ -32,8 +32,17 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   return [raw1.toUpperCase(), raw2.toUpperCase(), raw3.toUpperCase()];
 }
 
-// 2. Motor de alineación de subtítulos (Soporta Timestamps nativos de ElevenLabs + Fallback Fonético)
-function buildSubtitleChunks(escenas, alignmentData) {
+// Normalizador para emparejar palabras del guion con las palabras de ElevenLabs sin desfase
+function normalizeForMatch(str) {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase();
+}
+
+// 2. Motor de alineación de subtítulos de alta precisión (Sin desfase final ni signos sueltos)
+function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   const stopWords = new Set([
     'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
     'CON', 'NO', 'UNA', 'SU', 'PARA', 'ES', 'AL', 'LO', 'COMO', 'MAS', 'MÁS',
@@ -42,28 +51,47 @@ function buildSubtitleChunks(escenas, alignmentData) {
     'O', 'QUE', 'QUÉ', 'TU', 'TÚ', 'TE', 'MI', 'MIS', 'TUS', 'NOS', 'NI'
   ]);
 
-  // Extraer tokens de cada escena conservando marcas de **énfasis**
+  // Extraer tokens por espacio real (evita que "petición**." cree un token "." suelto que desfase el índice)
   const sceneTokensList = escenas.map(esc => {
     const raw = (esc.subtitulo || '').trim();
     if (!raw) return [];
 
     const tokens = [];
-    const regex = /\*\*([^*]+)\*\*|\*([^*]+)\*|(\S+)/g;
-    let match;
-    while ((match = regex.exec(raw)) !== null) {
-      if (match[1] || match[2]) {
-        const phrase = (match[1] || match[2]).trim();
-        phrase.split(/\s+/).forEach(w => {
-          if (w) tokens.push({ text: w, highlight: true });
-        });
-      } else if (match[3]) {
-        tokens.push({ text: match[3], highlight: false });
+    let inBold = false;
+    const rawWords = raw.split(/\s+/);
+
+    rawWords.forEach(rw => {
+      if (!rw) return;
+      const starCount = (rw.match(/\*/g) || []).length;
+      const startsBold = rw.startsWith('*');
+      const endsBold = rw.endsWith('*') && starCount >= 2;
+
+      const isHighlighted = inBold || starCount >= 2 || startsBold;
+      const cleanWord = rw.replace(/[*#_~`]/g, '').trim();
+
+      if (starCount % 2 !== 0) {
+        inBold = !inBold;
+      } else if (startsBold && !endsBold && starCount === 2) {
+        inBold = true;
       }
-    }
+
+      if (!cleanWord) return;
+
+      // Si por error tipográfico viene un signo de puntuación suelto (ej. "." o "..."), lo unimos a la palabra anterior
+      if (/^[.,;!?¡¿…]+$/.test(cleanWord)) {
+        if (tokens.length > 0) {
+          tokens[tokens.length - 1].text += cleanWord;
+        }
+        return;
+      }
+
+      tokens.push({ text: cleanWord, highlight: isHighlighted });
+    });
+
     return tokens;
   });
 
-  // Intentar extraer tiempos exactos por palabra si ElevenLabs envió `alignment`
+  // Extraer palabras reales desde character_start_times_seconds de ElevenLabs
   let elevenWords = [];
   if (alignmentData && Array.isArray(alignmentData.characters) && Array.isArray(alignmentData.character_start_times_seconds)) {
     const chars = alignmentData.characters;
@@ -72,11 +100,22 @@ function buildSubtitleChunks(escenas, alignmentData) {
     let curWord = '';
     let wStart = null;
     let wEnd = null;
+
     for (let i = 0; i < chars.length; i++) {
       const ch = chars[i];
       if (/\s/.test(ch)) {
         if (curWord.length > 0) {
-          elevenWords.push({ word: curWord, start: wStart, end: wEnd });
+          if (!/^[.,;!?¡¿…]+$/.test(curWord)) {
+            elevenWords.push({
+              word: curWord,
+              norm: normalizeForMatch(curWord),
+              start: wStart,
+              end: wEnd
+            });
+          } else if (elevenWords.length > 0) {
+            elevenWords[elevenWords.length - 1].word += curWord;
+            elevenWords[elevenWords.length - 1].end = wEnd;
+          }
           curWord = '';
           wStart = null;
         }
@@ -87,19 +126,73 @@ function buildSubtitleChunks(escenas, alignmentData) {
       }
     }
     if (curWord.length > 0) {
-      elevenWords.push({ word: curWord, start: wStart, end: wEnd });
+      if (!/^[.,;!?¡¿…]+$/.test(curWord)) {
+        elevenWords.push({
+          word: curWord,
+          norm: normalizeForMatch(curWord),
+          start: wStart,
+          end: wEnd
+        });
+      } else if (elevenWords.length > 0) {
+        elevenWords[elevenWords.length - 1].word += curWord;
+        elevenWords[elevenWords.length - 1].end = wEnd;
+      }
     }
   }
 
   function calcTokenWeight(tk) {
     const clean = tk.text.replace(/[.,;!?¡¿"«»()]/g, '');
     let w = Math.max(2, clean.length);
-    if (/[,;]/.test(tk.text)) w += 2.6;
-    if (/[.!?]/.test(tk.text)) w += 4.0;
+    // Si contiene dígitos (ej. 76%, 1913), al pronunciarse en español ocupa muchas más sílabas
+    if (/\d/.test(clean)) w += 6.5;
+    if (/[,;:]/.test(tk.text)) w += 2.8;
+    if (/[.!?…]/.test(tk.text)) w += 4.2;
     return w;
   }
 
-  const totalDuration = escenas.length > 0 ? escenas[escenas.length - 1].fin : 28;
+  // Emparejamiento global inteligente palabra a palabra (Con ventana de re-enganche anti-deriva)
+  const flatTokens = [];
+  sceneTokensList.forEach((tokens, sIdx) => {
+    tokens.forEach((tk, tIdx) => {
+      flatTokens.push({ sIdx, tIdx, tk, norm: normalizeForMatch(tk.text), matchedStart: null, matchedEnd: null });
+    });
+  });
+
+  if (elevenWords.length > 0 && flatTokens.length > 0) {
+    let ewCursor = 0;
+    for (let i = 0; i < flatTokens.length; i++) {
+      const targetNorm = flatTokens[i].norm;
+      let bestMatchIdx = -1;
+
+      // Buscar coincidencia exacta o parcial en una ventana cercana [-1, +4] para absorber desajustes
+      for (let offset = 0; offset <= 4; offset++) {
+        const candidateIdx = ewCursor + offset;
+        if (candidateIdx >= elevenWords.length) break;
+        const candNorm = elevenWords[candidateIdx].norm;
+        if (candNorm && targetNorm && (candNorm === targetNorm || candNorm.startsWith(targetNorm) || targetNorm.startsWith(candNorm))) {
+          bestMatchIdx = candidateIdx;
+          break;
+        }
+      }
+
+      if (bestMatchIdx !== -1) {
+        flatTokens[i].matchedStart = elevenWords[bestMatchIdx].start;
+        flatTokens[i].matchedEnd = elevenWords[bestMatchIdx].end;
+        ewCursor = bestMatchIdx + 1;
+      } else if (ewCursor < elevenWords.length) {
+        // Si es un número o símbolo que no coincide literalmente, usamos la posición proporcional segura
+        flatTokens[i].matchedStart = elevenWords[ewCursor].start;
+        flatTokens[i].matchedEnd = elevenWords[ewCursor].end;
+        ewCursor++;
+      }
+    }
+  }
+
+  // Usamos el fin real de la voz hablada (sin el padding de silencio final) para el fallback fonético
+  const lastSpokenEnd = elevenWords.length > 0
+    ? elevenWords[elevenWords.length - 1].end
+    : Math.max(1, realAudioDuration - 0.18);
+
   const sceneWeights = sceneTokensList.map(tokens => {
     const sum = tokens.reduce((acc, tk) => acc + calcTokenWeight(tk), 0);
     return Math.max(3, sum);
@@ -107,28 +200,31 @@ function buildSubtitleChunks(escenas, alignmentData) {
   const totalScriptWeight = sceneWeights.reduce((a, b) => a + b, 0);
 
   let cumulativeWeight = 0;
-  let globalWordIdx = 0;
+  let flatIdx = 0;
   const allChunks = [];
 
   escenas.forEach((esc, idx) => {
     const tokens = sceneTokensList[idx];
     const sWeight = sceneWeights[idx];
 
-    const phoneticStart = (cumulativeWeight / totalScriptWeight) * totalDuration;
+    const phoneticStart = (cumulativeWeight / totalScriptWeight) * lastSpokenEnd;
     cumulativeWeight += sWeight;
-    const phoneticEnd = (cumulativeWeight / totalScriptWeight) * totalDuration;
+    const phoneticEnd = (cumulativeWeight / totalScriptWeight) * lastSpokenEnd;
 
-    // Si tenemos timestamps de ElevenLabs, anclamos el inicio y fin de la escena a las palabras reales
-    let sceneStart = (idx === 0) ? 0 : (phoneticStart * 0.80 + esc.inicio * 0.20);
-    let sceneEnd = (idx === escenas.length - 1) ? totalDuration : (phoneticEnd * 0.80 + esc.fin * 0.20);
+    const sceneFlatSlice = flatTokens.slice(flatIdx, flatIdx + tokens.length);
+    flatIdx += tokens.length;
 
-    if (elevenWords.length > 0 && tokens.length > 0) {
-      const firstW = elevenWords[Math.min(globalWordIdx, elevenWords.length - 1)];
-      const lastW = elevenWords[Math.min(globalWordIdx + tokens.length - 1, elevenWords.length - 1)];
-      if (firstW && lastW) {
-        sceneStart = (idx === 0) ? 0 : Math.max(0, firstW.start - 0.05);
-        sceneEnd = (idx === escenas.length - 1) ? totalDuration : Math.min(totalDuration, lastW.end + 0.10);
-      }
+    let sceneStart = (idx === 0) ? 0 : phoneticStart;
+    let sceneEnd = (idx === escenas.length - 1) ? realAudioDuration : phoneticEnd;
+
+    const firstMatched = sceneFlatSlice.find(f => f.matchedStart !== null);
+    const lastMatched = [...sceneFlatSlice].reverse().find(f => f.matchedEnd !== null);
+
+    if (firstMatched && lastMatched) {
+      sceneStart = (idx === 0) ? 0 : Math.max(0, firstMatched.matchedStart - 0.04);
+      sceneEnd = (idx === escenas.length - 1)
+        ? realAudioDuration
+        : Math.min(realAudioDuration, lastMatched.matchedEnd + 0.06);
     }
 
     esc.inicio = sceneStart;
@@ -136,15 +232,15 @@ function buildSubtitleChunks(escenas, alignmentData) {
 
     if (tokens.length === 0) return;
 
-    // Agrupar en bloques ágiles de 2 a 3 palabras (máx 18 caracteres por línea para evitar solapamientos)
+    // Agrupar en bloques ágiles de 2 a 3 palabras (máx 18 caracteres)
     const groups = [];
     let currentGroup = [];
     let currentChars = 0;
 
-    tokens.forEach((tk) => {
-      currentGroup.push(tk);
-      currentChars += tk.text.length;
-      const hasPunct = /[.,;!?]/.test(tk.text);
+    sceneFlatSlice.forEach((item) => {
+      currentGroup.push(item);
+      currentChars += item.tk.text.length;
+      const hasPunct = /[.,;!?]/.test(item.tk.text);
 
       if (currentGroup.length >= 3 || currentChars >= 18 || (hasPunct && currentGroup.length >= 2)) {
         groups.push(currentGroup);
@@ -160,20 +256,20 @@ function buildSubtitleChunks(escenas, alignmentData) {
       }
     }
 
-    // Garantizar que cada bloque visual tenga al menos 1 palabra clave resaltada en color
+    // Garantizar al menos 1 palabra resaltada por bloque
     groups.forEach(g => {
-      if (!g.some(t => t.highlight)) {
+      if (!g.some(item => item.tk.highlight)) {
         let bestIdx = -1;
         let maxLen = 0;
-        g.forEach((t, i) => {
-          const clean = t.text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').toUpperCase();
+        g.forEach((item, i) => {
+          const clean = item.tk.text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9]/g, '').toUpperCase();
           if (!stopWords.has(clean) && clean.length > maxLen) {
             maxLen = clean.length;
             bestIdx = i;
           }
         });
         if (bestIdx !== -1 && maxLen >= 4) {
-          g[bestIdx].highlight = true;
+          g[bestIdx].tk.highlight = true;
         }
       }
     });
@@ -182,37 +278,35 @@ function buildSubtitleChunks(escenas, alignmentData) {
     let cursor = sceneStart;
 
     groups.forEach((g, gIdx) => {
-      const gWeight = g.reduce((acc, tk) => acc + calcTokenWeight(tk), 0);
+      const gWeight = g.reduce((acc, item) => acc + calcTokenWeight(item.tk), 0);
       const gDur = (gWeight / sWeight) * dur;
       let gStart = cursor;
       let gEnd = (gIdx === groups.length - 1) ? sceneEnd : (cursor + gDur);
 
       let wCursor = gStart;
-      const timedWords = g.map((tk, wIdx) => {
+      const timedWords = g.map((item, wIdx) => {
         let wStart, wEnd;
-        if (elevenWords.length > 0 && globalWordIdx < elevenWords.length) {
-          const ew = elevenWords[globalWordIdx];
-          wStart = ew.start;
-          wEnd = ew.end;
-          globalWordIdx++;
+        if (item.matchedStart !== null && item.matchedEnd !== null) {
+          wStart = item.matchedStart;
+          wEnd = item.matchedEnd;
         } else {
-          const wWeight = calcTokenWeight(tk);
+          const wWeight = calcTokenWeight(item.tk);
           const wDur = (wWeight / gWeight) * (gEnd - gStart);
           wStart = wCursor;
           wEnd = (wIdx === g.length - 1) ? gEnd : (wCursor + wDur);
           wCursor = wEnd;
         }
         return {
-          text: tk.text,
-          highlight: tk.highlight,
+          text: item.tk.text,
+          highlight: item.tk.highlight,
           start: wStart,
           end: wEnd
         };
       });
 
-      if (elevenWords.length > 0 && timedWords.length > 0) {
+      if (timedWords.length > 0 && g[0].matchedStart !== null) {
         gStart = timedWords[0].start;
-        gEnd = timedWords[timedWords.length - 1].end + 0.08;
+        gEnd = timedWords[timedWords.length - 1].end + 0.04;
       }
 
       allChunks.push({
@@ -225,11 +319,20 @@ function buildSubtitleChunks(escenas, alignmentData) {
     });
   });
 
+  // Ajustar continuidad entre bloques para que no parpadeen ni se pisen
+  for (let i = 0; i < allChunks.length - 1; i++) {
+    if (allChunks[i].end > allChunks[i + 1].start) {
+      allChunks[i].end = allChunks[i + 1].start;
+    } else if (allChunks[i + 1].start - allChunks[i].end < 0.12) {
+      allChunks[i].end = allChunks[i + 1].start;
+    }
+  }
+
   return allChunks;
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado Viral (SVGs Intactos + Audio/Música Blindados)...');
+  console.log('🚀 Iniciando motor de renderizado Viral (SVGs Intactos + Sincronización Exacta + Música 8%)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -276,30 +379,29 @@ async function main() {
   const duracionExactaVideo = totalFrames / fps;
 
   // ============================================================================
-  // 2.5 MEZCLA DE MÚSICA DE FONDO EN 2 PASOS SEGUROS (A prueba de fallos en Linux)
+  // 2.5 MEZCLA DE MÚSICA DE FONDO EN 2 PASOS SEGUROS (Volumen afinado al 8%)
   // ============================================================================
   try {
     const bgMusicPath = path.resolve('bg_music.mp3');
     if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
-      console.log(`🎵 bg_music.mp3 detectado (${fs.statSync(bgMusicPath).size} bytes). Preparando pista musical...`);
+      console.log(`🎵 bg_music.mp3 detectado (${fs.statSync(bgMusicPath).size} bytes). Preparando pista musical al 8%...`);
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
 
-      // Paso A: Convertir bg_music.mp3 a WAV estéreo 44.1kHz de la duración exacta del vídeo con volumen al 12%
+      // Paso A: Convertir bg_music.mp3 a WAV estéreo 44.1kHz con volumen suave al 8% (0.08)
       execSync(
-        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.12,afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.08,afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
         { stdio: 'inherit' }
       );
 
-      // Paso B: Mezclar los dos WAVs gemelos (voice_clean.wav + music_clean.wav) sin pérdida de volumen (normalize=0)
+      // Paso B: Mezclar los dos WAVs gemelos manteniendo la voz al 105% de presencia
       try {
         execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
           { stdio: 'inherit' }
         );
       } catch (amixErr) {
-        // Fallback por si la versión de FFmpeg de Ubuntu es antigua y no soporta normalize=0
         execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.0[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
           { stdio: 'inherit' }
         );
       }
@@ -393,7 +495,7 @@ async function main() {
     };
   });
 
-  const subtitleChunks = buildSubtitleChunks(escenasProcesadas, payload.alignment);
+  const subtitleChunks = buildSubtitleChunks(escenasProcesadas, payload.alignment, duracionExactaVideo);
 
   const htmlContent = `
   <!DOCTYPE html>
@@ -773,7 +875,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con SVGs intactos, voz y música de fondo!');
+  console.log('✅ ¡Vídeo output.mp4 generado con SVGs intactos, subtítulos clavados y música de fondo!');
 }
 
 main().catch(err => {
