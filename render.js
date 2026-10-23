@@ -51,7 +51,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     'O', 'QUE', 'QUÉ', 'TU', 'TÚ', 'TE', 'MI', 'MIS', 'TUS', 'NOS', 'NI'
   ]);
 
-  // Extraer tokens por espacio real (evita que "petición**." cree un token "." suelto que desfase el índice)
   const sceneTokensList = escenas.map(esc => {
     const raw = (esc.subtitulo || '').trim();
     if (!raw) return [];
@@ -77,7 +76,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 
       if (!cleanWord) return;
 
-      // Si por error tipográfico viene un signo de puntuación suelto (ej. "." o "..."), lo unimos a la palabra anterior
       if (/^[.,;!?¡¿…]+$/.test(cleanWord)) {
         if (tokens.length > 0) {
           tokens[tokens.length - 1].text += cleanWord;
@@ -91,7 +89,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     return tokens;
   });
 
-  // Extraer palabras reales desde character_start_times_seconds de ElevenLabs
   let elevenWords = [];
   if (alignmentData && Array.isArray(alignmentData.characters) && Array.isArray(alignmentData.character_start_times_seconds)) {
     const chars = alignmentData.characters;
@@ -143,14 +140,12 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   function calcTokenWeight(tk) {
     const clean = tk.text.replace(/[.,;!?¡¿"«»()]/g, '');
     let w = Math.max(2, clean.length);
-    // Si contiene dígitos (ej. 76%, 1913), al pronunciarse en español ocupa muchas más sílabas
     if (/\d/.test(clean)) w += 6.5;
     if (/[,;:]/.test(tk.text)) w += 2.8;
     if (/[.!?…]/.test(tk.text)) w += 4.2;
     return w;
   }
 
-  // Emparejamiento global inteligente palabra a palabra (Con ventana de re-enganche anti-deriva)
   const flatTokens = [];
   sceneTokensList.forEach((tokens, sIdx) => {
     tokens.forEach((tk, tIdx) => {
@@ -164,7 +159,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
       const targetNorm = flatTokens[i].norm;
       let bestMatchIdx = -1;
 
-      // Buscar coincidencia exacta o parcial en una ventana cercana [-1, +4] para absorber desajustes
       for (let offset = 0; offset <= 4; offset++) {
         const candidateIdx = ewCursor + offset;
         if (candidateIdx >= elevenWords.length) break;
@@ -180,7 +174,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
         flatTokens[i].matchedEnd = elevenWords[bestMatchIdx].end;
         ewCursor = bestMatchIdx + 1;
       } else if (ewCursor < elevenWords.length) {
-        // Si es un número o símbolo que no coincide literalmente, usamos la posición proporcional segura
         flatTokens[i].matchedStart = elevenWords[ewCursor].start;
         flatTokens[i].matchedEnd = elevenWords[ewCursor].end;
         ewCursor++;
@@ -188,7 +181,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     }
   }
 
-  // Usamos el fin real de la voz hablada (sin el padding de silencio final) para el fallback fonético
   const lastSpokenEnd = elevenWords.length > 0
     ? elevenWords[elevenWords.length - 1].end
     : Math.max(1, realAudioDuration - 0.18);
@@ -232,7 +224,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 
     if (tokens.length === 0) return;
 
-    // Agrupar en bloques ágiles de 2 a 3 palabras (máx 18 caracteres)
     const groups = [];
     let currentGroup = [];
     let currentChars = 0;
@@ -256,7 +247,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
       }
     }
 
-    // Garantizar al menos 1 palabra resaltada por bloque
     groups.forEach(g => {
       if (!g.some(item => item.tk.highlight)) {
         let bestIdx = -1;
@@ -319,7 +309,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     });
   });
 
-  // Ajustar continuidad entre bloques para que no parpadeen ni se pisen
   for (let i = 0; i < allChunks.length - 1; i++) {
     if (allChunks[i].end > allChunks[i + 1].start) {
       allChunks[i].end = allChunks[i + 1].start;
@@ -332,7 +321,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado Viral (SVGs Intactos + Sincronización Exacta + Música 8%)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v3 (Hook Visual 0:00 + SFX Choque + Sincronización Exacta)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -379,56 +368,81 @@ async function main() {
   const duracionExactaVideo = totalFrames / fps;
 
   // ============================================================================
-  // 2.5 MEZCLA DE MÚSICA DE FONDO EN 2 PASOS SEGUROS (Volumen afinado al 8%)
+  // 2.5 GENERACIÓN DE SFX DE CHOQUE (0.05s) + MEZCLA CON MÚSICA DE FONDO AL 8%
   // ============================================================================
   try {
+    // Generar SFX de impacto inicial en el segundo 0.05 (Sub-Drop cinemático + Ping sutil para frenar el scroll)
+    let hasHookSfx = false;
+    try {
+      console.log('⚡ Generando SFX de choque inicial (segundo 0.05) para frenar el Swipe...');
+      execSync(
+        `ffmpeg -y -f lavfi -i "aevalsrc='0.38*exp(-7*t)*sin(2*PI*(150*exp(-4*t)+42)*t)+0.14*exp(-18*t)*sin(2*PI*880*t)':s=44100:d=0.65" -af "adelay=40|40,apad=whole_dur=${duracionExactaVideo.toFixed(3)}" -ar 44100 -ac 2 -c:a pcm_s16le hook_sfx.wav`,
+        { stdio: 'inherit' }
+      );
+      hasHookSfx = fs.existsSync('hook_sfx.wav') && fs.statSync('hook_sfx.wav').size > 1000;
+    } catch (sfxErr) {
+      console.warn('⚠️ No se pudo sintetizar hook_sfx.wav, continuando sin SFX:', sfxErr.message);
+    }
+
     const bgMusicPath = path.resolve('bg_music.mp3');
     if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
       console.log(`🎵 bg_music.mp3 detectado (${fs.statSync(bgMusicPath).size} bytes). Preparando pista musical al 8%...`);
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
 
-      // Paso A: Convertir bg_music.mp3 a WAV estéreo 44.1kHz con volumen suave al 8% (0.08)
       execSync(
-        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.08,afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.08,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
         { stdio: 'inherit' }
       );
 
-      // Paso B: Mezclar los dos WAVs gemelos manteniendo la voz al 105% de presencia
-      try {
-        execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-          { stdio: 'inherit' }
-        );
-      } catch (amixErr) {
-        execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-          { stdio: 'inherit' }
-        );
+      if (hasHookSfx) {
+        try {
+          execSync(
+            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+            { stdio: 'inherit' }
+          );
+        } catch (amix3Err) {
+          execSync(
+            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=3.1[v];[1:a]volume=3.0[m];[2:a]volume=3.0[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+            { stdio: 'inherit' }
+          );
+        }
+      } else {
+        try {
+          execSync(
+            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+            { stdio: 'inherit' }
+          );
+        } catch (amixErr) {
+          execSync(
+            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+            { stdio: 'inherit' }
+          );
+        }
       }
 
       if (!fs.existsSync('audio.wav') || fs.statSync('audio.wav').size < 1000) {
         throw new Error('El archivo audio.wav mezclado quedó vacío.');
       }
-      console.log('✅ ¡Mezcla de voz + música completada con éxito!');
+      console.log('✅ ¡Mezcla de Voz + Música + SFX de Choque completada con éxito!');
     } else {
       console.log('⚠️ No se encontró bg_music.mp3 válido. Usando voz limpia.');
       fs.copyFileSync('voice_clean.wav', 'audio.wav');
     }
   } catch (audioErr) {
-    console.warn('⚠️ Error al mezclar bg_music.mp3, garantizando audio con voz limpia:', audioErr.message);
+    console.warn('⚠️ Error al mezclar audio secundario, garantizando audio con voz limpia:', audioErr.message);
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
 
   // ============================================================================
-  // 3. SELECCIÓN DE COLOR DE ÉNFASIS ÚNICO PARA CADA VÍDEO
+  // 3. SELECCIÓN DE PALETA Y VARIACIÓN VISUAL EN 0:00 (Rompe el efecto "Ya lo vi")
   // ============================================================================
   const accentPalettes = [
-    { name: 'Cian Eléctrico', hex: '#00f2fe', glow: 'rgba(0, 242, 254, 0.75)' },
-    { name: 'Verde Neón', hex: '#39ff14', glow: 'rgba(57, 255, 20, 0.70)' },
-    { name: 'Amarillo Dorado', hex: '#ffd000', glow: 'rgba(255, 208, 0, 0.75)' },
-    { name: 'Magenta Vibrante', hex: '#ff2a85', glow: 'rgba(255, 42, 133, 0.75)' },
-    { name: 'Naranja Fuego', hex: '#ff6b00', glow: 'rgba(255, 107, 0, 0.75)' },
-    { name: 'Violeta Eléctrico', hex: '#c77dff', glow: 'rgba(199, 125, 255, 0.75)' }
+    { name: 'Cian Eléctrico', hex: '#00f2fe', glow: 'rgba(0, 242, 254, 0.78)', bgCenter: '#102838', bgEdge: '#04070b' },
+    { name: 'Verde Neón', hex: '#39ff14', glow: 'rgba(57, 255, 20, 0.72)', bgCenter: '#122c1a', bgEdge: '#050906' },
+    { name: 'Amarillo Dorado', hex: '#ffd000', glow: 'rgba(255, 208, 0, 0.78)', bgCenter: '#2e2510', bgEdge: '#080604' },
+    { name: 'Magenta Vibrante', hex: '#ff2a85', glow: 'rgba(255, 42, 133, 0.78)', bgCenter: '#2d1228', bgEdge: '#080408' },
+    { name: 'Naranja Fuego', hex: '#ff6b00', glow: 'rgba(255, 107, 0, 0.78)', bgCenter: '#301a0e', bgEdge: '#090503' },
+    { name: 'Violeta Eléctrico', hex: '#c77dff', glow: 'rgba(199, 125, 255, 0.78)', bgCenter: '#221438', bgEdge: '#06040a' }
   ];
 
   const seedStr = (payload.tema_titulo || '') + (payload.categoria || '') + String(Date.now());
@@ -437,7 +451,7 @@ async function main() {
     hash = (hash * 31 + seedStr.charCodeAt(i)) % 100000;
   }
   const chosenAccent = accentPalettes[hash % accentPalettes.length];
-  console.log(`🎨 Color de resaltado de subtítulos: ${chosenAccent.name} (${chosenAccent.hex})`);
+  console.log(`🎨 Paleta visual seleccionada: ${chosenAccent.name} (${chosenAccent.hex})`);
 
   // ============================================================================
   // 4. ESCALADO PROPORCIONAL DE ESCENAS Y GENERACIÓN DE SUBTÍTULOS
@@ -482,7 +496,7 @@ async function main() {
       .replace(/\{TEXTO_3\}/g, t3);
 
     const planosRotativos = ['primer_plano', 'medio', 'general', 'primer_plano'];
-    const planoElegido = esc.plano || planosRotativos[idx % planosRotativos.length];
+    const planoElegido = (idx === 0) ? 'primer_plano' : (esc.plano || planosRotativos[idx % planosRotativos.length]);
 
     return {
       ...esc,
@@ -511,7 +525,7 @@ async function main() {
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         width: 720px; height: 1280px;
-        background: radial-gradient(circle at 50% 38%, #1d1d35 0%, #06060a 100%);
+        background: radial-gradient(circle at 50% 36%, ${chosenAccent.bgCenter} 0%, ${chosenAccent.bgEdge} 100%);
         font-family: 'Montserrat', sans-serif;
         overflow: hidden; position: relative;
       }
@@ -523,11 +537,17 @@ async function main() {
         background-size: 50px 50px;
       }
       .glow-spot {
-        position: absolute; top: 35%; left: 50%; width: 500px; height: 500px;
+        position: absolute; top: 35%; left: 50%; width: 520px; height: 520px;
         transform: translate(-50%, -50%);
-        background: radial-gradient(circle, rgba(255, 42, 95, 0.16) 0%, var(--accent-glow) 38%, transparent 70%);
-        opacity: 0.50;
+        background: radial-gradient(circle, rgba(255, 42, 95, 0.18) 0%, var(--accent-glow) 38%, transparent 70%);
+        opacity: 0.55;
         pointer-events: none; z-index: 1;
+      }
+      .hook-flash {
+        position: absolute; inset: 0;
+        background: radial-gradient(circle at 50% 40%, var(--accent-color) 0%, transparent 75%);
+        opacity: 0; pointer-events: none; z-index: 28;
+        mix-blend-mode: screen;
       }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 10px;
@@ -536,11 +556,11 @@ async function main() {
       }
       .top-tag {
         position: absolute; top: 58px; left: 50%; transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.08); color: #e0e0f0;
+        background: rgba(10, 10, 18, 0.85); color: var(--accent-color);
         font-size: 20px; font-weight: 900; padding: 10px 26px;
         border-radius: 40px; letter-spacing: 2px; text-transform: uppercase;
-        border: 2px solid rgba(255,255,255,0.18); white-space: nowrap;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.6); z-index: 20;
+        border: 2px solid var(--accent-color); white-space: nowrap;
+        box-shadow: 0 0 22px var(--accent-glow); z-index: 20;
       }
 
       .scene {
@@ -634,6 +654,7 @@ async function main() {
   <body>
     <div class="grid-bg"></div>
     <div class="glow-spot" id="glow"></div>
+    <div class="hook-flash" id="hook-flash"></div>
     <div class="progress-bar" id="pbar"></div>
     <div class="top-tag">${payload.categoria || 'PSICOLOGÍA'}</div>
 
@@ -720,6 +741,7 @@ async function main() {
       }
 
       const subBox = document.getElementById('sub-box');
+      const hookFlash = document.getElementById('hook-flash');
       let lastChunkIdx = -2;
 
       window.setFrameData = function(frameIdx, t) {
@@ -728,7 +750,14 @@ async function main() {
         const psychPct = Math.pow(linearRatio, 0.62) * 100;
         document.getElementById('pbar').style.width = Math.min(100, psychPct) + '%';
         
-        const glowScale = 1 + Math.sin(t * 4.2) * 0.18;
+        // Destello visual de choque en los primeros 0.25s para frenar el scroll en el feed
+        if (t < 0.25) {
+          hookFlash.style.opacity = String((1 - t / 0.25) * 0.42);
+        } else {
+          hookFlash.style.opacity = '0';
+        }
+
+        const glowScale = 1 + Math.sin(t * 4.2) * 0.18 + (t < 0.35 ? (1 - t / 0.35) * 0.45 : 0);
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
         // 1. RENDERIZADO DE ESCENA VISUAL
@@ -747,25 +776,42 @@ async function main() {
             const durEscena = Math.max(0.1, e.fin - e.inicio);
             sc.style.opacity = '1';
 
-            const entryProgress = Math.min(1, localT / 0.26);
-            let scale = 0.42 + 0.58 * easeOutBack(entryProgress);
+            let scale;
+            let tiltDeg;
 
-            scale *= (1 + (localT / durEscena) * 0.08);
+            if (idx === 0) {
+              // HOOK VISUAL 0:00: En vez de empezar vacío/pequeño, arranca en Zoom Gigante (1.75x) y aterriza de golpe
+              const punchP = Math.min(1, localT / 0.32);
+              const easeOutCubic = 1 - Math.pow(1 - punchP, 3);
+              scale = 1.75 - 0.75 * easeOutCubic;
+              scale *= (1 + (localT / durEscena) * 0.08);
+              tiltDeg = (1 - easeOutCubic) * -8 + Math.sin(localT * 3.2) * 2.0;
+            } else {
+              const entryProgress = Math.min(1, localT / 0.26);
+              scale = 0.42 + 0.58 * easeOutBack(entryProgress);
+              scale *= (1 + (localT / durEscena) * 0.08);
 
-            if (localT > durEscena * 0.48) {
-              const midProgress = Math.min(1, (localT - durEscena * 0.48) / 0.22);
-              scale *= (1 + 0.08 * easeOutBack(midProgress));
+              if (localT > durEscena * 0.48) {
+                const midProgress = Math.min(1, (localT - durEscena * 0.48) / 0.22);
+                scale *= (1 + 0.08 * easeOutBack(midProgress));
+              }
+              tiltDeg = Math.sin(localT * 2.8) * (e.esDiagrama ? 1.4 : 2.5);
             }
 
             const floatY = Math.sin(localT * 5.2) * 11;
-            const tiltDeg = Math.sin(localT * 2.8) * (e.esDiagrama ? 1.4 : 2.5);
             inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
 
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
-              const delay = Math.min(0.18, dIdx * 0.025);
-              const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.35));
-              shape.style.strokeDashoffset = String(100 * (1 - drawP));
+              // En la Escena 0, el dibujo ya está casi visible en el fotograma 0 para evitar miniaturas vacías en el feed
+              if (idx === 0) {
+                const drawP0 = Math.max(0.65, Math.min(1, 0.65 + (localT / 0.18) * 0.35));
+                shape.style.strokeDashoffset = String(100 * (1 - drawP0));
+              } else {
+                const delay = Math.min(0.18, dIdx * 0.025);
+                const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.35));
+                shape.style.strokeDashoffset = String(100 * (1 - drawP));
+              }
             });
 
             const faceLayer = sc.querySelector('.layer-face');
@@ -875,7 +921,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con SVGs intactos, subtítulos clavados y música de fondo!');
+  console.log('✅ ¡Vídeo output.mp4 generado con Hook Visual 0:00, SFX de choque, subtítulos clavados y música de fondo!');
 }
 
 main().catch(err => {
