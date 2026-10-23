@@ -41,7 +41,7 @@ function normalizeForMatch(str) {
     .toLowerCase();
 }
 
-// 2. Motor de alineación de subtítulos de alta precisión (Sin desfase final ni signos sueltos)
+// 2. Motor de alineación de subtítulos y escenas sin huecos muertos entre transiciones
 function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   const stopWords = new Set([
     'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
@@ -213,10 +213,10 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     const lastMatched = [...sceneFlatSlice].reverse().find(f => f.matchedEnd !== null);
 
     if (firstMatched && lastMatched) {
-      sceneStart = (idx === 0) ? 0 : Math.max(0, firstMatched.matchedStart - 0.04);
+      sceneStart = (idx === 0) ? 0 : Math.max(0, firstMatched.matchedStart - 0.03);
       sceneEnd = (idx === escenas.length - 1)
         ? realAudioDuration
-        : Math.min(realAudioDuration, lastMatched.matchedEnd + 0.06);
+        : Math.min(realAudioDuration, lastMatched.matchedEnd + 0.05);
     }
 
     esc.inicio = sceneStart;
@@ -309,6 +309,16 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     });
   });
 
+  // SELLADO CRÍTICO DE ESCENAS: Evita que entre el fin de una escena y el inicio de la siguiente
+  // quede un hueco muerto (como en 0:06 y 0:13) que muestre la última escena encogida
+  for (let i = 0; i < escenas.length - 1; i++) {
+    escenas[i].fin = escenas[i + 1].inicio;
+  }
+  if (escenas.length > 0) {
+    escenas[0].inicio = 0;
+    escenas[escenas.length - 1].fin = realAudioDuration;
+  }
+
   for (let i = 0; i < allChunks.length - 1; i++) {
     if (allChunks[i].end > allChunks[i + 1].start) {
       allChunks[i].end = allChunks[i + 1].start;
@@ -320,8 +330,77 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   return allChunks;
 }
 
+// 3. Sintetizador de Efectos de Sonido (SFX) dirigidos por el Guionista en cada cambio de escena
+function buildSceneSfxTrack(escenas, totalDuration) {
+  const sfxRecipes = {
+    shock: {
+      expr: '0.36*exp(-6.5*t)*sin(2*PI*(145*exp(-4*t)+42)*t)+0.13*exp(-18*t)*sin(2*PI*880*t)',
+      dur: 0.62
+    },
+    whoosh: {
+      expr: '0.22*sin(PI*t/0.32)*sin(2*PI*(190+520*t*t)*t)+0.08*sin(PI*t/0.32)*sin(2*PI*95*t)',
+      dur: 0.32
+    },
+    alerta: {
+      expr: '0.18*exp(-9*t)*(sin(2*PI*740*t)+0.6*sin(2*PI*1110*t))',
+      dur: 0.38
+    },
+    reloj: {
+      expr: '0.24*exp(-38*t)*sin(2*PI*1150*t)+0.20*exp(-38*max(0,t-0.24))*gt(t,0.24)*sin(2*PI*860*max(0,t-0.24))',
+      dur: 0.48
+    },
+    revelacion: {
+      expr: '0.16*exp(-3.8*t)*(sin(2*PI*523.25*t)+0.8*sin(2*PI*659.25*t)+0.6*sin(2*PI*783.99*t)+0.4*sin(2*PI*1046.5*t))',
+      dur: 0.72
+    },
+    duda: {
+      expr: '0.19*exp(-5.5*t)*sin(2*PI*(310+260*t)*t)',
+      dur: 0.42
+    }
+  };
+
+  const fallbackOrder = ['shock', 'whoosh', 'alerta', 'whoosh', 'reloj', 'whoosh', 'revelacion', 'duda'];
+  const inputs = [];
+  const filterParts = [];
+
+  escenas.forEach((esc, idx) => {
+    const rawType = String(esc.sfx || '').toLowerCase().trim();
+    const sfxKey = sfxRecipes[rawType]
+      ? rawType
+      : (idx === 0 ? 'shock' : fallbackOrder[idx % fallbackOrder.length]);
+
+    const recipe = sfxRecipes[sfxKey];
+    const startSec = idx === 0 ? 0.04 : Math.max(0.05, Number(esc.inicio) || 0);
+    const delayMs = Math.round(startSec * 1000);
+
+    inputs.push(`-f lavfi -i "aevalsrc='${recipe.expr}':s=44100:d=${recipe.dur}"`);
+    filterParts.push(`[${idx}:a]adelay=${delayMs}|${delayMs},apad=whole_dur=${totalDuration.toFixed(3)}[s${idx}]`);
+  });
+
+  if (inputs.length === 0) return false;
+
+  const mixLabels = escenas.map((_, idx) => `[s${idx}]`).join('');
+  const filterComplex = `${filterParts.join(';')};${mixLabels}amix=inputs=${escenas.length}:duration=longest:dropout_transition=0:normalize=0[sfxout]`;
+
+  try {
+    execSync(
+      `ffmpeg -y ${inputs.join(' ')} -filter_complex "${filterComplex}" -map "[sfxout]" -ar 44100 -ac 2 -t ${totalDuration.toFixed(3)} -c:a pcm_s16le hook_sfx.wav`,
+      { stdio: 'ignore' }
+    );
+  } catch (err) {
+    // Fallback compatible si la versión de FFmpeg no admite normalize=0
+    const filterCompat = `${filterParts.join(';')};${mixLabels}amix=inputs=${escenas.length}:duration=longest:dropout_transition=0,volume=${ Math.max(1.5, escenas.length * 0.55).toFixed(2) }[sfxout]`;
+    execSync(
+      `ffmpeg -y ${inputs.join(' ')} -filter_complex "${filterCompat}" -map "[sfxout]" -ar 44100 -ac 2 -t ${totalDuration.toFixed(3)} -c:a pcm_s16le hook_sfx.wav`,
+      { stdio: 'ignore' }
+    );
+  }
+
+  return fs.existsSync('hook_sfx.wav') && fs.statSync('hook_sfx.wav').size > 1000;
+}
+
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado Viral v3 (Hook Visual 0:00 + SFX Choque + Sincronización Exacta)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v4 (SFX Multipista IA + Transiciones Selladas)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -368,73 +447,7 @@ async function main() {
   const duracionExactaVideo = totalFrames / fps;
 
   // ============================================================================
-  // 2.5 GENERACIÓN DE SFX DE CHOQUE (0.05s) + MEZCLA CON MÚSICA DE FONDO AL 8%
-  // ============================================================================
-  try {
-    // Generar SFX de impacto inicial en el segundo 0.05 (Sub-Drop cinemático + Ping sutil para frenar el scroll)
-    let hasHookSfx = false;
-    try {
-      console.log('⚡ Generando SFX de choque inicial (segundo 0.05) para frenar el Swipe...');
-      execSync(
-        `ffmpeg -y -f lavfi -i "aevalsrc='0.38*exp(-7*t)*sin(2*PI*(150*exp(-4*t)+42)*t)+0.14*exp(-18*t)*sin(2*PI*880*t)':s=44100:d=0.65" -af "adelay=40|40,apad=whole_dur=${duracionExactaVideo.toFixed(3)}" -ar 44100 -ac 2 -c:a pcm_s16le hook_sfx.wav`,
-        { stdio: 'inherit' }
-      );
-      hasHookSfx = fs.existsSync('hook_sfx.wav') && fs.statSync('hook_sfx.wav').size > 1000;
-    } catch (sfxErr) {
-      console.warn('⚠️ No se pudo sintetizar hook_sfx.wav, continuando sin SFX:', sfxErr.message);
-    }
-
-    const bgMusicPath = path.resolve('bg_music.mp3');
-    if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
-      console.log(`🎵 bg_music.mp3 detectado (${fs.statSync(bgMusicPath).size} bytes). Preparando pista musical al 8%...`);
-      const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
-
-      execSync(
-        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.08,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
-        { stdio: 'inherit' }
-      );
-
-      if (hasHookSfx) {
-        try {
-          execSync(
-            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-            { stdio: 'inherit' }
-          );
-        } catch (amix3Err) {
-          execSync(
-            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=3.1[v];[1:a]volume=3.0[m];[2:a]volume=3.0[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-            { stdio: 'inherit' }
-          );
-        }
-      } else {
-        try {
-          execSync(
-            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-            { stdio: 'inherit' }
-          );
-        } catch (amixErr) {
-          execSync(
-            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-            { stdio: 'inherit' }
-          );
-        }
-      }
-
-      if (!fs.existsSync('audio.wav') || fs.statSync('audio.wav').size < 1000) {
-        throw new Error('El archivo audio.wav mezclado quedó vacío.');
-      }
-      console.log('✅ ¡Mezcla de Voz + Música + SFX de Choque completada con éxito!');
-    } else {
-      console.log('⚠️ No se encontró bg_music.mp3 válido. Usando voz limpia.');
-      fs.copyFileSync('voice_clean.wav', 'audio.wav');
-    }
-  } catch (audioErr) {
-    console.warn('⚠️ Error al mezclar audio secundario, garantizando audio con voz limpia:', audioErr.message);
-    fs.copyFileSync('voice_clean.wav', 'audio.wav');
-  }
-
-  // ============================================================================
-  // 3. SELECCIÓN DE PALETA Y VARIACIÓN VISUAL EN 0:00 (Rompe el efecto "Ya lo vi")
+  // 3. SELECCIÓN DE PALETA Y VARIACIÓN VISUAL EN 0:00
   // ============================================================================
   const accentPalettes = [
     { name: 'Cian Eléctrico', hex: '#00f2fe', glow: 'rgba(0, 242, 254, 0.78)', bgCenter: '#102838', bgEdge: '#04070b' },
@@ -454,7 +467,7 @@ async function main() {
   console.log(`🎨 Paleta visual seleccionada: ${chosenAccent.name} (${chosenAccent.hex})`);
 
   // ============================================================================
-  // 4. ESCALADO PROPORCIONAL DE ESCENAS Y GENERACIÓN DE SUBTÍTULOS
+  // 4. ESCALADO PROPORCIONAL DE ESCENAS Y ALINEACIÓN DE SUBTÍTULOS
   // ============================================================================
   const escenasOriginales = payload.escenas || [];
   const ultimaEscenaFinOriginal = escenasOriginales.length > 0
@@ -509,7 +522,69 @@ async function main() {
     };
   });
 
+  // Calculamos primero los tiempos exactos de cada escena para clavar los SFX al milisegundo
   const subtitleChunks = buildSubtitleChunks(escenasProcesadas, payload.alignment, duracionExactaVideo);
+
+  // ============================================================================
+  // 4.5 GENERACIÓN DE PISTA SFX MULTI-ESCENA + MEZCLA CON MÚSICA AL 8%
+  // ============================================================================
+  try {
+    let hasHookSfx = false;
+    try {
+      console.log('⚡ Sintetizando pista de efectos sonoros (SFX) por escena dirigidos por el Guionista...');
+      hasHookSfx = buildSceneSfxTrack(escenasProcesadas, duracionExactaVideo);
+    } catch (sfxErr) {
+      console.warn('⚠️ No se pudo sintetizar la pista SFX multipista:', sfxErr.message);
+    }
+
+    const bgMusicPath = path.resolve('bg_music.mp3');
+    if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
+      console.log(`🎵 bg_music.mp3 detectado (${fs.statSync(bgMusicPath).size} bytes). Preparando mezcla final...`);
+      const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
+
+      execSync(
+        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.08,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        { stdio: 'inherit' }
+      );
+
+      if (hasHookSfx) {
+        try {
+          execSync(
+            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+            { stdio: 'inherit' }
+          );
+        } catch (amix3Err) {
+          execSync(
+            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=3.1[v];[1:a]volume=3.0[m];[2:a]volume=3.0[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+            { stdio: 'inherit' }
+          );
+        }
+      } else {
+        try {
+          execSync(
+            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+            { stdio: 'inherit' }
+          );
+        } catch (amixErr) {
+          execSync(
+            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+            { stdio: 'inherit' }
+          );
+        }
+      }
+
+      if (!fs.existsSync('audio.wav') || fs.statSync('audio.wav').size < 1000) {
+        throw new Error('El archivo audio.wav mezclado quedó vacío.');
+      }
+      console.log('✅ ¡Mezcla de Voz + Música (8%) + SFX por escena completada con éxito!');
+    } else {
+      console.log('⚠️ No se encontró bg_music.mp3 válido. Usando voz limpia.');
+      fs.copyFileSync('voice_clean.wav', 'audio.wav');
+    }
+  } catch (audioErr) {
+    console.warn('⚠️ Error al mezclar audio secundario, garantizando audio con voz limpia:', audioErr.message);
+    fs.copyFileSync('voice_clean.wav', 'audio.wav');
+  }
 
   const htmlContent = `
   <!DOCTYPE html>
@@ -750,22 +825,27 @@ async function main() {
         const psychPct = Math.pow(linearRatio, 0.62) * 100;
         document.getElementById('pbar').style.width = Math.min(100, psychPct) + '%';
         
-        // Destello visual de choque en los primeros 0.25s para frenar el scroll en el feed
+        // 1. SELECCIÓN DE ESCENA SIN HUECOS MUERTOS
+        let activeIdx = escenas.findIndex((e, idx) => {
+          if (idx === escenas.length - 1) return t >= e.inicio;
+          return t >= e.inicio && t < e.fin;
+        });
+        if (activeIdx === -1 && escenas.length > 0) activeIdx = 0;
+
+        const activeScene = escenas[activeIdx];
+        const sceneLocalT = activeScene ? Math.max(0, t - activeScene.inicio) : 0;
+
+        // Destello visual fuerte en 0:00 y micro-pulso sutil al cambiar de escena
         if (t < 0.25) {
           hookFlash.style.opacity = String((1 - t / 0.25) * 0.42);
+        } else if (sceneLocalT < 0.14) {
+          hookFlash.style.opacity = String((1 - sceneLocalT / 0.14) * 0.12);
         } else {
           hookFlash.style.opacity = '0';
         }
 
         const glowScale = 1 + Math.sin(t * 4.2) * 0.18 + (t < 0.35 ? (1 - t / 0.35) * 0.45 : 0);
         document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
-
-        // 1. RENDERIZADO DE ESCENA VISUAL
-        let activeIdx = escenas.findIndex((e, idx) => {
-          if (idx === escenas.length - 1) return t >= e.inicio;
-          return t >= e.inicio && t < e.fin;
-        });
-        if (activeIdx === -1 && escenas.length > 0) activeIdx = escenas.length - 1;
 
         escenas.forEach((e, idx) => {
           const sc = document.getElementById('scene-' + e.id);
@@ -780,15 +860,15 @@ async function main() {
             let tiltDeg;
 
             if (idx === 0) {
-              // HOOK VISUAL 0:00: En vez de empezar vacío/pequeño, arranca en Zoom Gigante (1.75x) y aterriza de golpe
+              // HOOK VISUAL 0:00: Arranca en Zoom Gigante (1.75x) y aterriza de golpe
               const punchP = Math.min(1, localT / 0.32);
               const easeOutCubic = 1 - Math.pow(1 - punchP, 3);
               scale = 1.75 - 0.75 * easeOutCubic;
               scale *= (1 + (localT / durEscena) * 0.08);
               tiltDeg = (1 - easeOutCubic) * -8 + Math.sin(localT * 3.2) * 2.0;
             } else {
-              const entryProgress = Math.min(1, localT / 0.26);
-              scale = 0.42 + 0.58 * easeOutBack(entryProgress);
+              const entryProgress = Math.min(1, localT / 0.24);
+              scale = 0.52 + 0.48 * easeOutBack(entryProgress);
               scale *= (1 + (localT / durEscena) * 0.08);
 
               if (localT > durEscena * 0.48) {
@@ -803,7 +883,6 @@ async function main() {
 
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
-              // En la Escena 0, el dibujo ya está casi visible en el fotograma 0 para evitar miniaturas vacías en el feed
               if (idx === 0) {
                 const drawP0 = Math.max(0.65, Math.min(1, 0.65 + (localT / 0.18) * 0.35));
                 shape.style.strokeDashoffset = String(100 * (1 - drawP0));
@@ -921,7 +1000,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con Hook Visual 0:00, SFX de choque, subtítulos clavados y música de fondo!');
+  console.log('✅ ¡Vídeo output.mp4 generado con SFX Multipista IA, Hook 0:00, subtítulos clavados y música de fondo!');
 }
 
 main().catch(err => {
