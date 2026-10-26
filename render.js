@@ -309,8 +309,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     });
   });
 
-  // SELLADO CRÍTICO DE ESCENAS: Evita que entre el fin de una escena y el inicio de la siguiente
-  // quede un hueco muerto (como en 0:06 y 0:13) que muestre la última escena encogida
+  // Sellado de escenas sin huecos muertos
   for (let i = 0; i < escenas.length - 1; i++) {
     escenas[i].fin = escenas[i + 1].inicio;
   }
@@ -330,46 +329,110 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   return allChunks;
 }
 
-// 3. Sintetizador de Efectos de Sonido (SFX) dirigidos por el Guionista en cada cambio de escena
-function buildSceneSfxTrack(escenas, totalDuration) {
-  const sfxRecipes = {
-    shock: {
-      expr: '0.36*exp(-6.5*t)*sin(2*PI*(145*exp(-4*t)+42)*t)+0.13*exp(-18*t)*sin(2*PI*880*t)',
-      dur: 0.62
-    },
-    whoosh: {
-      expr: '0.22*sin(PI*t/0.32)*sin(2*PI*(190+520*t*t)*t)+0.08*sin(PI*t/0.32)*sin(2*PI*95*t)',
-      dur: 0.32
-    },
-    alerta: {
-      expr: '0.18*exp(-9*t)*(sin(2*PI*740*t)+0.6*sin(2*PI*1110*t))',
-      dur: 0.38
-    },
-    reloj: {
-      expr: '0.24*exp(-38*t)*sin(2*PI*1150*t)+0.20*exp(-38*max(0,t-0.24))*gt(t,0.24)*sin(2*PI*860*max(0,t-0.24))',
-      dur: 0.48
-    },
-    revelacion: {
-      expr: '0.16*exp(-3.8*t)*(sin(2*PI*523.25*t)+0.8*sin(2*PI*659.25*t)+0.6*sin(2*PI*783.99*t)+0.4*sin(2*PI*1046.5*t))',
-      dur: 0.72
-    },
-    duda: {
-      expr: '0.19*exp(-5.5*t)*sin(2*PI*(310+260*t)*t)',
-      dur: 0.42
-    }
-  };
+// 3. Sintetizador Procedural de 16 SFX con Modulación de Frecuencia Única por Escena
+function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
+  function getRecipe(type, pitchMod) {
+    const p = pitchMod.toFixed(3);
+    const catalog = {
+      sub_drop: {
+        expr: `0.36*exp(-6*t)*sin(2*PI*(150*${p}*exp(-4.2*t)+38)*t)+0.12*exp(-16*t)*sin(2*PI*720*${p}*t)`,
+        dur: 0.65
+      },
+      laser_swipe: {
+        expr: `0.20*exp(-7*t)*sin(2*PI*(980*${p}*exp(-5.5*t)+110)*t)`,
+        dur: 0.34
+      },
+      whoosh_fast: {
+        expr: `0.22*sin(PI*t/0.28)*sin(2*PI*(160*${p}+480*t*t)*t)+0.09*sin(PI*t/0.28)*sin(2*PI*85*${p}*t)`,
+        dur: 0.28
+      },
+      glitch_data: {
+        expr: `0.17*exp(-8*t)*(sin(2*PI*440*${p}*t)*sin(2*PI*38*t)+0.6*sin(2*PI*1320*${p}*t)*sin(2*PI*62*t))`,
+        dur: 0.32
+      },
+      heartbeat: {
+        expr: `0.34*exp(-22*t)*sin(2*PI*58*${p}*t)+0.28*exp(-22*max(0,t-0.21))*gt(t,0.21)*sin(2*PI*52*${p}*max(0,t-0.21))`,
+        dur: 0.52
+      },
+      tension_riser: {
+        expr: `0.18*(t/0.55)*exp(-2*(0.55-t))*sin(2*PI*(220*${p}+340*t*t)*t)`,
+        dur: 0.55
+      },
+      glass_ping: {
+        expr: `0.17*exp(-6.5*t)*(sin(2*PI*1180*${p}*t)+0.5*sin(2*PI*1770*${p}*t))`,
+        dur: 0.50
+      },
+      error_buzz: {
+        expr: `0.18*exp(-7.5*t)*(sin(2*PI*145*${p}*t)+0.7*sin(2*PI*153*${p}*t)+0.4*sin(2*PI*290*${p}*t))`,
+        dur: 0.40
+      },
+      clock_tick: {
+        expr: `0.23*exp(-42*t)*sin(2*PI*1250*${p}*t)+0.19*exp(-42*max(0,t-0.22))*gt(t,0.22)*sin(2*PI*920*${p}*max(0,t-0.22))`,
+        dur: 0.44
+      },
+      sonar_pulse: {
+        expr: `0.21*exp(-5.2*t)*sin(2*PI*660*${p}*t)+0.10*exp(-5*max(0,t-0.26))*gt(t,0.26)*sin(2*PI*660*${p}*max(0,t-0.26))`,
+        dur: 0.58
+      },
+      coin_cash: {
+        expr: `0.18*exp(-14*t)*sin(2*PI*1318*${p}*t)+0.20*exp(-8*max(0,t-0.08))*gt(t,0.08)*sin(2*PI*1567*${p}*max(0,t-0.08))`,
+        dur: 0.48
+      },
+      camera_shutter: {
+        expr: `0.25*exp(-55*t)*sin(2*PI*1800*${p}*t)+0.20*exp(-45*max(0,t-0.06))*gt(t,0.06)*sin(2*PI*950*${p}*max(0,t-0.06))`,
+        dur: 0.22
+      },
+      vinyl_rewind: {
+        expr: `0.20*exp(-4.5*t)*sin(2*PI*(780*${p}-1400*t*t)*t)`,
+        dur: 0.36
+      },
+      electric_zap: {
+        expr: `0.19*exp(-11*t)*(sin(2*PI*310*${p}*t)*sin(2*PI*95*t)+0.5*sin(2*PI*940*${p}*t))`,
+        dur: 0.30
+      },
+      revelacion_chord: {
+        expr: `0.15*exp(-3.5*t)*(sin(2*PI*523.25*${p}*t)+0.8*sin(2*PI*659.25*${p}*t)+0.6*sin(2*PI*783.99*${p}*t)+0.45*sin(2*PI*1046.5*${p}*t))`,
+        dur: 0.75
+      },
+      mystery_question: {
+        expr: `0.19*exp(-5.0*t)*sin(2*PI*(290*${p}+290*t)*t)`,
+        dur: 0.45
+      }
+    };
 
-  const fallbackOrder = ['shock', 'whoosh', 'alerta', 'whoosh', 'reloj', 'whoosh', 'revelacion', 'duda'];
+    // Alias de compatibilidad con nombres antiguos
+    catalog.shock = catalog.sub_drop;
+    catalog.whoosh = catalog.whoosh_fast;
+    catalog.alerta = catalog.error_buzz;
+    catalog.reloj = catalog.clock_tick;
+    catalog.revelacion = catalog.revelacion_chord;
+    catalog.duda = catalog.mystery_question;
+
+    return catalog[type] || catalog.whoosh_fast;
+  }
+
+  const allTypes = [
+    'sub_drop', 'laser_swipe', 'whoosh_fast', 'glitch_data', 'heartbeat',
+    'tension_riser', 'glass_ping', 'error_buzz', 'clock_tick', 'sonar_pulse',
+    'coin_cash', 'camera_shutter', 'vinyl_rewind', 'electric_zap', 'revelacion_chord', 'mystery_question'
+  ];
+
   const inputs = [];
   const filterParts = [];
+  const usedSfx = new Set();
 
   escenas.forEach((esc, idx) => {
-    const rawType = String(esc.sfx || '').toLowerCase().trim();
-    const sfxKey = sfxRecipes[rawType]
-      ? rawType
-      : (idx === 0 ? 'shock' : fallbackOrder[idx % fallbackOrder.length]);
+    let rawType = String(esc.sfx || '').toLowerCase().trim();
+    if (!rawType || usedSfx.has(rawType)) {
+      // Si el guionista repite un SFX o no lo pone, elegimos uno distinto basado en el hash del vídeo
+      rawType = allTypes[(videoHash + idx * 3) % allTypes.length];
+    }
+    usedSfx.add(rawType);
 
-    const recipe = sfxRecipes[sfxKey];
+    // Modulación procedural de pitch (entre 0.86x y 1.16x) para que ningún sonido suene enlatado jamás
+    const pitchMod = 0.86 + (((videoHash + idx * 17) % 31) / 100);
+    const recipe = getRecipe(rawType, pitchMod);
+
     const startSec = idx === 0 ? 0.04 : Math.max(0.05, Number(esc.inicio) || 0);
     const delayMs = Math.round(startSec * 1000);
 
@@ -388,8 +451,7 @@ function buildSceneSfxTrack(escenas, totalDuration) {
       { stdio: 'ignore' }
     );
   } catch (err) {
-    // Fallback compatible si la versión de FFmpeg no admite normalize=0
-    const filterCompat = `${filterParts.join(';')};${mixLabels}amix=inputs=${escenas.length}:duration=longest:dropout_transition=0,volume=${ Math.max(1.5, escenas.length * 0.55).toFixed(2) }[sfxout]`;
+    const filterCompat = `${filterParts.join(';')};${mixLabels}amix=inputs=${escenas.length}:duration=longest:dropout_transition=0,volume=${Math.max(1.5, escenas.length * 0.55).toFixed(2)}[sfxout]`;
     execSync(
       `ffmpeg -y ${inputs.join(' ')} -filter_complex "${filterCompat}" -map "[sfxout]" -ar 44100 -ac 2 -t ${totalDuration.toFixed(3)} -c:a pcm_s16le hook_sfx.wav`,
       { stdio: 'ignore' }
@@ -400,7 +462,7 @@ function buildSceneSfxTrack(escenas, totalDuration) {
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado Viral v4 (SFX Multipista IA + Transiciones Selladas)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v5 (8 Coreografías + 16 SFX Procedurales + Partículas Canvas)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -423,9 +485,7 @@ async function main() {
     execSync('ffmpeg -y -i audio_raw.mp3 -af "silenceremove=stop_periods=-1:stop_duration=0.22:stop_threshold=-38dB,atempo=1.04,apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'inherit' });
   }
 
-  // ============================================================================
-  // 2. OBTENCIÓN DE LA DURACIÓN REAL EXACTA (nk=1 sobre WAV limpio)
-  // ============================================================================
+  // 2. Obtención de la duración real exacta
   let realAudioDuration = 26;
   try {
     const probeOutput = execSync(
@@ -446,35 +506,49 @@ async function main() {
   const totalFrames = Math.ceil(realAudioDuration * fps);
   const duracionExactaVideo = totalFrames / fps;
 
-  // ============================================================================
-  // 3. SELECCIÓN DE PALETA Y VARIACIÓN VISUAL EN 0:00
-  // ============================================================================
+  // 3. Semilla, Paleta Principal + Paleta Secundaria + Estilo de Atmósfera y Subtítulos
   const accentPalettes = [
-    { name: 'Cian Eléctrico', hex: '#00f2fe', glow: 'rgba(0, 242, 254, 0.78)', bgCenter: '#102838', bgEdge: '#04070b' },
-    { name: 'Verde Neón', hex: '#39ff14', glow: 'rgba(57, 255, 20, 0.72)', bgCenter: '#122c1a', bgEdge: '#050906' },
-    { name: 'Amarillo Dorado', hex: '#ffd000', glow: 'rgba(255, 208, 0, 0.78)', bgCenter: '#2e2510', bgEdge: '#080604' },
-    { name: 'Magenta Vibrante', hex: '#ff2a85', glow: 'rgba(255, 42, 133, 0.78)', bgCenter: '#2d1228', bgEdge: '#080408' },
-    { name: 'Naranja Fuego', hex: '#ff6b00', glow: 'rgba(255, 107, 0, 0.78)', bgCenter: '#301a0e', bgEdge: '#090503' },
-    { name: 'Violeta Eléctrico', hex: '#c77dff', glow: 'rgba(199, 125, 255, 0.78)', bgCenter: '#221438', bgEdge: '#06040a' }
+    { name: 'Cian Eléctrico', hex: '#00f2fe', altHex: '#ff2a85', glow: 'rgba(0, 242, 254, 0.78)', altGlow: 'rgba(255, 42, 133, 0.72)', bgCenter: '#0f293a', bgEdge: '#04070b' },
+    { name: 'Verde Neón', hex: '#39ff14', altHex: '#00f2fe', glow: 'rgba(57, 255, 20, 0.72)', altGlow: 'rgba(0, 242, 254, 0.72)', bgCenter: '#112c1a', bgEdge: '#050906' },
+    { name: 'Amarillo Dorado', hex: '#ffd000', altHex: '#ff2a5f', glow: 'rgba(255, 208, 0, 0.78)', altGlow: 'rgba(255, 42, 95, 0.72)', bgCenter: '#2e240e', bgEdge: '#080604' },
+    { name: 'Magenta Vibrante', hex: '#ff2a85', altHex: '#ffd000', glow: 'rgba(255, 42, 133, 0.78)', altGlow: 'rgba(255, 208, 0, 0.72)', bgCenter: '#2d1128', bgEdge: '#080408' },
+    { name: 'Naranja Fuego', hex: '#ff6b00', altHex: '#00f2fe', glow: 'rgba(255, 107, 0, 0.78)', altGlow: 'rgba(0, 242, 254, 0.72)', bgCenter: '#30190c', bgEdge: '#090503' },
+    { name: 'Violeta Eléctrico', hex: '#c77dff', altHex: '#39ff14', glow: 'rgba(199, 125, 255, 0.78)', altGlow: 'rgba(57, 255, 20, 0.72)', bgCenter: '#211338', bgEdge: '#06040a' },
+    { name: 'Rojo Carmesí', hex: '#ff2a5f', altHex: '#ffd000', glow: 'rgba(255, 42, 95, 0.80)', altGlow: 'rgba(255, 208, 0, 0.75)', bgCenter: '#31101c', bgEdge: '#090306' }
   ];
 
-  const seedStr = (payload.tema_titulo || '') + (payload.categoria || '') + String(Date.now());
+  const seedStr = (payload.tema_titulo || '') + (payload.TituloYT || '') + String(Date.now());
   let hash = 0;
   for (let i = 0; i < seedStr.length; i++) {
-    hash = (hash * 31 + seedStr.charCodeAt(i)) % 100000;
+    hash = (hash * 31 + seedStr.charCodeAt(i)) % 1000000;
   }
   const chosenAccent = accentPalettes[hash % accentPalettes.length];
-  console.log(`🎨 Paleta visual seleccionada: ${chosenAccent.name} (${chosenAccent.hex})`);
+  const bgPatternMode = hash % 5; // 5 fondos atmosféricos distintos
+  const subStyleMode = hash % 3;  // 3 estilos visuales de caja de subtítulos
+  console.log(`🎨 Paleta: ${chosenAccent.name} | Atmósfera: #${bgPatternMode} | Estilo Sub: #${subStyleMode}`);
 
-  // ============================================================================
-  // 4. ESCALADO PROPORCIONAL DE ESCENAS Y ALINEACIÓN DE SUBTÍTULOS
-  // ============================================================================
+  // 4. Escalado y Anti-Repetición de Escenas (Garantiza que no haya 2 escenas iguales)
   const escenasOriginales = payload.escenas || [];
   const ultimaEscenaFinOriginal = escenasOriginales.length > 0
     ? Number(escenasOriginales[escenasOriginales.length - 1].fin)
     : duracionExactaVideo;
 
   const timeScale = duracionExactaVideo / Math.max(0.1, ultimaEscenaFinOriginal);
+
+  const allCuerpos = Object.keys(catalogo).filter(k => k.startsWith('cuerpo_'));
+  const allCaras = Object.keys(catalogo).filter(k => k.startsWith('cara_'));
+  const allProps = Object.keys(catalogo).filter(k => k.startsWith('prop_'));
+  const allDiags = Object.keys(catalogo).filter(k => k.startsWith('diag_'));
+
+  const usedCuerpos = new Set();
+  const usedCaras = new Set();
+  const usedProps = new Set();
+  const usedDiags = new Set();
+
+  const transicionesCatalogo = [
+    'punch_zoom', 'whip_left', 'whip_right', 'drop_bounce',
+    'glitch_shake', 'spiral_zoom', 'pendulum', 'elastic_pop'
+  ];
 
   const escenasProcesadas = escenasOriginales.map((esc, idx) => {
     const inicioEscena = (idx === 0) ? 0 : Number(esc.inicio) * timeScale;
@@ -483,16 +557,43 @@ async function main() {
       : Number(esc.fin) * timeScale;
 
     let svgInterno = '';
+    let esDiagrama = false;
 
     if (esc.diagrama && catalogo[esc.diagrama]) {
-      svgInterno = `<g class="layer-main">${catalogo[esc.diagrama]}</g>`;
+      let diagKey = esc.diagrama;
+      if (usedDiags.has(diagKey) && allDiags.length > usedDiags.size) {
+        diagKey = allDiags.find(d => !usedDiags.has(d)) || diagKey;
+      }
+      usedDiags.add(diagKey);
+      svgInterno = `<g class="layer-main">${catalogo[diagKey]}</g>`;
+      esDiagrama = true;
     } else {
-      const cuerpoKey = (esc.cuerpo && catalogo[esc.cuerpo]) ? esc.cuerpo : 'cuerpo_base_quieto';
-      const caraKey = (esc.cara && catalogo[esc.cara]) ? esc.cara : 'cara_duda';
-      const propKey = (esc.prop && catalogo[esc.prop]) ? esc.prop : null;
+      let cuerpoKey = (esc.cuerpo && catalogo[esc.cuerpo]) ? esc.cuerpo : allCuerpos[(hash + idx * 3) % allCuerpos.length];
+      if (usedCuerpos.has(cuerpoKey) && allCuerpos.length > usedCuerpos.size) {
+        cuerpoKey = allCuerpos[(hash + idx * 7) % allCuerpos.length];
+        if (usedCuerpos.has(cuerpoKey)) {
+          cuerpoKey = allCuerpos.find(c => !usedCuerpos.has(c)) || cuerpoKey;
+        }
+      }
+      usedCuerpos.add(cuerpoKey);
+
+      let caraKey = (esc.cara && catalogo[esc.cara]) ? esc.cara : allCaras[(hash + idx * 5) % allCaras.length];
+      if (usedCaras.has(caraKey) && allCaras.length > usedCaras.size) {
+        caraKey = allCaras[(hash + idx * 11) % allCaras.length];
+        if (usedCaras.has(caraKey)) {
+          caraKey = allCaras.find(c => !usedCaras.has(c)) || caraKey;
+        }
+      }
+      usedCaras.add(caraKey);
+
+      let propKey = (esc.prop && catalogo[esc.prop]) ? esc.prop : allProps[(hash + idx * 9) % allProps.length];
+      if (usedProps.has(propKey) && allProps.length > usedProps.size) {
+        propKey = allProps.find(p => !usedProps.has(p)) || propKey;
+      }
+      if (propKey) usedProps.add(propKey);
 
       if (catalogo[cuerpoKey]) svgInterno += `<g class="layer-body">${catalogo[cuerpoKey]}</g>`;
-      if (catalogo[caraKey]) svgInterno += `<g class="layer-face">${catalogo[caraKey]}</g>`;
+      if (catalogo[caraKey]) svgInterno += `<g class="layer-face" data-cara="${caraKey}">${catalogo[caraKey]}</g>`;
       if (propKey && catalogo[propKey]) svgInterno += `<g class="layer-prop">${catalogo[propKey]}</g>`;
     }
 
@@ -509,7 +610,12 @@ async function main() {
       .replace(/\{TEXTO_3\}/g, t3);
 
     const planosRotativos = ['primer_plano', 'medio', 'general', 'primer_plano'];
-    const planoElegido = (idx === 0) ? 'primer_plano' : (esc.plano || planosRotativos[idx % planosRotativos.length]);
+    const planoElegido = (idx === 0) ? 'primer_plano' : (esc.plano || planosRotativos[(hash + idx) % planosRotativos.length]);
+
+    const rawTrans = String(esc.transicion || '').toLowerCase().trim();
+    const transicionElegida = (idx === 0)
+      ? 'punch_zoom'
+      : (transicionesCatalogo.includes(rawTrans) ? rawTrans : transicionesCatalogo[(hash + idx * 3) % transicionesCatalogo.length]);
 
     return {
       ...esc,
@@ -517,31 +623,28 @@ async function main() {
       inicio: inicioEscena,
       fin: finEscena,
       svgInterno,
-      esDiagrama: !!esc.diagrama,
-      plano: planoElegido
+      esDiagrama,
+      plano: planoElegido,
+      transicion: transicionElegida,
+      drawMode: (hash + idx) % 3 // 3 modos distintos de dibujado de trazos SVG
     };
   });
 
-  // Calculamos primero los tiempos exactos de cada escena para clavar los SFX al milisegundo
   const subtitleChunks = buildSubtitleChunks(escenasProcesadas, payload.alignment, duracionExactaVideo);
 
-  // ============================================================================
-  // 4.5 GENERACIÓN DE PISTA SFX MULTI-ESCENA + MEZCLA CON MÚSICA AL 8%
-  // ============================================================================
+  // 4.5 Síntesis SFX Multipista + Mezcla con Música de Fondo al 8%
   try {
     let hasHookSfx = false;
     try {
-      console.log('⚡ Sintetizando pista de efectos sonoros (SFX) por escena dirigidos por el Guionista...');
-      hasHookSfx = buildSceneSfxTrack(escenasProcesadas, duracionExactaVideo);
+      console.log('⚡ Sintetizando los 16 SFX procedurales con modulación de tono...');
+      hasHookSfx = buildSceneSfxTrack(escenasProcesadas, duracionExactaVideo, hash);
     } catch (sfxErr) {
-      console.warn('⚠️ No se pudo sintetizar la pista SFX multipista:', sfxErr.message);
+      console.warn('⚠️ No se pudo sintetizar la pista SFX:', sfxErr.message);
     }
 
     const bgMusicPath = path.resolve('bg_music.mp3');
     if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
-      console.log(`🎵 bg_music.mp3 detectado (${fs.statSync(bgMusicPath).size} bytes). Preparando mezcla final...`);
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
-
       execSync(
         `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.08,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
         { stdio: 'inherit' }
@@ -560,29 +663,16 @@ async function main() {
           );
         }
       } else {
-        try {
-          execSync(
-            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-            { stdio: 'inherit' }
-          );
-        } catch (amixErr) {
-          execSync(
-            `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-            { stdio: 'inherit' }
-          );
-        }
+        execSync(
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          { stdio: 'inherit' }
+        );
       }
-
-      if (!fs.existsSync('audio.wav') || fs.statSync('audio.wav').size < 1000) {
-        throw new Error('El archivo audio.wav mezclado quedó vacío.');
-      }
-      console.log('✅ ¡Mezcla de Voz + Música (8%) + SFX por escena completada con éxito!');
     } else {
-      console.log('⚠️ No se encontró bg_music.mp3 válido. Usando voz limpia.');
       fs.copyFileSync('voice_clean.wav', 'audio.wav');
     }
   } catch (audioErr) {
-    console.warn('⚠️ Error al mezclar audio secundario, garantizando audio con voz limpia:', audioErr.message);
+    console.warn('⚠️ Fallback a voz limpia:', audioErr.message);
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
 
@@ -595,7 +685,9 @@ async function main() {
       @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&display=swap');
       :root {
         --accent-color: ${chosenAccent.hex};
+        --accent-alt: ${chosenAccent.altHex};
         --accent-glow: ${chosenAccent.glow};
+        --accent-alt-glow: ${chosenAccent.altGlow};
       }
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
@@ -604,19 +696,22 @@ async function main() {
         font-family: 'Montserrat', sans-serif;
         overflow: hidden; position: relative;
       }
-      .grid-bg {
+      #bg-canvas {
         position: absolute; inset: 0;
-        background-image: 
-          linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-        background-size: 50px 50px;
+        width: 720px; height: 1280px;
+        z-index: 2; pointer-events: none;
+      }
+      .vignette {
+        position: absolute; inset: 0;
+        background: radial-gradient(circle at 50% 45%, transparent 48%, rgba(0,0,0,0.72) 100%);
+        z-index: 3; pointer-events: none;
       }
       .glow-spot {
-        position: absolute; top: 35%; left: 50%; width: 520px; height: 520px;
+        position: absolute; top: 36%; left: 50%; width: 540px; height: 540px;
         transform: translate(-50%, -50%);
-        background: radial-gradient(circle, rgba(255, 42, 95, 0.18) 0%, var(--accent-glow) 38%, transparent 70%);
-        opacity: 0.55;
-        pointer-events: none; z-index: 1;
+        background: radial-gradient(circle, var(--accent-glow) 0%, var(--accent-alt-glow) 42%, transparent 72%);
+        opacity: 0.52;
+        pointer-events: none; z-index: 4;
       }
       .hook-flash {
         position: absolute; inset: 0;
@@ -626,16 +721,16 @@ async function main() {
       }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 10px;
-        background: linear-gradient(90deg, #ff2a5f, var(--accent-color)); width: 0%; z-index: 30;
+        background: linear-gradient(90deg, var(--accent-alt), var(--accent-color)); width: 0%; z-index: 30;
         box-shadow: 0 0 18px var(--accent-glow);
       }
       .top-tag {
         position: absolute; top: 58px; left: 50%; transform: translateX(-50%);
-        background: rgba(10, 10, 18, 0.85); color: var(--accent-color);
-        font-size: 20px; font-weight: 900; padding: 10px 26px;
+        background: rgba(8, 8, 16, 0.88); color: var(--accent-color);
+        font-size: 20px; font-weight: 900; padding: 10px 28px;
         border-radius: 40px; letter-spacing: 2px; text-transform: uppercase;
         border: 2px solid var(--accent-color); white-space: nowrap;
-        box-shadow: 0 0 22px var(--accent-glow); z-index: 20;
+        box-shadow: 0 0 24px var(--accent-glow); z-index: 20;
       }
 
       .scene {
@@ -646,12 +741,12 @@ async function main() {
       }
       .scene-inner {
         display: flex; justify-content: center; align-items: center;
-        will-change: transform;
+        will-change: transform, filter;
       }
-      svg { width: 530px; height: 630px; overflow: visible; filter: drop-shadow(0 15px 30px rgba(0,0,0,0.85)); }
-      .plano-primer_plano svg { width: 640px; height: 760px; }
-      .plano-medio svg { width: 580px; height: 690px; }
-      .plano-general svg { width: 520px; height: 620px; }
+      svg { width: 530px; height: 630px; overflow: visible; filter: drop-shadow(0 16px 32px rgba(0,0,0,0.88)); }
+      .plano-primer_plano svg { width: 645px; height: 765px; }
+      .plano-medio svg { width: 585px; height: 695px; }
+      .plano-general svg { width: 525px; height: 625px; }
 
       svg text {
         font-family: 'Montserrat', sans-serif;
@@ -664,18 +759,16 @@ async function main() {
       }
 
       /* CLASES CRÍTICAS PARA QUE LOS SVGS NUNCA SALGAN NEGROS */
-      .stroke-white { stroke: #ffffff; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,255,255,0.35)); }
-      .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.9)); }
-      .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.9)); }
+      .stroke-white { stroke: #ffffff; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,255,255,0.38)); }
+      .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.92)); }
+      .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.92)); }
 
-      /* ======================================================================
-         SUBTÍTULOS CORREGIDOS ANTI-SOLAPAMIENTO (ESPACIADO AMPLIO Y LIMPIO)
-         ====================================================================== */
+      /* SUBTÍTULOS CON 3 VARIANTES ESTÉTICAS DINÁMICAS */
       .subtitle-container {
         position: absolute;
-        bottom: 120px;
-        left: 32px;
-        right: 32px;
+        bottom: 118px;
+        left: 30px;
+        right: 30px;
         min-height: 150px;
         display: flex;
         justify-content: center;
@@ -691,11 +784,22 @@ async function main() {
         gap: 14px 24px;
         text-align: center;
         padding: 18px 28px;
-        background: rgba(8, 8, 16, 0.78);
-        border: 1.5px solid rgba(255, 255, 255, 0.14);
+        background: rgba(8, 8, 16, 0.82);
+        border: 2px solid rgba(255, 255, 255, 0.16);
         border-radius: 26px;
-        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.88);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.90);
         will-change: transform, opacity;
+      }
+      .subtitle-box.style-1 {
+        background: linear-gradient(180deg, rgba(16, 16, 30, 0.88) 0%, rgba(6, 6, 12, 0.94) 100%);
+        border: 2px solid var(--accent-color);
+        box-shadow: 0 14px 36px rgba(0,0,0,0.9), 0 0 22px var(--accent-glow);
+      }
+      .subtitle-box.style-2 {
+        background: rgba(6, 6, 12, 0.88);
+        border-left: 6px solid var(--accent-color);
+        border-right: 6px solid var(--accent-alt);
+        border-radius: 18px;
       }
       .sub-word {
         display: inline-block;
@@ -716,22 +820,23 @@ async function main() {
         filter: drop-shadow(0 0 14px var(--accent-glow));
       }
       .sub-word.active {
-        transform: scale(1.09) translateY(-3px);
+        transform: scale(1.10) translateY(-4px);
       }
       .sub-word.kw.active {
-        transform: scale(1.13) translateY(-4px);
+        transform: scale(1.15) translateY(-5px) rotate(-1.5deg);
       }
       .sub-word.future {
-        opacity: 0.45;
+        opacity: 0.42;
       }
     </style>
   </head>
   <body>
-    <div class="grid-bg"></div>
+    <canvas id="bg-canvas" width="720" height="1280"></canvas>
+    <div class="vignette"></div>
     <div class="glow-spot" id="glow"></div>
     <div class="hook-flash" id="hook-flash"></div>
     <div class="progress-bar" id="pbar"></div>
-    <div class="top-tag">${payload.categoria || 'PSICOLOGÍA'}</div>
+    <div class="top-tag" id="top-tag">${payload.categoria || 'PSICOLOGÍA'}</div>
 
     <div id="scenes-wrapper">
       ${escenasProcesadas.map(e => `
@@ -744,18 +849,118 @@ async function main() {
     </div>
 
     <div class="subtitle-container">
-      <div class="subtitle-box" id="sub-box"></div>
+      <div class="subtitle-box style-${subStyleMode}" id="sub-box"></div>
     </div>
 
     <script>
       const escenas = ${JSON.stringify(escenasProcesadas)};
       const subtitleChunks = ${JSON.stringify(subtitleChunks)};
       const totalFrames = ${totalFrames};
+      const bgPatternMode = ${bgPatternMode};
+      const accentHex = "${chosenAccent.hex}";
+      const accentAltHex = "${chosenAccent.altHex}";
+
+      // Inicializar sistema de partículas y atmósfera en Canvas
+      const canvas = document.getElementById('bg-canvas');
+      const ctx = canvas.getContext('2d');
+      const particles = Array.from({ length: 36 }, (_, i) => ({
+        x: (i * 97) % 720,
+        y: (i * 173) % 1280,
+        r: 1.8 + (i % 4) * 1.3,
+        vx: ((i % 5) - 2) * 14,
+        vy: -22 - (i % 6) * 12,
+        alpha: 0.18 + (i % 5) * 0.10,
+        isAlt: i % 3 === 0
+      }));
+
+      function renderAtmosphere(t, sceneLocalT) {
+        ctx.clearRect(0, 0, 720, 1280);
+        const burst = sceneLocalT < 0.20 ? (1 - sceneLocalT / 0.20) : 0;
+
+        // 5 Patrones geométricos de fondo distintos según el vídeo
+        ctx.save();
+        if (bgPatternMode === 0) {
+          // Modo 0: Cuadrícula Cibernética en movimiento
+          ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+          ctx.lineWidth = 1;
+          const offset = (t * 28) % 55;
+          for (let x = 0; x < 720; x += 55) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1280); ctx.stroke();
+          }
+          for (let y = offset; y < 1280; y += 55) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(720, y); ctx.stroke();
+          }
+        } else if (bgPatternMode === 1) {
+          // Modo 1: Ondas de Radar Hipnóticas desde el centro
+          ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+          ctx.lineWidth = 1.5;
+          for (let r = 1; r <= 6; r++) {
+            const rad = ((r * 110 + t * 45) % 680);
+            ctx.beginPath();
+            ctx.arc(360, 480, rad, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        } else if (bgPatternMode === 2) {
+          // Modo 2: Constelación Neuronal conectada
+          ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+          ctx.lineWidth = 1;
+          for (let i = 0; i < particles.length; i++) {
+            const p1 = particles[i];
+            const px1 = (p1.x + p1.vx * t + 7200) % 720;
+            const py1 = (p1.y + p1.vy * t + 12800) % 1280;
+            for (let j = i + 1; j < particles.length; j++) {
+              const p2 = particles[j];
+              const px2 = (p2.x + p2.vx * t + 7200) % 720;
+              const py2 = (p2.y + p2.vy * t + 12800) % 1280;
+              const dist = Math.hypot(px1 - px2, py1 - py2);
+              if (dist < 135) {
+                ctx.beginPath(); ctx.moveTo(px1, py1); ctx.lineTo(px2, py2); ctx.stroke();
+              }
+            }
+          }
+        } else if (bgPatternMode === 3) {
+          // Modo 3: Líneas Diagonales de Tensión Dinámica
+          ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+          ctx.lineWidth = 1.5;
+          const shift = (t * 35) % 90;
+          for (let i = -1280; i < 720; i += 90) {
+            ctx.beginPath();
+            ctx.moveTo(i + shift, 0);
+            ctx.lineTo(i + shift + 720, 1280);
+            ctx.stroke();
+          }
+        } else {
+          // Modo 4: Cruces de Precisión de Laboratorio Clínico
+          ctx.strokeStyle = 'rgba(255,255,255,0.065)';
+          ctx.lineWidth = 1.5;
+          const yShift = (t * 20) % 90;
+          for (let x = 60; x < 720; x += 90) {
+            for (let y = yShift; y < 1280; y += 90) {
+              ctx.beginPath();
+              ctx.moveTo(x - 5, y); ctx.lineTo(x + 5, y);
+              ctx.moveTo(x, y - 5); ctx.lineTo(x, y + 5);
+              ctx.stroke();
+            }
+          }
+        }
+
+        // Dibujar partículas flotantes reactivas
+        particles.forEach((p, idx) => {
+          const speedBoost = 1 + burst * 0.4;
+          const px = (p.x + p.vx * t * speedBoost + Math.sin(t * 2 + idx) * 18 + 7200) % 720;
+          const py = (p.y + p.vy * t * speedBoost + 12800) % 1280;
+          ctx.fillStyle = p.isAlt ? accentAltHex : accentHex;
+          ctx.globalAlpha = Math.min(0.85, p.alpha + burst * 0.25);
+          ctx.beginPath();
+          ctx.arc(px, py, p.r * (1 + burst * 0.5), 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+      }
 
       document.fonts.ready.then(() => {
         document.querySelectorAll('.scene svg').forEach(svg => {
           const texts = Array.from(svg.querySelectorAll('text'));
-          
           texts.forEach(txt => {
             const content = (txt.textContent || '').trim();
             if (content.length <= 2) return;
@@ -807,6 +1012,7 @@ async function main() {
           shape.style.strokeDasharray = '100';
           shape.style.strokeDashoffset = '100';
         });
+        svg.dataset.totalShapes = String(idx);
       });
 
       function easeOutBack(x) {
@@ -815,17 +1021,21 @@ async function main() {
         return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
       }
 
+      function easeOutElastic(x) {
+        if (x === 0 || x === 1) return x;
+        return Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * ((2 * Math.PI) / 3)) + 1;
+      }
+
       const subBox = document.getElementById('sub-box');
       const hookFlash = document.getElementById('hook-flash');
+      const glowEl = document.getElementById('glow');
       let lastChunkIdx = -2;
 
       window.setFrameData = function(frameIdx, t) {
-        // Barra de progreso psicológica no lineal
         const linearRatio = (frameIdx + 1) / totalFrames;
         const psychPct = Math.pow(linearRatio, 0.62) * 100;
         document.getElementById('pbar').style.width = Math.min(100, psychPct) + '%';
         
-        // 1. SELECCIÓN DE ESCENA SIN HUECOS MUERTOS
         let activeIdx = escenas.findIndex((e, idx) => {
           if (idx === escenas.length - 1) return t >= e.inicio;
           return t >= e.inicio && t < e.fin;
@@ -835,18 +1045,25 @@ async function main() {
         const activeScene = escenas[activeIdx];
         const sceneLocalT = activeScene ? Math.max(0, t - activeScene.inicio) : 0;
 
-        // Destello visual fuerte en 0:00 y micro-pulso sutil al cambiar de escena
+        renderAtmosphere(t, sceneLocalT);
+
         if (t < 0.25) {
-          hookFlash.style.opacity = String((1 - t / 0.25) * 0.42);
+          hookFlash.style.opacity = String((1 - t / 0.25) * 0.44);
         } else if (sceneLocalT < 0.14) {
-          hookFlash.style.opacity = String((1 - sceneLocalT / 0.14) * 0.12);
+          hookFlash.style.opacity = String((1 - sceneLocalT / 0.14) * 0.16);
         } else {
           hookFlash.style.opacity = '0';
         }
 
-        const glowScale = 1 + Math.sin(t * 4.2) * 0.18 + (t < 0.35 ? (1 - t / 0.35) * 0.45 : 0);
-        document.getElementById('glow').style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
+        // El foco de luz se desplaza dinámicamente en cada escena para cambiar la composición
+        const glowX = 50 + Math.sin(activeIdx * 2.1 + t * 1.5) * 12;
+        const glowY = 36 + Math.cos(activeIdx * 1.7 + t * 1.2) * 7;
+        const glowScale = 1 + Math.sin(t * 4.5) * 0.18 + (sceneLocalT < 0.25 ? (1 - sceneLocalT / 0.25) * 0.35 : 0);
+        glowEl.style.left = glowX + '%';
+        glowEl.style.top = glowY + '%';
+        glowEl.style.transform = \`translate(-50%, -50%) scale(\${glowScale})\`;
 
+        // 1. RENDERIZADO DE LAS 8 COREOGRAFÍAS DE CÁMARA POR ESCENA
         escenas.forEach((e, idx) => {
           const sc = document.getElementById('scene-' + e.id);
           const inner = document.getElementById('inner-' + e.id);
@@ -856,67 +1073,138 @@ async function main() {
             const durEscena = Math.max(0.1, e.fin - e.inicio);
             sc.style.opacity = '1';
 
-            let scale;
-            let tiltDeg;
+            let tx = 0;
+            let ty = Math.sin(localT * 5.2) * 10;
+            let scale = 1;
+            let rot = 0;
 
-            if (idx === 0) {
-              // HOOK VISUAL 0:00: Arranca en Zoom Gigante (1.75x) y aterriza de golpe
-              const punchP = Math.min(1, localT / 0.32);
-              const easeOutCubic = 1 - Math.pow(1 - punchP, 3);
-              scale = 1.75 - 0.75 * easeOutCubic;
-              scale *= (1 + (localT / durEscena) * 0.08);
-              tiltDeg = (1 - easeOutCubic) * -8 + Math.sin(localT * 3.2) * 2.0;
+            const tr = e.transicion || 'elastic_pop';
+            const p = Math.min(1, localT / 0.28);
+            const easeCubic = 1 - Math.pow(1 - p, 3);
+
+            if (idx === 0 || tr === 'punch_zoom') {
+              scale = 1.78 - 0.78 * easeCubic;
+              rot = (1 - easeCubic) * -9 + Math.sin(localT * 3.2) * 2.0;
+            } else if (tr === 'whip_left') {
+              const b = easeOutBack(p);
+              tx = -340 * (1 - b);
+              scale = 0.75 + 0.25 * b;
+              rot = -18 * (1 - b) + Math.sin(localT * 3.0) * 2.2;
+            } else if (tr === 'whip_right') {
+              const b = easeOutBack(p);
+              tx = 340 * (1 - b);
+              scale = 0.75 + 0.25 * b;
+              rot = 18 * (1 - b) + Math.sin(localT * 3.0) * 2.2;
+            } else if (tr === 'drop_bounce') {
+              const el = easeOutElastic(Math.min(1, localT / 0.42));
+              ty = -320 * (1 - el) + Math.sin(localT * 5.2) * 8;
+              scale = 0.85 + 0.15 * el;
+              rot = Math.sin(localT * 3.5) * 2.0;
+            } else if (tr === 'glitch_shake') {
+              const b = easeOutBack(p);
+              scale = 0.60 + 0.40 * b;
+              const shakeDecay = localT < 0.45 ? (1 - localT / 0.45) : 0.18;
+              tx += Math.sin(localT * 55) * 14 * shakeDecay;
+              ty += Math.cos(localT * 62) * 10 * shakeDecay;
+              rot = Math.sin(localT * 40) * 5 * shakeDecay;
+            } else if (tr === 'spiral_zoom') {
+              const b = easeOutBack(p);
+              scale = 0.30 + 0.70 * b;
+              rot = (1 - easeCubic) * 28 + Math.sin(localT * 2.8) * 2.0;
+            } else if (tr === 'pendulum') {
+              const b = easeOutBack(p);
+              scale = 0.65 + 0.35 * b;
+              rot = Math.sin(localT * 6.2) * 7.5;
+              tx += Math.sin(localT * 6.2) * 18;
             } else {
-              const entryProgress = Math.min(1, localT / 0.24);
-              scale = 0.52 + 0.48 * easeOutBack(entryProgress);
-              scale *= (1 + (localT / durEscena) * 0.08);
-
-              if (localT > durEscena * 0.48) {
-                const midProgress = Math.min(1, (localT - durEscena * 0.48) / 0.22);
-                scale *= (1 + 0.08 * easeOutBack(midProgress));
-              }
-              tiltDeg = Math.sin(localT * 2.8) * (e.esDiagrama ? 1.4 : 2.5);
+              // elastic_pop
+              const el = easeOutElastic(Math.min(1, localT / 0.38));
+              scale = 0.35 + 0.65 * el;
+              rot = Math.sin(localT * 2.8) * (e.esDiagrama ? 1.5 : 2.8);
             }
 
-            const floatY = Math.sin(localT * 5.2) * 11;
-            inner.style.transform = \`translateY(\${floatY}px) scale(\${scale}) rotate(\${tiltDeg}deg)\`;
+            // Zoom progresivo + Impulso secundario a mitad de la escena para mantener retención
+            scale *= (1 + (localT / durEscena) * 0.09);
+            if (localT > durEscena * 0.48) {
+              const midP = Math.min(1, (localT - durEscena * 0.48) / 0.22);
+              scale *= (1 + 0.08 * easeOutBack(midP));
+            }
 
+            inner.style.transform = \`translate(\${tx.toFixed(1)}px, \${ty.toFixed(1)}px) scale(\${scale.toFixed(3)}) rotate(\${rot.toFixed(2)}deg)\`;
+
+            // 3 Modos distintos de dibujado de trazos SVG para variar el revelado visual
+            const svgEl = sc.querySelector('svg');
+            const totalShapes = Math.max(1, parseInt(svgEl?.dataset.totalShapes || '8', 10));
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
               if (idx === 0) {
-                const drawP0 = Math.max(0.65, Math.min(1, 0.65 + (localT / 0.18) * 0.35));
+                const drawP0 = Math.max(0.68, Math.min(1, 0.68 + (localT / 0.18) * 0.32));
                 shape.style.strokeDashoffset = String(100 * (1 - drawP0));
+              } else if (e.drawMode === 1) {
+                // Dibujo simultáneo rápido con rebote
+                const drawP = Math.max(0, Math.min(1, localT / 0.28));
+                shape.style.strokeDashoffset = String(100 * (1 - drawP));
+              } else if (e.drawMode === 2) {
+                // Orden inverso de capas (de los detalles al contorno)
+                const revIdx = Math.max(0, totalShapes - 1 - dIdx);
+                const delay = Math.min(0.18, revIdx * 0.025);
+                const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.32));
+                shape.style.strokeDashoffset = String(100 * (1 - drawP));
               } else {
+                // Cascada progresiva clásica
                 const delay = Math.min(0.18, dIdx * 0.025);
-                const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.35));
+                const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.34));
                 shape.style.strokeDashoffset = String(100 * (1 - drawP));
               }
             });
 
-            const faceLayer = sc.querySelector('.layer-face');
-            if (faceLayer) {
-              const faceY = Math.sin(localT * 7.5) * 3.5;
-              const faceRot = Math.sin(localT * 5.0) * 4.0;
-              faceLayer.style.transformOrigin = '100px 65px';
-              faceLayer.style.transform = \`translateY(\${faceY}px) rotate(\${faceRot}deg)\`;
+            // Animación secundaria orgánica del cuerpo (respiración)
+            const bodyLayer = sc.querySelector('.layer-body');
+            if (bodyLayer) {
+              const breathScaleY = 1 + Math.sin(localT * 6.0) * 0.025;
+              const breathScaleX = 1 - Math.sin(localT * 6.0) * 0.015;
+              bodyLayer.style.transformOrigin = '100px 140px';
+              bodyLayer.style.transform = \`scale(\${breathScaleX}, \${breathScaleY})\`;
             }
 
+            // Animación expresiva de la cara según emoción
+            const faceLayer = sc.querySelector('.layer-face');
+            if (faceLayer) {
+              const caraType = faceLayer.dataset.cara || '';
+              let faceX = 0;
+              let faceY = Math.sin(localT * 7.5) * 3.8;
+              let faceRot = Math.sin(localT * 5.2) * 4.5;
+
+              if (/estres|enfado|miedo|panico|grito/.test(caraType)) {
+                faceX = Math.sin(localT * 38) * 2.2;
+                faceRot += Math.cos(localT * 32) * 3.0;
+              } else if (/duda|pensando|sospecha/.test(caraType)) {
+                faceRot = -6 + Math.sin(localT * 3.5) * 6.0;
+              }
+
+              faceLayer.style.transformOrigin = '100px 65px';
+              faceLayer.style.transform = \`translate(\${faceX}px, \${faceY}px) rotate(\${faceRot}deg)\`;
+            }
+
+            // Animación viva de los props (órbita + pulso elástico)
             const propLayer = sc.querySelector('.layer-prop');
             if (propLayer) {
-              const propY = Math.sin(localT * 6.5 + 1) * 9;
-              const propScale = 1 + Math.sin(localT * 9.5) * 0.09;
+              const propX = Math.cos(localT * 5.0) * 5.5;
+              const propY = Math.sin(localT * 6.8 + 1) * 10;
+              const propScale = 1 + Math.sin(localT * 10.5) * 0.11;
+              const propRot = Math.sin(localT * 4.5) * 6;
               propLayer.style.transformOrigin = 'center';
               propLayer.style.transformBox = 'fill-box';
-              propLayer.style.transform = \`translateY(\${propY}px) scale(\${propScale})\`;
+              propLayer.style.transform = \`translate(\${propX}px, \${propY}px) scale(\${propScale}) rotate(\${propRot}deg)\`;
             }
 
             sc.querySelectorAll('.float').forEach(el => {
-              const fOffset = Math.sin(localT * 6.5) * 7.5;
+              const fOffset = Math.sin(localT * 6.8) * 8.5;
               el.style.transform = \`translateY(\${fOffset}px)\`;
             });
 
             sc.querySelectorAll('.pulse').forEach(el => {
-              const pScale = 1 + Math.sin(localT * 11) * 0.13;
+              const pScale = 1 + Math.sin(localT * 11.5) * 0.14;
               el.style.transformOrigin = 'center';
               el.style.transformBox = 'fill-box';
               el.style.transform = \`scale(\${pScale})\`;
@@ -1000,7 +1288,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 generado con SFX Multipista IA, Hook 0:00, subtítulos clavados y música de fondo!');
+  console.log('✅ ¡Vídeo output.mp4 v5 generado con 8 Coreografías, 16 SFX Procedurales y Partículas en Canvas!');
 }
 
 main().catch(err => {
