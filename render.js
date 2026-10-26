@@ -3,7 +3,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
-// 1. Limpiador de textos internos de los SVGs (diagramas y props)
+// 1. Extractor inteligente de textos internos para SVGs (Elimina para siempre el fallback "OPCIÓN A")
 function sanitizeSvgTexts(esc, matchesDestacados) {
   let raw1 = (esc.texto_1 || '').trim();
   let raw2 = (esc.texto_2 || '').trim();
@@ -25,11 +25,38 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
     .replace(/\s{2,}/g, ' ')
     .trim();
 
-  raw1 = cleanRedundant(raw1) || matchesDestacados[0] || 'OPCIÓN A';
-  raw2 = cleanRedundant(raw2) || matchesDestacados[1] || 'OPCIÓN B';
-  raw3 = cleanRedundant(raw3) || matchesDestacados[2] || 'OPCIÓN C';
+  // Extraer palabras potentes del subtítulo de la escena por si faltan texto_1 o texto_2
+  const stopWords = new Set([
+    'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
+    'CON', 'NO', 'UNA', 'SU', 'PARA', 'ES', 'AL', 'LO', 'COMO', 'MAS', 'MÁS',
+    'PERO', 'SUS', 'LE', 'HA', 'ME', 'SI', 'SIN', 'SOBRE', 'ESTE', 'YA', 'ENTRE',
+    'CUANDO', 'TODO', 'ESTA', 'SER', 'SON', 'DOS', 'ERA', 'QUE', 'QUÉ', 'TU', 'TÚ', 'TE'
+  ]);
 
-  return [raw1.toUpperCase(), raw2.toUpperCase(), raw3.toUpperCase()];
+  const subWords = (esc.subtitulo || '')
+    .replace(/[*#_~`.,;!?¡¿"«»()]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map(w => w.toUpperCase())
+    .filter(w => w.length >= 3 && !stopWords.has(w));
+
+  const fallback1 = matchesDestacados[0] || subWords[0] || 'MENTE';
+  const fallback2 = matchesDestacados[1] || subWords[1] || subWords[subWords.length - 1] || 'REALIDAD';
+  const fallback3 = matchesDestacados[2] || subWords[2] || 'TRAMPA';
+
+  raw1 = cleanRedundant(raw1) || fallback1;
+  raw2 = cleanRedundant(raw2) || fallback2;
+  raw3 = cleanRedundant(raw3) || fallback3;
+
+  if (raw2.toUpperCase() === raw1.toUpperCase() && subWords.length > 1) {
+    raw2 = subWords.find(w => w !== raw1.toUpperCase()) || fallback2;
+  }
+
+  return [
+    raw1.toUpperCase().slice(0, 12),
+    raw2.toUpperCase().slice(0, 12),
+    raw3.toUpperCase().slice(0, 12)
+  ];
 }
 
 // Normalizador para emparejar palabras del guion con las palabras de ElevenLabs sin desfase
@@ -170,7 +197,6 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
           bestMatchIdx = candidateIdx;
           break;
         }
-        // Caso especial: "1€" se envía como "un euro" a ElevenLabs
         if (hasCurrencyOrPct && targetNorm === '1' && candNorm === 'un') {
           bestMatchIdx = candidateIdx;
           break;
@@ -182,10 +208,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
         let mEnd = elevenWords[bestMatchIdx].end;
         ewCursor = bestMatchIdx + 1;
 
-        // Si el token visual lleva €, $ o % (ej. "100€" o "67%"), absorbemos las palabras "euros", "dólares" o "por ciento"
-        // que ElevenLabs genera después del número para que el subtítulo dure toda la locución del importe y no desfase el resto
         while (ewCursor < elevenWords.length && /^(euro|euros|dolar|dolares|por|ciento)$/.test(elevenWords[ewCursor].norm)) {
-          // Solo absorbemos si el siguiente token visual del guion no es literalmente esa misma palabra escrita
           const nextVisualNorm = (i + 1 < flatTokens.length) ? flatTokens[i + 1].norm : '';
           if (nextVisualNorm === elevenWords[ewCursor].norm) break;
           mEnd = elevenWords[ewCursor].end;
@@ -479,7 +502,7 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado Viral v5.1 (8 Coreografías + 16 SFX + Fusión Moneda €)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v5.2 (Anti-Cajas Vacías + HUD Dinámico + Fusión €)...');
 
   const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
@@ -531,14 +554,16 @@ async function main() {
     { name: 'Rojo Carmesí', hex: '#ff2a5f', altHex: '#ffd000', glow: 'rgba(255, 42, 95, 0.80)', altGlow: 'rgba(255, 208, 0, 0.75)', bgCenter: '#31101c', bgEdge: '#090306' }
   ];
 
-  const seedStr = (payload.tema_titulo || '') + (payload.TituloYT || '') + String(Date.now());
-  let hash = 0;
+  // Hash de alta dispersión basado en el contenido único de las escenas para no repetir paleta en vídeos seguidos
+  const seedStr = JSON.stringify(payload.escenas || '') + (payload.TituloYT || '') + String(Date.now());
+  let hash = 2166136261;
   for (let i = 0; i < seedStr.length; i++) {
-    hash = (hash * 31 + seedStr.charCodeAt(i)) % 1000000;
+    hash ^= seedStr.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
   }
   const chosenAccent = accentPalettes[hash % accentPalettes.length];
-  const bgPatternMode = hash % 5;
-  const subStyleMode = hash % 3;
+  const bgPatternMode = (hash >>> 3) % 5;
+  const subStyleMode = (hash >>> 6) % 3;
   console.log(`🎨 Paleta: ${chosenAccent.name} | Atmósfera: #${bgPatternMode} | Estilo Sub: #${subStyleMode}`);
 
   const escenasOriginales = payload.escenas || [];
@@ -548,10 +573,16 @@ async function main() {
 
   const timeScale = duracionExactaVideo / Math.max(0.1, ultimaEscenaFinOriginal);
 
-  const allCuerpos = Object.keys(catalogo).filter(k => k.startsWith('cuerpo_'));
-  const allCaras = Object.keys(catalogo).filter(k => k.startsWith('cara_'));
-  const allProps = Object.keys(catalogo).filter(k => k.startsWith('prop_'));
-  const allDiags = Object.keys(catalogo).filter(k => k.startsWith('diag_'));
+  // Filtrar en el motor las claves limpias (sin sufijo numérico _123) para erradicar cajas vacías
+  const filterCleanCatalog = (prefix) => {
+    const clean = Object.keys(catalogo).filter(k => k.startsWith(prefix) && !/_[0-9]+$/.test(k));
+    return clean.length > 0 ? clean : Object.keys(catalogo).filter(k => k.startsWith(prefix));
+  };
+
+  const allCuerpos = filterCleanCatalog('cuerpo_');
+  const allCaras = filterCleanCatalog('cara_');
+  const allProps = filterCleanCatalog('prop_');
+  const allDiags = filterCleanCatalog('diag_');
 
   const usedCuerpos = new Set();
   const usedCaras = new Set();
@@ -569,37 +600,59 @@ async function main() {
       ? duracionExactaVideo
       : Number(esc.fin) * timeScale;
 
+    const subTexto = esc.subtitulo || '';
+    const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim());
+    const [t1, t2, t3] = sanitizeSvgTexts(esc, matchesDestacados);
+
     let svgInterno = '';
     let esDiagrama = false;
 
     if (esc.diagrama && catalogo[esc.diagrama]) {
       let diagKey = esc.diagrama;
-      if (usedDiags.has(diagKey) && allDiags.length > usedDiags.size) {
-        diagKey = allDiags.find(d => !usedDiags.has(d)) || diagKey;
+      // Si el guionista mandó un diagrama genérico numerado (caja vacía) o repetido, lo cambiamos por uno artesanal limpio
+      if (/_[0-9]+$/.test(diagKey) || (usedDiags.has(diagKey) && allDiags.length > usedDiags.size)) {
+        diagKey = allDiags.find(d => !usedDiags.has(d)) || allDiags[(hash + idx) % allDiags.length] || diagKey;
       }
       usedDiags.add(diagKey);
-      svgInterno = `<g class="layer-main">${catalogo[diagKey]}</g>`;
+
+      let rawDiagSvg = catalogo[diagKey];
+
+      // Si el SVG tiene textos estáticos quemados como "LÓGICA" y "EMOCIÓN", los sustituimos por t1 y t2 de la escena
+      if (/LÓGICA/i.test(rawDiagSvg) && /EMOCIÓN/i.test(rawDiagSvg)) {
+        rawDiagSvg = rawDiagSvg.replace(/LÓGICA/gi, t1).replace(/EMOCIÓN/gi, t2);
+      }
+
+      // Si el diagrama no tiene ninguna etiqueta <text> ni marcadores {{TEXTO_1}}, le inyectamos un HUD de neón arriba y abajo
+      const hasTextTag = /<text\b/i.test(rawDiagSvg) || /\{?\{TEXTO_1\}?\}/.test(rawDiagSvg);
+      if (!hasTextTag) {
+        rawDiagSvg += `
+          <text x="100" y="28" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="900">${t1}</text>
+          <text x="100" y="222" text-anchor="middle" fill="#ffd000" font-size="13" font-weight="900">${t2}</text>
+        `;
+      }
+
+      svgInterno = `<g class="layer-main">${rawDiagSvg}</g>`;
       esDiagrama = true;
     } else {
-      let cuerpoKey = (esc.cuerpo && catalogo[esc.cuerpo]) ? esc.cuerpo : allCuerpos[(hash + idx * 3) % allCuerpos.length];
+      let cuerpoKey = (esc.cuerpo && catalogo[esc.cuerpo] && !/_[0-9]+$/.test(esc.cuerpo))
+        ? esc.cuerpo
+        : allCuerpos[(hash + idx * 3) % allCuerpos.length];
       if (usedCuerpos.has(cuerpoKey) && allCuerpos.length > usedCuerpos.size) {
-        cuerpoKey = allCuerpos[(hash + idx * 7) % allCuerpos.length];
-        if (usedCuerpos.has(cuerpoKey)) {
-          cuerpoKey = allCuerpos.find(c => !usedCuerpos.has(c)) || cuerpoKey;
-        }
+        cuerpoKey = allCuerpos.find(c => !usedCuerpos.has(c)) || cuerpoKey;
       }
       usedCuerpos.add(cuerpoKey);
 
-      let caraKey = (esc.cara && catalogo[esc.cara]) ? esc.cara : allCaras[(hash + idx * 5) % allCaras.length];
+      let caraKey = (esc.cara && catalogo[esc.cara] && !/_[0-9]+$/.test(esc.cara))
+        ? esc.cara
+        : allCaras[(hash + idx * 5) % allCaras.length];
       if (usedCaras.has(caraKey) && allCaras.length > usedCaras.size) {
-        caraKey = allCaras[(hash + idx * 11) % allCaras.length];
-        if (usedCaras.has(caraKey)) {
-          caraKey = allCaras.find(c => !usedCaras.has(c)) || caraKey;
-        }
+        caraKey = allCaras.find(c => !usedCaras.has(c)) || caraKey;
       }
       usedCaras.add(caraKey);
 
-      let propKey = (esc.prop && catalogo[esc.prop]) ? esc.prop : allProps[(hash + idx * 9) % allProps.length];
+      let propKey = (esc.prop && catalogo[esc.prop] && !/_[0-9]+$/.test(esc.prop))
+        ? esc.prop
+        : allProps[(hash + idx * 7) % allProps.length];
       if (usedProps.has(propKey) && allProps.length > usedProps.size) {
         propKey = allProps.find(p => !usedProps.has(p)) || propKey;
       }
@@ -609,10 +662,6 @@ async function main() {
       if (catalogo[caraKey]) svgInterno += `<g class="layer-face" data-cara="${caraKey}">${catalogo[caraKey]}</g>`;
       if (propKey && catalogo[propKey]) svgInterno += `<g class="layer-prop">${catalogo[propKey]}</g>`;
     }
-
-    const subTexto = esc.subtitulo || '';
-    const matchesDestacados = [...subTexto.matchAll(/\*\*?(.*?)\*\*?/g)].map(m => m[1].replace(/\*/g, '').trim());
-    const [t1, t2, t3] = sanitizeSvgTexts(esc, matchesDestacados);
 
     svgInterno = svgInterno
       .replace(/\{\{TEXTO_1\}\}/g, t1)
@@ -1281,7 +1330,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 v5.1 generado con éxito!');
+  console.log('✅ ¡Vídeo output.mp4 v5.2 generado sin cajas vacías y con HUD dinámico!');
 }
 
 main().catch(err => {
