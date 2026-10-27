@@ -3,7 +3,319 @@ const path = require('path');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
-// 1. Extractor inteligente de textos internos para SVGs (Elimina para siempre el fallback "OPCIÓN A")
+// ============================================================================
+// MEGABIBLIOTECA INTEGRADA DE ANIMALES, VEHÍCULOS, OBJETOS Y PROPS (v6.0)
+// ============================================================================
+const EXPANDED_SVG_PACK = {
+  // --- ANIMALES Y BIOLOGÍA ---
+  diag_perro_pavlov: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-white draw" d="M55,155 L55,115 L75,90 L115,90 L135,70 L155,75 L150,100 L130,115 L130,155" />
+      <path class="stroke-yellow draw" d="M65,90 L50,110 L68,112 Z" />
+      <circle cx="138" cy="82" r="3.5" fill="#ffffff" />
+      <path class="stroke-red pulse" d="M155,95 Q162,110 155,120 Q148,110 155,95 Z" />
+      <path class="stroke-yellow pulse" d="M38,65 L52,65 L45,50 Z" />
+      <circle class="pulse" cx="45" cy="72" r="4" fill="#ffd000" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_rata_experimento: `
+    <text x="100" y="26" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
+    <rect class="stroke-white draw" x="28" y="45" width="144" height="140" rx="12" />
+    <g class="float">
+      <path class="stroke-white draw" d="M55,145 Q75,110 115,125 L140,140 L55,145 Z" />
+      <circle class="stroke-yellow draw" cx="118" cy="118" r="10" />
+      <circle cx="130" cy="133" r="3" fill="#ff2a5f" />
+      <path class="stroke-red draw" d="M55,142 Q35,135 42,115" />
+      <rect class="stroke-red pulse" x="142" y="95" width="18" height="18" rx="4" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_tiburon_miedo: `
+    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-red draw" d="M75,135 L105,65 L125,135 Z" />
+      <path class="stroke-white draw" d="M20,140 Q45,125 70,140 T120,140 T180,140" />
+      <path class="stroke-yellow draw" d="M30,162 Q60,150 90,162 T150,162 T175,162" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_ovejas_rebano: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <circle class="stroke-white draw" cx="55" cy="115" r="20" />
+      <circle class="stroke-white draw" cx="105" cy="115" r="20" />
+      <circle class="stroke-red pulse" cx="155" cy="115" r="20" />
+      <path class="stroke-yellow draw" d="M40,70 L155,70 L142,58 M155,70 L142,82" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_serpiente_alerta: `
+    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-yellow draw" d="M60,170 Q35,140 85,125 T130,90 T95,55" />
+      <polygon class="stroke-red pulse" points="95,42 112,58 95,70 78,58" />
+      <path class="stroke-red draw" d="M95,42 L90,28 M95,42 L100,28" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_mariposa_caos: `
+    <text x="100" y="26" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
+    <g class="pulse">
+      <path class="stroke-yellow draw" d="M100,95 C55,40 25,85 65,125 C35,155 65,185 100,145" />
+      <path class="stroke-red draw" d="M100,95 C145,40 175,85 135,125 C165,155 135,185 100,145" />
+      <line class="stroke-white draw" x1="100" y1="70" x2="100" y2="165" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_pulpo_mente: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <circle class="stroke-white draw" cx="100" cy="82" r="28" />
+      <circle cx="90" cy="80" r="4" fill="#ffd000" />
+      <circle cx="110" cy="80" r="4" fill="#ffd000" />
+      <path class="stroke-red draw" d="M80,108 Q50,140 35,170 M92,110 Q75,150 68,180 M108,110 Q125,150 132,180 M120,108 Q150,140 165,170" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_aguila_foco: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="pulse">
+      <circle class="stroke-red draw" cx="100" cy="120" r="52" />
+      <circle class="stroke-yellow draw" cx="100" cy="120" r="24" />
+      <circle cx="100" cy="120" r="7" fill="#ff2a5f" />
+      <line class="stroke-white draw" x1="30" y1="120" x2="170" y2="120" />
+      <line class="stroke-white draw" x1="100" y1="50" x2="100" y2="190" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+
+  // --- VEHÍCULOS Y DILEMAS ---
+  diag_coche_deportivo: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-red draw" d="M22,140 L38,110 L75,92 L135,92 L168,115 L182,140 Z" />
+      <circle class="stroke-white pulse" cx="58" cy="145" r="18" />
+      <circle class="stroke-white pulse" cx="148" cy="145" r="18" />
+      <line class="stroke-yellow draw" x1="15" y1="72" x2="55" y2="72" />
+      <line class="stroke-yellow draw" x1="5" y1="88" x2="40" y2="88" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_dilema_tranvia: `
+    <text x="52" y="28" text-anchor="middle" fill="#ffffff" font-size="12">{{TEXTO_1}}</text>
+    <text x="148" y="28" text-anchor="middle" fill="#ff2a5f" font-size="12">{{TEXTO_2}}</text>
+    <path class="stroke-white draw" d="M100,195 L100,125 L45,60 M100,125 L155,60" />
+    <g class="pulse">
+      <rect class="stroke-yellow draw" x="72" y="140" width="56" height="38" rx="6" />
+      <circle cx="88" cy="184" r="5" fill="#ffffff" />
+      <circle cx="112" cy="184" r="5" fill="#ffffff" />
+    </g>
+  `,
+  diag_avion_riesgo: `
+    <text x="100" y="26" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-white draw" d="M30,135 L165,75 L145,120 L170,138 L135,138 L112,165 L98,132 L30,135 Z" />
+      <path class="stroke-red pulse" d="M25,155 L65,142" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_cohete_euforia: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-white draw" d="M100,45 C128,80 128,130 122,155 L78,155 C72,130 72,80 100,45 Z" />
+      <path class="stroke-red draw" d="M78,135 L55,162 L78,155 M122,135 L145,162 L122,155" />
+      <circle class="stroke-yellow draw" cx="100" cy="100" r="12" />
+      <polygon class="stroke-red pulse" points="88,158 100,192 112,158" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_barco_hundido: `
+    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <polygon class="stroke-white draw" points="45,125 155,145 130,175 60,160" />
+      <polygon class="stroke-yellow draw" points="95,65 95,130 138,125" />
+      <path class="stroke-red draw" d="M20,152 Q60,138 100,152 T180,152" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_semaforo_freno: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_1}}</text>
+    <rect class="stroke-white draw" x="70" y="42" width="60" height="145" rx="16" />
+    <circle class="stroke-red pulse" cx="100" cy="72" r="14" />
+    <circle class="stroke-yellow draw" cx="100" cy="114" r="14" />
+    <circle class="stroke-white draw" cx="100" cy="156" r="14" />
+    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+  `,
+
+  // --- OBJETOS, DINERO, CIENCIA Y EXPERIMENTOS ---
+  diag_ruleta_casino: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="pulse">
+      <circle class="stroke-yellow draw" cx="100" cy="120" r="58" />
+      <circle class="stroke-red draw" cx="100" cy="120" r="22" />
+      <line class="stroke-white draw" x1="42" y1="120" x2="158" y2="120" />
+      <line class="stroke-white draw" x1="100" y1="62" x2="100" y2="178" />
+      <line class="stroke-white draw" x1="59" y1="79" x2="141" y2="161" />
+      <line class="stroke-white draw" x1="141" y1="79" x2="59" y2="161" />
+      <circle cx="128" cy="85" r="6" fill="#ffffff" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_dados_azar: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <rect class="stroke-white draw" x="34" y="75" width="58" height="58" rx="10" />
+      <circle cx="50" cy="91" r="4.5" fill="#ff2a5f" />
+      <circle cx="76" cy="117" r="4.5" fill="#ff2a5f" />
+      <rect class="stroke-yellow draw" x="106" y="102" width="58" height="58" rx="10" />
+      <circle cx="122" cy="118" r="4.5" fill="#ffd000" />
+      <circle cx="135" cy="131" r="4.5" fill="#ffd000" />
+      <circle cx="148" cy="144" r="4.5" fill="#ffd000" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_adn_genetica: `
+    <text x="100" y="26" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-white draw" d="M60,48 C140,85 60,155 140,192" />
+      <path class="stroke-red draw" d="M140,48 C60,85 140,155 60,192" />
+      <line class="stroke-yellow draw" x1="75" y1="68" x2="125" y2="68" />
+      <line class="stroke-yellow draw" x1="82" y1="120" x2="118" y2="120" />
+      <line class="stroke-yellow draw" x1="75" y1="172" x2="125" y2="172" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_jeringuilla_placebo: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <rect class="stroke-white draw" x="78" y="70" width="44" height="85" rx="4" />
+      <line class="stroke-yellow draw" x1="100" y1="40" x2="100" y2="70" />
+      <line class="stroke-yellow draw" x1="82" y1="40" x2="118" y2="40" />
+      <line class="stroke-red pulse" x1="100" y1="155" x2="100" y2="195" />
+      <line class="stroke-red draw" x1="84" y1="115" x2="116" y2="115" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_iman_atraccion: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="pulse">
+      <path class="stroke-red draw" d="M60,65 L60,130 A40,40 0 0,0 140,130 L140,65" />
+      <line class="stroke-white draw" x1="60" y1="82" x2="60" y2="62" />
+      <line class="stroke-white draw" x1="140" y1="82" x2="140" y2="62" />
+      <path class="stroke-yellow draw" d="M75,45 L65,58 L80,58 L70,72 M125,45 L115,58 L130,58 L120,72" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_bomba_tiempo: `
+    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <g class="pulse">
+      <circle class="stroke-white draw" cx="95" cy="132" r="46" />
+      <path class="stroke-yellow draw" d="M122,92 Q142,65 162,72" />
+      <circle class="stroke-red pulse" cx="165" cy="72" r="9" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_camara_vigilancia: `
+    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <polygon class="stroke-white draw" points="45,85 135,65 150,105 60,125" />
+      <line class="stroke-yellow draw" x1="45" y1="105" x2="25" y2="145" />
+      <circle class=" pulse" cx="145" cy="84" r="6" fill="#ff2a5f" />
+      <path class="stroke-red draw" d="M155,95 L185,135 M145,112 L165,155" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_ajedrez_estrategia: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <polygon class="stroke-yellow draw" points="60,175 140,175 125,85 75,85" />
+      <circle class="stroke-white draw" cx="100" cy="65" r="16" />
+      <line class="stroke-red pulse" x1="100" y1="35" x2="100" y2="52" />
+      <line class="stroke-red pulse" x1="90" y1="43" x2="110" y2="43" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_pildora_eleccion: `
+    <text x="55" y="32" text-anchor="middle" fill="#ff2a5f" font-size="12">{{TEXTO_1}}</text>
+    <text x="145" y="32" text-anchor="middle" fill="#00f2fe" font-size="12">{{TEXTO_2}}</text>
+    <g class="pulse">
+      <rect class="stroke-red draw" x="35" y="75" width="42" height="88" rx="21" />
+      <line class="stroke-white draw" x1="35" y1="119" x2="77" y2="119" />
+      <rect class="stroke-yellow draw" x="123" y="75" width="42" height="88" rx="21" />
+      <line class="stroke-white draw" x1="123" y1="119" x2="165" y2="119" />
+    </g>
+  `,
+  diag_caja_skinner: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <rect class="stroke-white draw" x="35" y="50" width="130" height="130" rx="12" />
+    <circle class="stroke-red pulse" cx="100" cy="115" r="26" />
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_mascara_doble: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-white draw" d="M45,70 L100,70 L100,165 C65,165 45,135 45,70 Z" />
+      <path class="stroke-red draw" d="M100,70 L155,70 C155,135 135,165 100,165 Z" />
+      <path class="stroke-yellow draw" d="M62,125 Q75,142 88,125" />
+      <path class="stroke-red draw" d="M112,138 Q125,120 138,138" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_bateria_agotada: `
+    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <rect class="stroke-white draw" x="45" y="65" width="100" height="110" rx="10" />
+    <rect class="stroke-white draw" x="145" y="98" width="14" height="44" rx="4" />
+    <rect class="stroke-red pulse" x="58" y="135" width="30" height="28" rx="4" />
+    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_espejo_distorsion: `
+    <text x="100" y="26" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
+    <ellipse class="stroke-white draw" cx="100" cy="118" rx="52" ry="68" />
+    <path class="stroke-red pulse" d="M75,85 L110,120 L85,145 L128,165" />
+    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_laberinto_mental: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <rect class="stroke-white draw" x="40" y="55" width="120" height="120" rx="8" />
+    <path class="stroke-yellow draw" d="M40,95 L120,95 L120,135 L80,135 L80,75" />
+    <circle class="pulse" cx="100" cy="115" r="7" fill="#ff2a5f" />
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_trofeo_exito: `
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-yellow draw" d="M60,60 L140,60 L125,130 L75,130 Z" />
+      <line class="stroke-white draw" x1="100" y1="130" x2="100" y2="170" />
+      <line class="stroke-white draw" x1="65" y1="170" x2="135" y2="170" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_cadena_habito: `
+    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <g class="pulse">
+      <rect class="stroke-white draw" x="35" y="95" width="55" height="36" rx="18" />
+      <rect class="stroke-red draw" x="72" y="95" width="55" height="36" rx="18" />
+      <rect class="stroke-yellow draw" x="110" y="95" width="55" height="36" rx="18" />
+    </g>
+    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+
+  // --- NUEVOS PROPS DE MANO PARA EL PERSONAJE ---
+  prop_dado_mano: `<g class="float"><rect class="stroke-yellow draw" x="132" y="88" width="34" height="34" rx="6"/><circle cx="142" cy="98" r="3" fill="#ff2a5f"/><circle cx="156" cy="112" r="3" fill="#ff2a5f"/></g>`,
+  prop_iman_mano: `<g class="pulse"><path class="stroke-red draw" d="M132,85 L132,115 A16,16 0 0,0 164,115 L164,85"/></g>`,
+  prop_jeringa_mano: `<g class="float"><rect class="stroke-white draw" x="138" y="80" width="18" height="42" rx="3"/><line class="stroke-red draw" x1="147" y1="122" x2="147" y2="142"/></g>`,
+  prop_bandera_alerta: `<g class="float"><line class="stroke-white draw" x1="135" y1="65" x2="135" y2="145"/><polygon class="stroke-red pulse" points="135,65 178,80 135,98"/></g>`,
+  prop_llave_secreta: `<g class="float"><circle class="stroke-yellow draw" cx="148" cy="85" r="12"/><line class="stroke-yellow draw" x1="148" y1="97" x2="148" y2="135"/><line class="stroke-yellow draw" x1="148" y1="125" x2="160" y2="125"/></g>`,
+  prop_billete_euro: `<g class="pulse"><rect class="stroke-yellow draw" x="126" y="88" width="48" height="28" rx="4"/><text x="150" y="107" text-anchor="middle" fill="#ffd000" font-size="14">€</text></g>`,
+  prop_copa_premio: `<g class="float"><polygon class="stroke-yellow draw" points="132,82 166,82 156,115 142,115"/><line class="stroke-white draw" x1="149" y1="115" x2="149" y2="135"/></g>`,
+  prop_brujula_moral: `<g class="pulse"><circle class="stroke-white draw" cx="148" cy="105" r="20"/><polygon class="stroke-red draw" points="148,90 154,105 148,120 142,105"/></g>`,
+  prop_megafono_ruido: `<g class="pulse"><polygon class="stroke-yellow draw" points="125,105 165,82 165,128"/><path class="stroke-red draw" d="M172,90 Q184,105 172,120"/></g>`,
+  prop_tijeras_corte: `<g class="float"><circle class="stroke-red draw" cx="138" cy="122" r="8"/><circle class="stroke-red draw" cx="158" cy="122" r="8"/><line class="stroke-white draw" x1="142" y1="115" x2="162" y2="80"/><line class="stroke-white draw" x1="154" y1="115" x2="134" y2="80"/></g>`
+};
+
+// 1. Extractor inteligente de textos internos para SVGs
 function sanitizeSvgTexts(esc, matchesDestacados) {
   let raw1 = (esc.texto_1 || '').trim();
   let raw2 = (esc.texto_2 || '').trim();
@@ -25,7 +337,6 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
     .replace(/\s{2,}/g, ' ')
     .trim();
 
-  // Extraer palabras potentes del subtítulo de la escena por si faltan texto_1 o texto_2
   const stopWords = new Set([
     'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
     'CON', 'NO', 'UNA', 'SU', 'PARA', 'ES', 'AL', 'LO', 'COMO', 'MAS', 'MÁS',
@@ -42,7 +353,7 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
 
   const fallback1 = matchesDestacados[0] || subWords[0] || 'MENTE';
   const fallback2 = matchesDestacados[1] || subWords[1] || subWords[subWords.length - 1] || 'REALIDAD';
-  const fallback3 = matchesDestacados[2] || subWords[2] || 'TRAMPA';
+  const fallback3 = matchesDestacados[2] || subWords[2] || 'EFECTO';
 
   raw1 = cleanRedundant(raw1) || fallback1;
   raw2 = cleanRedundant(raw2) || fallback2;
@@ -59,7 +370,6 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   ];
 }
 
-// Normalizador para emparejar palabras del guion con las palabras de ElevenLabs sin desfase
 function normalizeForMatch(str) {
   return (str || '')
     .normalize('NFD')
@@ -68,7 +378,7 @@ function normalizeForMatch(str) {
     .toLowerCase();
 }
 
-// 2. Motor de alineación de subtítulos y escenas (Soporta fusión automática de "100" + "euros" -> "100€")
+// 2. Motor de alineación de subtítulos y escenas
 function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   const stopWords = new Set([
     'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
@@ -502,9 +812,12 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 async function main() {
-  console.log('🚀 Iniciando motor de renderizado Viral v5.2 (Anti-Cajas Vacías + HUD Dinámico + Fusión €)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v6.0 (32 Nuevos Animales/Vehículos/Objetos + HUD + Fusión €)...');
 
-  const catalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
+  // Fusionamos catalogo.json con la Megabiblioteca Integrada de Animales, Vehículos y Objetos
+  const rawCatalogo = JSON.parse(fs.readFileSync('catalogo.json', 'utf8'));
+  const catalogo = { ...rawCatalogo, ...EXPANDED_SVG_PACK };
+
   let payload = JSON.parse(fs.readFileSync('payload.json', 'utf8'));
   if (Array.isArray(payload) && payload.length > 0) payload = payload[0];
   if (payload.json) payload = payload.json;
@@ -554,7 +867,6 @@ async function main() {
     { name: 'Rojo Carmesí', hex: '#ff2a5f', altHex: '#ffd000', glow: 'rgba(255, 42, 95, 0.80)', altGlow: 'rgba(255, 208, 0, 0.75)', bgCenter: '#31101c', bgEdge: '#090306' }
   ];
 
-  // Hash de alta dispersión basado en el contenido único de las escenas para no repetir paleta en vídeos seguidos
   const seedStr = JSON.stringify(payload.escenas || '') + (payload.TituloYT || '') + String(Date.now());
   let hash = 2166136261;
   for (let i = 0; i < seedStr.length; i++) {
@@ -573,7 +885,6 @@ async function main() {
 
   const timeScale = duracionExactaVideo / Math.max(0.1, ultimaEscenaFinOriginal);
 
-  // Filtrar en el motor las claves limpias (sin sufijo numérico _123) para erradicar cajas vacías
   const filterCleanCatalog = (prefix) => {
     const clean = Object.keys(catalogo).filter(k => k.startsWith(prefix) && !/_[0-9]+$/.test(k));
     return clean.length > 0 ? clean : Object.keys(catalogo).filter(k => k.startsWith(prefix));
@@ -609,7 +920,6 @@ async function main() {
 
     if (esc.diagrama && catalogo[esc.diagrama]) {
       let diagKey = esc.diagrama;
-      // Si el guionista mandó un diagrama genérico numerado (caja vacía) o repetido, lo cambiamos por uno artesanal limpio
       if (/_[0-9]+$/.test(diagKey) || (usedDiags.has(diagKey) && allDiags.length > usedDiags.size)) {
         diagKey = allDiags.find(d => !usedDiags.has(d)) || allDiags[(hash + idx) % allDiags.length] || diagKey;
       }
@@ -617,12 +927,10 @@ async function main() {
 
       let rawDiagSvg = catalogo[diagKey];
 
-      // Si el SVG tiene textos estáticos quemados como "LÓGICA" y "EMOCIÓN", los sustituimos por t1 y t2 de la escena
       if (/LÓGICA/i.test(rawDiagSvg) && /EMOCIÓN/i.test(rawDiagSvg)) {
         rawDiagSvg = rawDiagSvg.replace(/LÓGICA/gi, t1).replace(/EMOCIÓN/gi, t2);
       }
 
-      // Si el diagrama no tiene ninguna etiqueta <text> ni marcadores {{TEXTO_1}}, le inyectamos un HUD de neón arriba y abajo
       const hasTextTag = /<text\b/i.test(rawDiagSvg) || /\{?\{TEXTO_1\}?\}/.test(rawDiagSvg);
       if (!hasTextTag) {
         rawDiagSvg += `
@@ -825,7 +1133,6 @@ async function main() {
       .stroke-red { stroke: #ff2a5f; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 42, 95, 0.92)); }
       .stroke-yellow { stroke: #ffd000; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px rgba(255, 208, 0, 0.92)); }
 
-      /* SUBTÍTULOS CON 3 VARIANTES ESTÉTICAS DINÁMICAS */
       .subtitle-container {
         position: absolute;
         bottom: 118px;
@@ -1330,7 +1637,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 v5.2 generado sin cajas vacías y con HUD dinámico!');
+  console.log('✅ ¡Vídeo output.mp4 v6.0 generado con 32 nuevos activos (animales, vehículos, objetos) y 400 temas!');
 }
 
 main().catch(err => {
