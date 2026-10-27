@@ -1,52 +1,73 @@
-name: Render Short YouTube
+name: Renderizar y Subir Short
 
 on:
   workflow_dispatch:
-    inputs:
-      payload_json:
-        description: 'JSON con las escenas y audio de n8n'
-        required: true
+  repository_dispatch:
+    types: [render-video]
 
 jobs:
-  build-video:
+  render:
     runs-on: ubuntu-latest
+
     steps:
-      - name: 1. Descargar repositorio
+      - name: 1. Descargar código del repositorio
         uses: actions/checkout@v4
 
-      - name: 2. Configurar Node.js
+      - name: 2. Configurar Node.js y Caché
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: 3. Instalar herramientas de sistema (FFmpeg y dependencias de Puppeteer)
+      - name: 3. Instalar FFmpeg estático y dependencias de Puppeteer
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libgbm-dev
+          sudo apt-get install -y libgbm-dev libasound2t64 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libnss3 libxshmfence1 curl || sudo apt-get install -y libgbm-dev libasound2 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libpango-1.0-0 libcairo2 libnss3 libxshmfence1 curl
+          curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz -o ffmpeg.tar.xz
+          tar -xf ffmpeg.tar.xz
+          sudo mv ffmpeg*-static/ffmpeg /usr/local/bin/
+          sudo mv ffmpeg*-static/ffprobe /usr/local/bin/
+          rm -rf ffmpeg*
 
-      - name: 4. Instalar dependencias del proyecto
-        run: npm install
+      - name: 4. Instalar librerías del proyecto (Node y Python)
+        run: |
+          npm install
+          pip install google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2 requests
 
-      - name: 5. Guardar payload recibido desde n8n
-        run: curl -s -L "${{ github.event.inputs.payload_json }}" > payload.json
+      - name: 5. Descargar payload.json desde Gist y Renderizar Vídeo
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          echo "📥 Descargando payload.json desde Gist..."
+          curl -s -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/gists/$GIST_ID" > gist_response.json
+          node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('gist_response.json', 'utf8'));
+            if (!data.files || !data.files['payload.json']) {
+              console.error('❌ No se encontró payload.json en el Gist:', data.message || data);
+              process.exit(1);
+            }
+            const fileObj = data.files['payload.json'];
+            if (fileObj.truncated && fileObj.raw_url) {
+              console.log('🔗 Archivo grande, descargando desde raw_url...');
+              const { execSync } = require('child_process');
+              execSync(\`curl -s -L \"\${fileObj.raw_url}\" -o payload.json\`);
+            } else {
+              fs.writeFileSync('payload.json', fileObj.content);
+            }
+            console.log('✅ payload.json guardado correctamente.');
+          "
+          node render.js
 
-      - name: 6. Ejecutar motor de renderizado (render.js)
-        run: npm run render
-
-      - name: 7. Configurar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: 8. Instalar dependencias de Python para YouTube
-        run: pip install --upgrade google-auth-oauthlib google-api-python-client requests httplib2
-
-      - name: 9. Enviar a Telegram y programar en YouTube
+      - name: 6. Subir a YouTube y Notificar por Telegram
         env:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          python upload.py output.mp4
+          python3 upload.py output.mp4
