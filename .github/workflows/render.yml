@@ -2,6 +2,10 @@ name: Renderizar y Subir Short
 
 on:
   workflow_dispatch:
+    inputs:
+      payload_json:
+        description: 'URL raw o contenido del payload.json'
+        required: true
   repository_dispatch:
     types: [render-video]
 
@@ -34,30 +38,16 @@ jobs:
           npm install
           pip install google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2 requests
 
-      - name: 5. Descargar payload.json desde Gist y Renderizar Vídeo
+      - name: 5. Descargar payload.json y Renderizar Vídeo
         env:
-          GIST_ID: ${{ secrets.GIST_ID }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          PAYLOAD_INPUT: ${{ github.event.inputs.payload_json }}
         run: |
-          echo "📥 Descargando payload.json desde Gist..."
-          curl -s -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/gists/$GIST_ID" > gist_response.json
-          node -e "
-            const fs = require('fs');
-            const data = JSON.parse(fs.readFileSync('gist_response.json', 'utf8'));
-            if (!data.files || !data.files['payload.json']) {
-              console.error('❌ No se encontró payload.json en el Gist:', data.message || data);
-              process.exit(1);
-            }
-            const fileObj = data.files['payload.json'];
-            if (fileObj.truncated && fileObj.raw_url) {
-              console.log('🔗 Archivo grande, descargando desde raw_url...');
-              const { execSync } = require('child_process');
-              execSync(\`curl -s -L \"\${fileObj.raw_url}\" -o payload.json\`);
-            } else {
-              fs.writeFileSync('payload.json', fileObj.content);
-            }
-            console.log('✅ payload.json guardado correctamente.');
-          "
+          echo "📥 Obteniendo payload.json desde el input de n8n..."
+          if [[ "$PAYLOAD_INPUT" == http* ]]; then
+            curl -s -L "$PAYLOAD_INPUT" -o payload.json
+          else
+            echo "$PAYLOAD_INPUT" > payload.json
+          fi
           node render.js
 
       - name: 6. Subir a YouTube y Notificar por Telegram
@@ -67,7 +57,7 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GIST_ID: ${{ secrets.GIST_ID }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GIST_ID: 3d119e7f1c255204b7b9653a1afab9b6
+          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           python3 upload.py output.mp4
