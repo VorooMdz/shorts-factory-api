@@ -21,8 +21,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-
+          
       - name: 3. Instalar FFmpeg estático y dependencias de Puppeteer
         run: |
           sudo apt-get update
