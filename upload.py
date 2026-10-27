@@ -46,6 +46,72 @@ def send_telegram_message(text, token, chat_id):
     except Exception as e:
         print(f"⚠️ Error enviando mensaje de texto a Telegram: {e}")
 
+def get_next_available_slot(youtube, madrid_tz):
+    """
+    Gestiona una cola de hasta 3 vídeos al día en los horarios 14:00, 18:00 y 21:00 (Hora de Madrid).
+    Si un día ya tiene 3 vídeos programados (o sus 3 turnos ocupados), salta al siguiente día libre.
+    """
+    target_hours = [14, 18, 21]
+    now_madrid = datetime.now(madrid_tz)
+    
+    occupied_slots = set()   # Guarda turnos exactos ej. "2026-10-27 14:00"
+    videos_per_day = {}      # Cuenta cuántos vídeos hay programados cada día ej. {"2026-10-27": 2}
+
+    try:
+        ch_res = youtube.channels().list(part="contentDetails", mine=True).execute()
+        items = ch_res.get("items", [])
+        if items:
+            uploads_playlist_id = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+            pl_res = youtube.playlistItems().list(
+                part="contentDetails",
+                playlistId=uploads_playlist_id,
+                maxResults=50
+            ).execute()
+            video_ids = [it["contentDetails"]["videoId"] for it in pl_res.get("items", [])]
+
+            if video_ids:
+                v_res = youtube.videos().list(
+                    part="status",
+                    id=",".join(video_ids)
+                ).execute()
+                for v in v_res.get("items", []):
+                    pub_at = v.get("status", {}).get("publishAt")
+                    if pub_at:
+                        dt_utc = datetime.fromisoformat(pub_at.replace("Z", "+00:00"))
+                        dt_mad = dt_utc.astimezone(madrid_tz)
+                        
+                        day_key = dt_mad.strftime("%Y-%m-%d")
+                        slot_key = dt_mad.strftime("%Y-%m-%d %H:00")
+                        
+                        occupied_slots.add(slot_key)
+                        videos_per_day[day_key] = videos_per_day.get(day_key, 0) + 1
+    except Exception as e:
+        print(f"ℹ️ No se pudo leer la cola previa del canal (usando cálculo estándar): {e}")
+
+    # Buscar desde hoy en adelante el primer turno libre (14:00, 18:00 o 21:00)
+    # en un día que todavía no haya alcanzado el máximo de 3 vídeos
+    day_offset = 0
+    while True:
+        check_date = (now_madrid + timedelta(days=day_offset)).date()
+        day_str = check_date.strftime("%Y-%m-%d")
+
+        # Si el día tiene menos de 3 vídeos programados, revisamos sus 3 franjas horarias
+        if videos_per_day.get(day_str, 0) < 3:
+            for hr in target_hours:
+                candidate = datetime(
+                    check_date.year, check_date.month, check_date.day,
+                    hr, 0, 0, tzinfo=madrid_tz
+                )
+                # Dejar un margen mínimo de 10 minutos respecto a la hora actual
+                if candidate <= now_madrid + timedelta(minutes=10):
+                    continue
+
+                slot_str = candidate.strftime("%Y-%m-%d %H:00")
+                if slot_str not in occupied_slots:
+                    return candidate
+
+        day_offset += 1
+
 def upload_video():
     client_id = os.environ.get("YOUTUBE_CLIENT_ID")
     client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
@@ -87,7 +153,7 @@ def upload_video():
     send_telegram_video(video_path, caption_telegram, telegram_token, telegram_chat_id)
 
     # =========================================================================
-    # PASO 2: INTENTAR LA SUBIDA Y PROGRAMACIÓN EN YOUTUBE (A las 18:00 de España)
+    # PASO 2: SUBIR Y PROGRAMAR EN YOUTUBE (3 TURNOS DIARIOS: 14:00, 18:00, 21:00)
     # =========================================================================
     try:
         credentials = Credentials(
@@ -99,16 +165,13 @@ def upload_video():
         )
         
         youtube = build("youtube", "v3", credentials=credentials)
-        
-        # 🕒 Calcular las 18:00 hora de España (Madrid) de forma automática
         madrid_tz = ZoneInfo("Europe/Madrid")
-        now_madrid = datetime.now(madrid_tz)
         
-        target_madrid = now_madrid.replace(hour=18, minute=0, second=0, microsecond=0)
-        if now_madrid >= target_madrid:
-            target_madrid = target_madrid + timedelta(days=1)
+        # Calcular automáticamente el próximo turno libre (14:00, 18:00 o 21:00)
+        target_madrid = get_next_available_slot(youtube, madrid_tz)
+        fecha_legible = target_madrid.strftime("%d/%m/%Y a las %H:%M")
         
-        # Convertir la hora de Madrid a UTC para que YouTube la entienda correctamente
+        # Convertir la hora de Madrid a UTC para YouTube
         target_utc = target_madrid.astimezone(timezone.utc)
         publish_at_str = target_utc.isoformat().replace("+00:00", "Z")
         
@@ -128,7 +191,7 @@ def upload_video():
         
         media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
         
-        print(f"🚀 Subiendo vídeo a YouTube y programándolo para las 18:00 hora peninsular ({publish_at_str} UTC)...")
+        print(f"🚀 Subiendo vídeo a YouTube y programándolo para el {fecha_legible} (España) [{publish_at_str} UTC]...")
         request = youtube.videos().insert(
             part="snippet,status",
             body=body,
@@ -142,7 +205,12 @@ def upload_video():
                 print(f"📥 Progreso de subida: {int(status.progress() * 100)}%")
                 
         video_id = response.get('id')
-        success_msg = f"✅ ¡Vídeo subido y programado con éxito en YouTube a las 18:00 (España)!\n🔗 https://youtu.be/{video_id}"
+        success_msg = (
+            f"✅ ¡Vídeo subido y programado en cola (Máx 3/día: 14h, 18h, 21h)!\n"
+            f"📅 Fecha y hora: {fecha_legible} (España)\n"
+            f"📌 Título: {titulo_final}\n"
+            f"🔗 https://youtu.be/{video_id}"
+        )
         print(success_msg)
         send_telegram_message(success_msg, telegram_token, telegram_chat_id)
 
