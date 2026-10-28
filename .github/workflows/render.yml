@@ -12,16 +12,20 @@ on:
 jobs:
   render:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: 1. Descargar código del repositorio
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: 2. Configurar Node.js y Caché
+      - name: 2. Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
+
       - name: 3. Instalar FFmpeg estático y dependencias de Puppeteer
         run: |
           sudo apt-get update
@@ -37,7 +41,7 @@ jobs:
           npm install
           pip install google-api-python-client google-auth google-auth-oauthlib google-auth-httplib2 requests
 
-      - name: 5. Descargar payload.json y Renderizar Vídeo
+      - name: 5. Descargar payload.json y Renderizar Vídeo v2.0
         env:
           PAYLOAD_INPUT: ${{ github.event.inputs.payload_json }}
         run: |
@@ -60,3 +64,58 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           python3 upload.py output.mp4
+
+      - name: 7. Auto-Registrar Tema en historial_temas.json (Solo si subió a YouTube)
+        run: |
+          if [ ! -f ".upload_success" ]; then
+            echo "⚠️ La subida a YouTube no se completó (.upload_success no existe). No se bloquea el tema."
+            exit 0
+          fi
+
+          node -e '
+            const fs = require("fs");
+            const histFile = "historial_temas.json";
+            let historial = [];
+            if (fs.existsSync(histFile)) {
+              try { historial = JSON.parse(fs.readFileSync(histFile, "utf8")); } catch (e) { historial = []; }
+            }
+            if (!Array.isArray(historial)) historial = [];
+
+            let payload = JSON.parse(fs.readFileSync("payload.json", "utf8"));
+            if (Array.isArray(payload) && payload.length > 0) payload = payload[0];
+            if (payload.json) payload = payload.json;
+
+            const idConcepto = String(payload.id_concepto || payload.tema_titulo || "tema_" + Date.now())
+              .toLowerCase()
+              .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+              .replace(/[^a-z0-9]+/g, "_")
+              .replace(/^_|_$/g, "");
+
+            const nuevoRegistro = {
+              id_concepto: idConcepto,
+              subrama: payload.subrama || payload.categoria || "General",
+              titulo: payload.TituloYT || payload.tema_titulo || idConcepto,
+              keywords: Array.isArray(payload.keywords_concepto) ? payload.keywords_concepto : [],
+              fecha: new Date().toISOString()
+            };
+
+            if (!historial.some(item => item.id_concepto === idConcepto)) {
+              historial.push(nuevoRegistro);
+              fs.writeFileSync(histFile, JSON.stringify(historial, null, 2));
+              console.log("✅ Nuevo tema registrado en historial_temas.json:", idConcepto);
+            } else {
+              console.log("ℹ️ El id_concepto ya figuraba en historial_temas.json:", idConcepto);
+            }
+          '
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add historial_temas.json
+          if git diff --staged --quiet; then
+            echo "ℹ️ Sin cambios que commitear en historial_temas.json."
+          else
+            git pull --rebase origin main || true
+            git commit -m "chore(memoria): registrar tema publicado en YouTube [skip ci]"
+            git push origin HEAD:main
+            echo "🚀 historial_temas.json actualizado en el repositorio."
+          fi
