@@ -1,33 +1,25 @@
 import os
-import json
 import google.oauth2.credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+import json
 
 def upload_video():
-    client_secret_env = os.environ.get("YOUTUBE_CLIENT_SECRET")
+    client_id = os.environ.get("YOUTUBE_CLIENT_ID")
+    client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
     refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
 
-    if not client_secret_env or not refresh_token:
-        print("❌ Faltan las credenciales de YouTube (YOUTUBE_CLIENT_SECRET o YOUTUBE_REFRESH_TOKEN) en los secretos de GitHub.")
+    if not client_id or not client_secret or not refresh_token:
+        print("❌ Faltan credenciales de YouTube en los secretos de GitHub (YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET o YOUTUBE_REFRESH_TOKEN).")
         exit(1)
 
-    try:
-        client_config = json.loads(client_secret_env)
-    except Exception as e:
-        print(f"❌ Error al decodificar YOUTUBE_CLIENT_SECRET como JSON válido: {e}")
-        print(f"Contenido recibido (primeros 20 caracteres): {client_secret_env[:20] if client_secret_env else 'VACÍO'}")
-        exit(1)
-    
-    # Soporta tanto estructura de archivo client_secret.json como credenciales planas
-    installed = client_config.get("installed", client_config)
-
+    # Creamos las credenciales directamente con los valores individuales de tus secretos
     creds = google.oauth2.credentials.Credentials(
         token=None,
         refresh_token=refresh_token,
-        token_uri=installed.get("token_uri", "https://oauth2.googleapis.com/token"),
-        client_id=installed.get("client_id"),
-        client_secret=installed.get("client_secret")
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret
     )
 
     youtube = build("youtube", "v3", credentials=creds)
