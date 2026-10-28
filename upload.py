@@ -9,7 +9,6 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 def send_telegram_video(video_path, caption, token, chat_id):
-    """Envía el archivo de vídeo directamente a Telegram."""
     if not token or not chat_id:
         print("⚠️ Faltan las credenciales de Telegram (TOKEN o CHAT_ID) en el entorno.")
         return False
@@ -18,7 +17,7 @@ def send_telegram_video(video_path, caption, token, chat_id):
     clean_chat_id = chat_id.strip()
     url = f"https://api.telegram.org/bot{clean_token}/sendVideo"
     
-    print(f"📤 Enviando vídeo a Telegram...")
+    print("📤 Enviando vídeo a Telegram...")
     try:
         with open(video_path, 'rb') as f:
             files = {'video': f}
@@ -35,7 +34,6 @@ def send_telegram_video(video_path, caption, token, chat_id):
         return False
 
 def send_telegram_message(text, token, chat_id):
-    """Envía un mensaje de texto informativo a Telegram."""
     if not token or not chat_id:
         return
     clean_token = token.strip()
@@ -47,7 +45,6 @@ def send_telegram_message(text, token, chat_id):
         print(f"⚠️ Error enviando mensaje de texto a Telegram: {e}")
 
 def load_gist_schedule(gist_id, gh_token):
-    """Lee el historial de turnos programados desde schedule_state.json en el Gist."""
     if not gist_id:
         return []
     headers = {"Accept": "application/vnd.github+json"}
@@ -68,7 +65,6 @@ def load_gist_schedule(gist_id, gh_token):
     return []
 
 def save_gist_schedule(gist_id, gh_token, slots_list):
-    """Guarda el nuevo turno programado en schedule_state.json dentro del Gist."""
     if not gist_id or not gh_token:
         print("ℹ️ No se proporcionó GIST_ID o GH_TOKEN con permiso de escritura para guardar estado en Gist.")
         return
@@ -76,7 +72,6 @@ def save_gist_schedule(gist_id, gh_token, slots_list):
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {gh_token.strip()}"
     }
-    # Mantener solo los últimos 120 turnos para que el archivo sea siempre ligero
     clean_list = sorted(list(set(slots_list)))[-120:]
     payload = {
         "files": {
@@ -95,10 +90,8 @@ def save_gist_schedule(gist_id, gh_token, slots_list):
         print(f"⚠️ Error al guardar schedule_state.json en Gist: {e}")
 
 def register_slot(slot_dt_madrid, occupied_slots, videos_per_day):
-    """Registra una fecha/hora de Madrid como ocupada normalizándola a las franjas 14, 18 o 21."""
     day_key = slot_dt_madrid.strftime("%Y-%m-%d")
     hr = slot_dt_madrid.hour
-    # Si hay un vídeo programado cerca de una franja (ej. 13:55 o 14:15), bloqueamos esa franja
     if abs(hr - 14) <= 1:
         norm_hr = 14
     elif abs(hr - 18) <= 1:
@@ -114,17 +107,12 @@ def register_slot(slot_dt_madrid, occupied_slots, videos_per_day):
         videos_per_day[day_key] = videos_per_day.get(day_key, 0) + 1
 
 def get_next_available_slot(youtube, madrid_tz, gist_id, gh_token):
-    """
-    Combina la lectura real de YouTube API (incluyendo vídeos privados con search.list forMine=True)
-    + el registro persistente en Gist para garantizar exactamente 3 vídeos al día (14:00, 18:00 y 21:00).
-    """
     target_hours = [14, 18, 21]
     now_madrid = datetime.now(madrid_tz)
     
     occupied_slots = set()
     videos_per_day = {}
 
-    # 1. Cargar turnos ya reservados en nuestro registro persistente del Gist
     gist_slots = load_gist_schedule(gist_id, gh_token)
     for iso_str in gist_slots:
         try:
@@ -134,10 +122,8 @@ def get_next_available_slot(youtube, madrid_tz, gist_id, gh_token):
         except Exception:
             pass
 
-    # 2. Consultar directamente en YouTube todos los vídeos propios (incluidos privados/programados)
     video_ids = set()
     try:
-        # Método A: search().list con forMine=True (devuelve vídeos privados y programados)
         s_res = youtube.search().list(
             part="id",
             forMine=True,
@@ -153,7 +139,6 @@ def get_next_available_slot(youtube, madrid_tz, gist_id, gh_token):
         print(f"ℹ️ Aviso en youtube.search (forMine): {e}")
 
     try:
-        # Método B: playlist de uploads por respaldo
         ch_res = youtube.channels().list(part="contentDetails", mine=True).execute()
         items = ch_res.get("items", [])
         if items:
@@ -190,7 +175,6 @@ def get_next_available_slot(youtube, madrid_tz, gist_id, gh_token):
     print(f"📊 Resumen de ocupación detectada por día: {videos_per_day}")
     print(f"🔒 Turnos exactos ocupados: {sorted(list(occupied_slots))}")
 
-    # 3. Buscar desde hoy en adelante el primer hueco libre en [14:00, 18:00, 21:00]
     day_offset = 0
     while True:
         check_date = (now_madrid + timedelta(days=day_offset)).date()
@@ -202,7 +186,6 @@ def get_next_available_slot(youtube, madrid_tz, gist_id, gh_token):
                     check_date.year, check_date.month, check_date.day,
                     hr, 0, 0, tzinfo=madrid_tz
                 )
-                # Solo programar en turnos futuros (mínimo 10 min de margen respecto a la hora actual)
                 if candidate <= now_madrid + timedelta(minutes=10):
                     continue
 
@@ -247,11 +230,9 @@ def upload_video():
 
     print(f"📌 TÍTULO DETECTADO: --> {titulo_final} <--")
 
-    # PASO 1: ENVIAR EL VÍDEO A TELEGRAM PRIMERO
-    caption_telegram = f"🎬 ¡Short renderizado!\n📌 Título: {titulo_final}"
+    caption_telegram = f"🎬 ¡Short v2.0 renderizado!\n📌 Título: {titulo_final}"
     send_telegram_video(video_path, caption_telegram, telegram_token, telegram_chat_id)
 
-    # PASO 2: SUBIR Y PROGRAMAR EN YOUTUBE (3 TURNOS DIARIOS: 14:00, 18:00, 21:00)
     try:
         credentials = Credentials(
             token=None,
@@ -301,7 +282,10 @@ def upload_video():
                 
         video_id = response.get('id')
 
-        # Guardar el turno recién ocupado en el Gist para que la siguiente ejecución lo vea al instante
+        # Crear bandera de éxito para que render.yml registre el tema en historial_temas.json
+        with open(".upload_success", "w", encoding="utf-8") as flag_file:
+            flag_file.write(str(video_id))
+
         gist_slots.append(target_madrid.isoformat())
         save_gist_schedule(gist_id, gh_token, gist_slots)
 
