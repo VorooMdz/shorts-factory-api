@@ -6,8 +6,8 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
 def send_telegram_message(text):
-    token = os.environ.get("TELEGRAM_TOKEN")
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    token = os.environ.get("TELEGRAM_TOKEN", "").strip()
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
     if token and chat_id:
         url = f"https://api.telegram.org/bot{token}/sendMessage"
         payload = {
@@ -16,19 +16,16 @@ def send_telegram_message(text):
             "parse_mode": "Markdown"
         }
         try:
-            requests.post(url, json=payload)
+            requests.post(url, json=payload, timeout=10)
         except Exception as e:
             print(f"❌ Error al enviar notificación a Telegram: {e}")
+    else:
+        print("⚠️ Advertencia: TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no están configurados en el entorno.")
 
 def upload_video():
     client_id = os.environ.get("YOUTUBE_CLIENT_ID", "").strip()
     client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET", "").strip()
     refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN", "").strip()
-
-    # TRAZA DE DEPURACIÓN SEGURA (Muestra longitud y primeros/últimos 4 caracteres)
-    print(f"DEBUG -> Client ID length: {len(client_id)} | starts with: {client_id[:4]}... ends with: ...{client_id[-4:]}")
-    print(f"DEBUG -> Client Secret length: {len(client_secret)} | starts with: {client_secret[:4]}... ends with: ...{client_secret[-4:]}")
-    print(f"DEBUG -> Refresh Token length: {len(refresh_token)} | starts with: {refresh_token[:4]}... ends with: ...{refresh_token[-4:]}")
 
     if not client_id or not client_secret or not refresh_token:
         error_msg = "❌ Faltan credenciales de YouTube en los secretos de GitHub."
@@ -61,7 +58,7 @@ def upload_video():
                 "categoryId": "27"  # Education
             },
             "status": {
-                "privacyStatus": "public",
+                "privacyStatus": "private",
                 "selfDeclaredMadeForKids": False
             }
         }
