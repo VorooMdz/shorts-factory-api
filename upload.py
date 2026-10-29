@@ -14,7 +14,6 @@ def send_telegram_notification(text, video_path=None):
         print("⚠️ Advertencia: TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no están configurados en el entorno.")
         return
 
-    # 1. Si existe el vídeo output.mp4, lo enviamos adjunto directamente al chat de Telegram
     if video_path and os.path.exists(video_path):
         url_video = f"https://api.telegram.org/bot{token}/sendVideo"
         try:
@@ -35,7 +34,6 @@ def send_telegram_notification(text, video_path=None):
         except Exception as e:
             print(f"⚠️ Error al adjuntar vídeo a Telegram: {e}. Enviando texto de respaldo...")
 
-    # 2. Fallback a mensaje de texto si no hay vídeo o si se está notificando un error
     url_msg = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
@@ -47,37 +45,46 @@ def send_telegram_notification(text, video_path=None):
     except Exception as e:
         print(f"❌ Error al enviar notificación a Telegram: {e}")
 
-def get_next_available_18h_slot():
+def get_next_available_slot():
     madrid_tz = ZoneInfo("Europe/Madrid")
     now_madrid = datetime.now(madrid_tz)
-    candidate_madrid = now_madrid.replace(hour=18, minute=0, second=0, microsecond=0)
+    slots_hours = [14, 18, 21]
 
-    # Si ya han pasado las 17:45 de hoy, empezamos a buscar hueco desde mañana a las 18:00
-    if now_madrid >= (candidate_madrid - timedelta(minutes=15)):
-        candidate_madrid += timedelta(days=1)
-
-    # Revisar historial_temas.json para no programar dos vídeos el mismo día a las 18:00
-    occupied_dates = set()
+    # Leer todos los slots ya ocupados en historial_temas.json
+    occupied_slots = set()
     if os.path.exists("historial_temas.json"):
         try:
             with open("historial_temas.json", "r", encoding="utf-8") as f:
                 hist = json.load(f)
                 if isinstance(hist, list):
                     for item in hist:
-                        sched = item.get("programado_para_madrid") or ""
-                        if len(sched) >= 10:
-                            occupied_dates.add(sched[:10])  # formato DD/MM/YYYY
-        except Exception:
-            pass
+                        sched = item.get("programado_para_madrid")
+                        if sched and isinstance(sched, str):
+                            occupied_slots.add(sched.strip())
+        except Exception as e:
+            print(f"⚠️ No se pudo leer historial_temas.json para comprobar turnos: {e}")
 
-    while candidate_madrid.strftime("%d/%m/%Y") in occupied_dates:
-        candidate_madrid += timedelta(days=1)
+    print(f"📅 Turnos ocupados actualmente en historial: {len(occupied_slots)}")
 
-    target_utc = candidate_madrid.astimezone(timezone.utc)
-    return (
-        target_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        candidate_madrid.strftime("%d/%m/%Y a las %H:%M")
-    )
+    # Buscar desde hoy en adelante (hasta 365 días) el primer turno libre (14:00, 18:00 o 21:00)
+    base_date = now_madrid.replace(minute=0, second=0, microsecond=0)
+    for day_offset in range(365):
+        current_day = base_date + timedelta(days=day_offset)
+        for hour in slots_hours:
+            candidate_madrid = current_day.replace(hour=hour, minute=0, second=0, microsecond=0)
+            
+            # Dejar al menos 15 minutos de margen respecto a la hora actual
+            if candidate_madrid <= (now_madrid + timedelta(minutes=15)):
+                continue
+
+            slot_label = candidate_madrid.strftime("%d/%m/%Y a las %H:%M")
+            if slot_label not in occupied_slots:
+                target_utc = candidate_madrid.astimezone(timezone.utc)
+                return target_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), slot_label
+
+    # Fallback de seguridad
+    fallback = (now_madrid + timedelta(days=1)).replace(hour=14, minute=0, second=0, microsecond=0)
+    return fallback.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), fallback.strftime("%d/%m/%Y a las %H:%M")
 
 def upload_video():
     client_id = os.environ.get("YOUTUBE_CLIENT_ID", "").strip()
@@ -109,9 +116,9 @@ def upload_video():
             title = f"{title} #shorts"
         description = payload.get("DescripcionYT", "Descubre más en nuestro canal #shorts #psicologia")
 
-        publish_at_utc, publish_str_madrid = get_next_available_18h_slot()
+        publish_at_utc, publish_str_madrid = get_next_available_slot()
 
-        # Guardamos la fecha programada dentro de payload.json para que render.yml la registre en historial_temas.json
+        # Guardamos el turno reservado en payload.json para que render.yml lo persista en historial_temas.json
         payload["programado_para_madrid"] = publish_str_madrid
         with open("payload.json", "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
