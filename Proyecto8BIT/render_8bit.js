@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 // ============================================================================
-// 1. DESCARGA DE PAYLOAD Y ALINEACIÓN FONÉTICA DE SUBTÍTULOS
+// 1. DESCARGA DE PAYLOAD Y ALINEACIÓN FONÉTICA DE SUBTÍTULOS (SIN CORTES)
 // ============================================================================
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -124,7 +124,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     for (let i = 0; i < flatTokens.length; i++) {
       const targetNorm = flatTokens[i].norm;
       let bestMatchIdx = -1;
-      for (let offset = 0; offset <= 4; offset++) {
+      for (let offset = 0; offset <= 5; offset++) {
         const candidateIdx = ewCursor + offset;
         if (candidateIdx >= elevenWords.length) break;
         const candNorm = elevenWords[candidateIdx].norm;
@@ -137,7 +137,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
         let mStart = elevenWords[bestMatchIdx].start;
         let mEnd = elevenWords[bestMatchIdx].end;
         ewCursor = bestMatchIdx + 1;
-        while (ewCursor < elevenWords.length && /^(euro|euros|dolar|dolares|por|ciento|millon|millones)$/.test(elevenWords[ewCursor].norm)) {
+        while (ewCursor < elevenWords.length && /^(euro|euros|dolar|dolares|por|ciento|millon|millones|mil|miles)$/.test(elevenWords[ewCursor].norm)) {
           const nextVisualNorm = (i + 1 < flatTokens.length) ? flatTokens[i + 1].norm : '';
           if (nextVisualNorm === elevenWords[ewCursor].norm) break;
           mEnd = elevenWords[ewCursor].end;
@@ -155,7 +155,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 
   const lastSpokenEnd = elevenWords.length > 0
     ? elevenWords[elevenWords.length - 1].end
-    : Math.max(1, realAudioDuration - 0.18);
+    : Math.max(1, realAudioDuration - 0.35);
 
   const sceneWeights = sceneTokensList.map(tokens => Math.max(3, tokens.reduce((acc, tk) => acc + calcTokenWeight(tk), 0)));
   const totalScriptWeight = sceneWeights.reduce((a, b) => a + b, 0);
@@ -182,7 +182,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 
     if (firstMatched && lastMatched) {
       sceneStart = (idx === 0) ? 0 : Math.max(0, firstMatched.matchedStart - 0.03);
-      sceneEnd = (idx === escenas.length - 1) ? realAudioDuration : Math.min(realAudioDuration, lastMatched.matchedEnd + 0.05);
+      sceneEnd = (idx === escenas.length - 1) ? realAudioDuration : Math.min(realAudioDuration, lastMatched.matchedEnd + 0.06);
     }
 
     esc.inicio = sceneStart;
@@ -254,7 +254,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 
       if (timedWords.length > 0 && g[0].matchedStart !== null) {
         gStart = timedWords[0].start;
-        gEnd = timedWords[timedWords.length - 1].end + 0.04;
+        gEnd = timedWords[timedWords.length - 1].end + 0.05;
       }
       allChunks.push({ start: gStart, end: gEnd, words: timedWords });
       cursor = gEnd;
@@ -283,43 +283,43 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
     const p = pitchMod.toFixed(3);
     const catalog = {
       coin_8bit: {
-        expr: `0.22*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`,
+        expr: `0.20*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`,
         dur: 0.42
       },
       laser_8bit: {
-        expr: `0.20*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`,
+        expr: `0.18*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`,
         dur: 0.32
       },
       explosion_8bit: {
-        expr: `0.32*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`,
+        expr: `0.28*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`,
         dur: 0.65
       },
       powerup_8bit: {
-        expr: `0.20*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`,
+        expr: `0.18*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`,
         dur: 0.45
       },
       alarm_8bit: {
-        expr: `0.20*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`,
+        expr: `0.18*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`,
         dur: 0.55
       },
       glitch_8bit: {
-        expr: `0.20*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`,
+        expr: `0.18*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`,
         dur: 0.35
       },
       jump_8bit: {
-        expr: `0.21*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`,
+        expr: `0.19*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`,
         dur: 0.30
       },
       error_8bit: {
-        expr: `0.24*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`,
+        expr: `0.22*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`,
         dur: 0.45
       },
       typing_8bit: {
-        expr: `0.18*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`,
+        expr: `0.16*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`,
         dur: 0.30
       },
       level_clear_8bit: {
-        expr: `0.20*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`,
+        expr: `0.18*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`,
         dur: 0.65
       }
     };
@@ -364,12 +364,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. EJECUCIÓN PRINCIPAL Y RENDERIZADO DE LA MATRIZ 45x80 (720x1280)
+// 3. EJECUCIÓN PRINCIPAL Y MOTOR GRÁFICO ESCÉNICO 8-BIT (45x80)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload 8-BIT desde URL...');
+    console.log('📥 Descargando payload 8-BIT v2.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -383,9 +383,10 @@ async function main() {
   }
   fs.writeFileSync('audio_raw.mp3', Buffer.from(rawBase64, 'base64'));
 
-  execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.15" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'inherit' });
+  // Colchón de +0.45s al final para evitar que se corte la última sílaba del locutor
+  execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.45" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'inherit' });
 
-  let realAudioDuration = 26;
+  let realAudioDuration = 35;
   try {
     const probeOutput = execSync(
       'ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nk=1 voice_clean.wav',
@@ -394,7 +395,7 @@ async function main() {
     const parsed = parseFloat(probeOutput.trim());
     if (!isNaN(parsed) && parsed > 0) realAudioDuration = parsed;
   } catch (err) {
-    realAudioDuration = Number(payload.duracion_total) || 26;
+    realAudioDuration = Number(payload.duracion_total) || 35;
   }
 
   const fps = 30;
@@ -425,17 +426,17 @@ async function main() {
     if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
       execSync(
-        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.85,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.82,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
         { stdio: 'inherit' }
       );
       if (hasSfx) {
         execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.08[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.12[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
           { stdio: 'inherit' }
         );
       } else {
         execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.08[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.12[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
           { stdio: 'inherit' }
         );
       }
@@ -445,15 +446,6 @@ async function main() {
   } catch (e) {
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
-
-  // Paletas Retro 8-Bit (NES / Cyberpunk / GameBoy / Synthwave)
-  const palettes = [
-    { name: 'Cyber Arcade', bgTop: '#060713', bgBot: '#120924', primary: '#00f2fe', secondary: '#ff2a85', accent: '#ffd000', ground: '#1a103c', gridLine: 'rgba(0, 242, 254, 0.12)' },
-    { name: 'Matrix Terminal', bgTop: '#030c06', bgBot: '#081c0f', primary: '#39ff14', secondary: '#00f2fe', accent: '#ffd000', ground: '#0d2e18', gridLine: 'rgba(57, 255, 20, 0.12)' },
-    { name: 'Famicom Red', bgTop: '#14050a', bgBot: '#280914', primary: '#ffd000', secondary: '#ff2a5f', accent: '#00f2fe', ground: '#38101e', gridLine: 'rgba(255, 42, 95, 0.12)' },
-    { name: 'Outrun 1986', bgTop: '#0b0418', bgBot: '#230b36', primary: '#ff6b00', secondary: '#c77dff', accent: '#39ff14', ground: '#2d124d', gridLine: 'rgba(199, 125, 255, 0.12)' }
-  ];
-  const pal = palettes[hash % palettes.length];
 
   const htmlContent = `
   <!DOCTYPE html>
@@ -469,52 +461,48 @@ async function main() {
         overflow: hidden; position: relative;
         font-family: 'Press Start 2P', monospace;
       }
-      /* Lienzo de Matriz 8-Bit (45x80 bloques -> 720x1280 px) */
       #pixel-canvas {
         position: absolute; inset: 0;
         width: 720px; height: 1280px;
         image-rendering: pixelated;
         z-index: 2;
       }
-      /* Efecto CRT Retro Sutil */
       .crt-scanlines {
         position: absolute; inset: 0;
         background: linear-gradient(
           rgba(18, 16, 16, 0) 50%, 
-          rgba(0, 0, 0, 0.28) 50%
+          rgba(0, 0, 0, 0.22) 50%
         );
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
-      /* HUD Arcade Superior */
       .arcade-hud {
-        position: absolute; top: 36px; left: 28px; right: 28px;
+        position: absolute; top: 32px; left: 26px; right: 26px;
         display: flex; justify-content: space-between; align-items: center;
-        background: rgba(5, 5, 12, 0.86);
-        border: 4px solid ${pal.primary};
-        padding: 14px 18px;
+        background: rgba(8, 10, 22, 0.90);
+        border: 4px solid #00f2fe;
+        padding: 13px 18px;
         box-shadow: 0 8px 0 #000000;
         z-index: 20;
       }
       .hud-tag {
-        color: ${pal.accent};
-        font-size: 14px;
+        color: #ffd000;
+        font-size: 13px;
         letter-spacing: 1px;
         text-transform: uppercase;
       }
       .hud-score {
         color: #ffffff;
-        font-size: 13px;
+        font-size: 12px;
       }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 12px;
-        background: ${pal.secondary};
+        background: linear-gradient(90deg, #ff2a5f, #ffd000, #00f2fe);
         width: 0%; z-index: 30;
       }
-      /* Caja de Subtítulos Estilo RPG 8-Bit */
       .subtitle-container {
         position: absolute;
-        bottom: 110px; left: 26px; right: 26px;
+        bottom: 85px; left: 26px; right: 26px;
         min-height: 155px;
         display: flex; justify-content: center; align-items: center;
         z-index: 25; pointer-events: none;
@@ -522,8 +510,8 @@ async function main() {
       .subtitle-box {
         display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
         gap: 12px 18px; text-align: center;
-        padding: 22px 26px;
-        background: rgba(6, 6, 14, 0.92);
+        padding: 20px 26px;
+        background: rgba(8, 10, 20, 0.94);
         border: 4px solid #ffffff;
         outline: 4px solid #000000;
         box-shadow: 0 12px 0 rgba(0,0,0,0.85);
@@ -540,26 +528,26 @@ async function main() {
         text-shadow: 4px 4px 0 #000000;
       }
       .sub-word.kw {
-        color: ${pal.accent};
+        color: #ffd000;
       }
       .sub-word.active {
         transform: scale(1.12) translateY(-5px);
-        color: ${pal.primary};
+        color: #00f2fe;
       }
       .sub-word.kw.active {
-        color: ${pal.accent};
+        color: #ffd000;
         transform: scale(1.16) translateY(-6px);
       }
       .sub-word.future {
-        opacity: 0.40;
+        opacity: 0.42;
       }
     </style>
   </head>
   <body>
     <div class="progress-bar" id="pbar"></div>
     <div class="arcade-hud">
-      <div class="hud-tag">${(payload.subrama || 'GLITCH 8-BIT').slice(0, 22)}</div>
-      <div class="hud-score" id="hud-frame">FRM:000</div>
+      <div class="hud-tag" id="hud-scene-title">${(payload.subrama || 'GLITCH 8-BIT').slice(0, 24)}</div>
+      <div class="hud-score" id="hud-frame">ESC:01</div>
     </div>
 
     <canvas id="pixel-canvas" width="720" height="1280"></canvas>
@@ -573,65 +561,15 @@ async function main() {
       const escenas = ${JSON.stringify(escenasOriginales)};
       const subtitleChunks = ${JSON.stringify(subtitleChunks)};
       const totalFrames = ${totalFrames};
-      const pal = ${JSON.stringify(pal)};
 
-      // CONFIGURACIÓN DE LA CUADRÍCULA 45x80 (Cada celda = 16x16 píxeles -> 720x1280)
       const COLS = 45;
       const ROWS = 80;
       const CELL = 16;
+      const GROUND_Y = 54; // Nivel firme del suelo donde pisan los personajes
 
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
-
-      // Matriz en memoria de 45x80
-      let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#000000'));
-
-      function clearGrid(bgType, frameIdx) {
-        for (let r = 0; r < ROWS; r++) {
-          for (let c = 0; c < COLS; c++) {
-            // Fondo gradiente por bandas 8-bit
-            if (r < 18) grid[r][c] = pal.bgTop;
-            else if (r < 48) grid[r][c] = (r % 2 === 0 && c % 2 === 0) ? pal.bgBot : pal.bgTop;
-            else if (r < 56) grid[r][c] = pal.bgBot;
-            else {
-              // Suelo en perspectiva con desplazamiento (efecto movimiento retro)
-              const scroll = Math.floor(frameIdx * 0.6);
-              const isGridLine = ((r - 56) % 4 === 0) || ((c + scroll) % 6 === 0);
-              grid[r][c] = isGridLine ? pal.secondary : pal.ground;
-            }
-          }
-        }
-
-        // Decoración atmosférica según bgType
-        if (bgType === 'matrix_rain' || bgType === 'cyber_grid') {
-          for (let c = 2; c < COLS - 2; c += 4) {
-            const headRow = (frameIdx + c * 7) % 52;
-            setCell(c, headRow, '#ffffff');
-            setCell(c, headRow - 1, pal.primary);
-            setCell(c, headRow - 2, pal.primary);
-            setCell(c, headRow - 3, '#0a3a1a');
-          }
-        } else if (bgType === 'space_stars') {
-          for (let i = 0; i < 28; i++) {
-            const sc = (i * 17 + Math.floor(frameIdx * 0.2)) % COLS;
-            const sr = (i * 11) % 50;
-            if ((frameIdx + i) % 10 < 7) setCell(sc, sr, i % 3 === 0 ? pal.accent : '#ffffff');
-          }
-        } else if (bgType === 'server_room') {
-          for (let c = 5; c < COLS - 5; c += 10) {
-            drawRect(c, 16, 6, 38, '#141824');
-            for (let r = 19; r < 50; r += 4) {
-              const blink = ((frameIdx + r + c) % 12) < 6;
-              setCell(c + 1, r, blink ? pal.primary : '#333344');
-              setCell(c + 3, r, !blink ? pal.secondary : '#333344');
-            }
-          }
-        } else if (bgType === 'bank_vault') {
-          drawRect(6, 15, 33, 38, '#1c2026');
-          drawCircle(22, 34, 10, '#3a4250');
-          drawCircle(22, 34, 4, pal.accent);
-        }
-      }
+      let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#101420'));
 
       function setCell(x, y, color) {
         const cx = Math.round(x);
@@ -659,7 +597,465 @@ async function main() {
         }
       }
 
-      // MAPA DE CARACTERES PIXEL ART 3x5 PARA ROTULAR TEXTOS EN LA MATRIZ
+      // ======================================================================
+      // 10 ESCENARIOS CONTEXTUALES RICOS Y COLORIDOS (NO MÁS FONDO NEGRO VACÍO)
+      // ======================================================================
+      function drawEnvironment(bgType, frameIdx) {
+        const type = String(bgType || 'day_office').toLowerCase().trim();
+
+        // 1. OFICINA CORPORATIVA CON VENTANALES DE DÍA Y EDIFICIOS
+        if (type === 'day_office') {
+          drawRect(0, 0, COLS, GROUND_Y, '#2b3a55'); // Pared azulada de oficina
+          // Dos grandes ventanales con cielo azul diurno, nubes y edificios al fondo
+          [5, 25].forEach(wx => {
+            drawRect(wx, 14, 15, 24, '#5bc0be'); // Cielo diurno
+            drawRect(wx + 2, 26, 4, 12, '#3a506b'); // Rascacielos lejano 1
+            drawRect(wx + 8, 22, 5, 16, '#1c2541'); // Rascacielos lejano 2
+            // Nube moviéndose
+            const cloudX = wx + 2 + (Math.floor(frameIdx * 0.15) % 9);
+            drawRect(cloudX, 17, 4, 2, '#ffffff');
+            // Marco de ventana
+            drawRect(wx, 14, 15, 1, '#e0e6ed');
+            drawRect(wx, 37, 15, 1, '#e0e6ed');
+            drawRect(wx + 7, 14, 1, 24, '#e0e6ed');
+          });
+          // Zócalo y suelo de madera cálida con baldosas
+          drawRect(0, GROUND_Y - 2, COLS, 2, '#d9d9d9');
+          for (let r = GROUND_Y; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              grid[r][c] = ((r + c) % 4 === 0) ? '#7f5539' : '#9c6644';
+            }
+          }
+          return;
+        }
+
+        // 2. SUPERMERCADO / TIENDA CON ESTANTERÍAS DE COLORES
+        if (type === 'supermarket') {
+          drawRect(0, 0, COLS, GROUND_Y, '#f4f1de'); // Pared crema muy luminosa
+          // Estanterías del supermercado llenas de productos
+          for (let sy = 16; sy <= 42; sy += 9) {
+            drawRect(4, sy, 37, 2, '#8d99ae'); // Balda metálica
+            for (let sx = 6; sx < 38; sx += 4) {
+              const prodCol = (sx + sy) % 3 === 0 ? '#e63946' : ((sx + sy) % 2 === 0 ? '#ffb703' : '#2a9d8f');
+              drawRect(sx, sy - 4, 2, 4, prodCol);
+              setCell(sx, sy - 3, '#ffffff'); // Etiqueta del producto
+            }
+          }
+          // Suelo ajedrezado de tienda
+          for (let r = GROUND_Y; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              const isLight = (Math.floor(r / 3) + Math.floor(c / 3)) % 2 === 0;
+              grid[r][c] = isLight ? '#e5e5e5' : '#b8c0ff';
+            }
+          }
+          return;
+        }
+
+        // 3. PLATAFORMA DE LANZAMIENTO ESPACIAL DIURNA (ARIANE / NASA)
+        if (type === 'launch_pad') {
+          // Cielo azul degradado luminoso
+          for (let r = 0; r < GROUND_Y; r++) {
+            const skyCol = r < 22 ? '#1d3557' : (r < 38 ? '#457b9d' : '#a8dadc');
+            drawRect(0, r, COLS, 1, skyCol);
+          }
+          // Nubes blancas suaves
+          const c1 = (Math.floor(frameIdx * 0.2) + 5) % (COLS - 8);
+          const c2 = (Math.floor(frameIdx * 0.15) + 25) % (COLS - 8);
+          drawRect(c1, 16, 7, 2, '#ffffff'); drawRect(c1 + 1, 15, 5, 1, '#ffffff');
+          drawRect(c2, 24, 8, 2, '#ffffff'); drawRect(c2 + 2, 23, 4, 1, '#ffffff');
+          // Torre de lanzamiento roja a la izquierda
+          for (let r = 18; r < GROUND_Y; r++) {
+            setCell(7, r, '#e63946');
+            setCell(11, r, '#e63946');
+            if (r % 3 === 0) drawRect(7, r, 5, 1, '#f1faee');
+          }
+          // Suelo de hormigón y hierba verde
+          drawRect(0, GROUND_Y, COLS, 3, '#52b788');
+          drawRect(0, GROUND_Y + 3, COLS, ROWS - GROUND_Y - 3, '#495057');
+          return;
+        }
+
+        // 4. AEROPUERTO Y CIELO DE VUELO (MILLAS / AVIONES)
+        if (type === 'airport_sky') {
+          for (let r = 0; r < GROUND_Y; r++) {
+            drawRect(0, r, COLS, 1, r < 28 ? '#0077b6' : '#90e0ef');
+          }
+          // Sol radiante arriba a la derecha
+          drawCircle(36, 15, 4, '#ffd166');
+          // Nubes en movimiento
+          for (let i = 0; i < 3; i++) {
+            const cx = (i * 15 + Math.floor(frameIdx * 0.4)) % (COLS - 6);
+            drawRect(cx, 18 + i * 7, 6, 2, '#ffffff');
+          }
+          // Torre de control al fondo
+          drawRect(6, 36, 4, 18, '#adb5bd');
+          drawRect(4, 32, 8, 4, '#1d3557');
+          drawRect(5, 33, 6, 2, '#00f5d4');
+          // Pista de asfalto con líneas blancas
+          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#343a40');
+          const stripeShift = Math.floor(frameIdx * 0.8);
+          for (let c = 0; c < COLS; c++) {
+            if ((c + stripeShift) % 8 < 4) drawRect(c, GROUND_Y + 4, 1, 2, '#ffd166');
+          }
+          return;
+        }
+
+        // 5. PARQUÉ DE BOLSA / WALL STREET (TRADING / FINANZAS)
+        if (type === 'stock_exchange') {
+          drawRect(0, 0, COLS, GROUND_Y, '#101828');
+          // Paneles electrónicos de cotizaciones al fondo
+          for (let py = 15; py <= 35; py += 10) {
+            drawRect(3, py, 39, 7, '#050811');
+            for (let px = 5; px < 40; px += 3) {
+              const isUp = ((px + py + Math.floor(frameIdx / 4)) % 3) !== 0;
+              const barH = 2 + ((px * py) % 4);
+              drawRect(px, py + 6 - barH, 2, barH, isUp ? '#10b981' : '#ef4444');
+            }
+          }
+          // Suelo de mármol brillante
+          for (let r = GROUND_Y; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              grid[r][c] = ((r + c) % 5 === 0) ? '#334155' : '#1e293b';
+            }
+          }
+          return;
+        }
+
+        // 6. BÓVEDA BANCARIA ACORAZADA
+        if (type === 'bank_vault') {
+          drawRect(0, 0, COLS, GROUND_Y, '#2b2d42');
+          drawRect(5, 13, 35, 39, '#4a4e69');
+          drawCircle(22, 32, 12, '#8d99ae');
+          drawCircle(22, 32, 9, '#2b2d42');
+          drawCircle(22, 32, 4, '#ffb703');
+          // Rayos de la timba de la puerta acorazada girando
+          const angle = frameIdx * 0.08;
+          for (let d = 4; d <= 9; d++) {
+            setCell(22 + Math.cos(angle) * d, 32 + Math.sin(angle) * d, '#ffb703');
+            setCell(22 - Math.cos(angle) * d, 32 - Math.sin(angle) * d, '#ffb703');
+          }
+          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#1a1b26');
+          return;
+        }
+
+        // 7. SALA DE SERVIDORES / CENTRO DE DATOS
+        if (type === 'server_room') {
+          drawRect(0, 0, COLS, GROUND_Y, '#0f172a');
+          for (let c = 4; c < COLS - 4; c += 10) {
+            drawRect(c, 14, 7, 40, '#1e293b');
+            drawRect(c + 1, 15, 5, 38, '#090d16');
+            for (let r = 17; r < 50; r += 3) {
+              const on = ((frameIdx + r * 3 + c) % 10) < 6;
+              setCell(c + 2, r, on ? '#38bdf8' : '#334155');
+              setCell(c + 4, r, !on ? '#10b981' : '#ef4444');
+            }
+          }
+          for (let r = GROUND_Y; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              grid[r][c] = (c % 5 === 0 || r % 4 === 0) ? '#38bdf8' : '#0f172a';
+            }
+          }
+          return;
+        }
+
+        // 8. LABORATORIO CLÍNICO / HOSPITAL
+        if (type === 'hospital_lab') {
+          drawRect(0, 0, COLS, GROUND_Y, '#e0fbfc');
+          // Azulejos blancos y celestes de laboratorio
+          for (let r = 12; r < GROUND_Y; r += 4) {
+            drawRect(0, r, COLS, 1, '#98c1d9');
+          }
+          // Cruz médica roja en la pared central
+          drawRect(20, 18, 5, 13, '#ef233c');
+          drawRect(16, 22, 13, 5, '#ef233c');
+          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#3d5a80');
+          return;
+        }
+
+        // 9. CASINO / CONCURSO DE TV ILUMINADO
+        if (type === 'casino_floor') {
+          drawRect(0, 0, COLS, GROUND_Y, '#240046');
+          // Panel de bombillas luminosas estilo concurso TV
+          for (let r = 14; r < 48; r += 5) {
+            for (let c = 4; c < COLS - 4; c += 5) {
+              const lit = ((r + c + Math.floor(frameIdx / 3)) % 3) === 0;
+              drawRect(c, r, 3, 3, lit ? '#ffbe0b' : '#5a189a');
+            }
+          }
+          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#3c096c');
+          return;
+        }
+
+        // 10. ESPACIO PROFUNDO CON PLANETA Y ESTRELLAS (DEEP SPACE)
+        drawRect(0, 0, COLS, ROWS, '#0b0c10');
+        // Planeta Tierra / Satélite en el horizonte
+        drawCircle(22, 68, 22, '#1f4e78');
+        drawCircle(18, 64, 8, '#2e8b57');
+        for (let i = 0; i < 32; i++) {
+          const sc = (i * 19 + Math.floor(frameIdx * 0.2)) % COLS;
+          const sr = (i * 13) % 48;
+          if ((frameIdx + i) % 8 < 6) setCell(sc, sr, i % 3 === 0 ? '#ffd166' : '#ffffff');
+        }
+      }
+
+      // ======================================================================
+      // DICCIONARIO DE 20 SPRITES 8-BIT RECONOCIBLES + MATRIZ CUSTOM
+      // ======================================================================
+      function drawActor8Bit(act, frameIdx) {
+        const tipo = String(act.tipo || 'engineer').toLowerCase().trim();
+        const action = String(act.action || 'idle').toLowerCase().trim();
+
+        // Determinar si es un objeto aéreo o terrestre para anclarlo bien y que no flote
+        const isAirborne = ['rocket', 'plane', 'satellite', 'chart_up', 'chart_down', 'alert_sign', 'virus_bug', 'barcode'].includes(tipo);
+        let baseX = Number(act.x) || 22;
+        let baseY = isAirborne ? (Number(act.y) || 30) : (GROUND_Y - 5);
+
+        let x = baseX;
+        let y = baseY;
+
+        if (action === 'walk_right' || action === 'run_right') {
+          x = 6 + ((baseX + Math.floor(frameIdx * 0.38)) % (COLS - 12));
+        } else if (action === 'walk_left' || action === 'run_left') {
+          x = 6 + ((baseX - Math.floor(frameIdx * 0.38) + COLS * 10) % (COLS - 12));
+        } else if (action === 'jump') {
+          y = baseY - Math.abs(Math.round(Math.sin(frameIdx * 0.32) * 5));
+        } else if (action === 'launch') {
+          y = Math.max(12, baseY - Math.floor((frameIdx % 45) * 0.65));
+        } else if (action === 'fall') {
+          y = Math.min(GROUND_Y - 3, 16 + Math.floor((frameIdx % 40) * 0.8));
+        } else if (action === 'float' || isAirborne) {
+          y = baseY + Math.round(Math.sin(frameIdx * 0.22) * 2);
+        }
+
+        // Sacudida limpia sin desintegrar el dibujo (para que siempre se entienda qué es)
+        if (action === 'shake' || action === 'glitch') {
+          x += (frameIdx % 2 === 0) ? 1 : -1;
+        }
+
+        const step = Math.floor(frameIdx / 4) % 2;
+        const put = (dx, dy, col) => setCell(x + dx, y + dy, col);
+
+        // Si el Director envió una matriz custom_grid (array de strings)
+        if (Array.isArray(act.custom_grid) && act.custom_grid.length >= 4) {
+          const paletteMap = {
+            '1': act.color || '#ffd166',
+            '2': '#ffffff',
+            '3': '#ef233c',
+            '4': '#00f5d4',
+            '5': '#000000'
+          };
+          const h = act.custom_grid.length;
+          const w = act.custom_grid[0].length;
+          for (let r = 0; r < h; r++) {
+            const rowStr = String(act.custom_grid[r]);
+            for (let c = 0; c < rowStr.length; c++) {
+              const ch = rowStr[c];
+              if (paletteMap[ch]) {
+                put(c - Math.floor(w / 2), r - Math.floor(h / 2), paletteMap[ch]);
+              }
+            }
+          }
+          return;
+        }
+
+        // 1. TAZA DE PUDIN / PRODUCTO DE SUPERMERCADO
+        if (tipo === 'pudding_cup') {
+          // Copa marrón/caramelo con tapa dorada
+          for (let c = -4; c <= 4; c++) put(c, -3, '#ffd166'); // Tapa dorada
+          for (let r = -2; r <= 2; r++) {
+            const w = r < 1 ? 3 : 2;
+            for (let c = -w; c <= w; c++) put(c, r, '#d4a373');
+          }
+          for (let c = -2; c <= 2; c++) put(c, -1, '#ffffff'); // Franja de crema
+          return;
+        }
+
+        // 2. CÓDIGO DE BARRAS CON LÁSER ROJO ESCANEANDO
+        if (tipo === 'barcode') {
+          drawRect(x - 6, y - 4, 13, 9, '#ffffff');
+          const bars = [-5, -3, -2, 0, 2, 3, 5];
+          bars.forEach(bc => {
+            for (let r = -3; r <= 3; r++) put(bc, r, '#000000');
+          });
+          // Línea láser roja subiendo y bajando
+          const laserY = -3 + (frameIdx % 7);
+          for (let c = -7; c <= 7; c++) put(c, laserY, '#ef233c');
+          return;
+        }
+
+        // 3. CARRITO DE LA COMPRA LLENO
+        if (tipo === 'shopping_cart') {
+          // Mango y cesta metálica
+          put(-5, -3, '#ef233c'); put(-4, -2, '#adb5bd');
+          for (let c = -3; c <= 4; c++) {
+            put(c, -2, '#ffffff'); put(c, 2, '#ffffff');
+            if (c % 2 === 0) { put(c, -1, '#adb5bd'); put(c, 0, '#adb5bd'); put(c, 1, '#adb5bd'); }
+          }
+          // Productos dentro del carrito
+          drawRect(x - 2, y - 4, 3, 2, '#ffb703');
+          drawRect(x + 1, y - 5, 3, 3, '#ef233c');
+          // Ruedas girando
+          put(-2, 4, '#000000'); put(3, 4, '#000000');
+          return;
+        }
+
+        // 4. AVIÓN COMERCIAL (MILLAS / VUELOS)
+        if (tipo === 'plane') {
+          const flyX = 8 + ((baseX + Math.floor(frameIdx * 0.5)) % (COLS - 16));
+          const pPut = (dx, dy, col) => setCell(flyX + dx, y + dy, col);
+          // Fuselaje blanco
+          for (let c = -6; c <= 6; c++) { pPut(c, 0, '#ffffff'); pPut(c, 1, '#e5e5e5'); }
+          pPut(7, 1, '#ffffff'); pPut(-6, -1, '#ef233c'); pPut(-6, -2, '#ef233c'); // Cola roja
+          // Ventanillas azules
+          for (let c = -3; c <= 4; c += 2) pPut(c, 0, '#0077b6');
+          // Alas
+          for (let r = -3; r <= 4; r++) pPut(0, r, '#adb5bd');
+          return;
+        }
+
+        // 5. COHETE ESPACIAL (ARIANE 5 / NASA)
+        if (tipo === 'rocket') {
+          put(0, -7, '#ef233c');
+          for (let c = -1; c <= 1; c++) put(c, -6, '#ef233c');
+          for (let r = -5; r <= 3; r++) {
+            for (let c = -2; c <= 2; c++) put(c, r, '#ffffff');
+          }
+          put(0, -2, '#00b4d8'); put(0, -1, '#00b4d8'); // Escotilla
+          put(-3, 2, '#ef233c'); put(-3, 3, '#ef233c'); put(-4, 3, '#ef233c');
+          put(3, 2, '#ef233c'); put(3, 3, '#ef233c'); put(4, 3, '#ef233c');
+          // Propulsor animado
+          const fl = 2 + (frameIdx % 4);
+          for (let f = 1; f <= fl; f++) {
+            put(0, 3 + f, f % 2 === 0 ? '#ffd166' : '#f77f00');
+            put(-1, 3 + f, '#ef233c'); put(1, 3 + f, '#ef233c');
+          }
+          return;
+        }
+
+        // 6. SATÉLITE ESPACIAL CON PANELES SOLARES
+        if (tipo === 'satellite') {
+          drawRect(x - 2, y - 2, 5, 5, '#ffd166'); // Cuerpo dorado
+          drawRect(x - 8, y - 1, 5, 3, '#0077b6'); // Panel izquierdo
+          drawRect(x + 4, y - 1, 5, 3, '#0077b6'); // Panel derecho
+          put(0, -3, '#ffffff'); put(0, -4, '#ef233c'); // Antena
+          return;
+        }
+
+        // 7. GRÁFICA SUBIENDO (CHART UP) O BAJANDO (CHART DOWN)
+        if (tipo === 'chart_up' || tipo === 'chart_down') {
+          drawRect(x - 6, y - 5, 13, 10, '#0f172a');
+          const isUp = tipo === 'chart_up';
+          const lineCol = isUp ? '#10b981' : '#ef4444';
+          for (let i = -4; i <= 4; i++) {
+            const cy = isUp ? -i : i;
+            put(i, cy, lineCol);
+            put(i, cy + 1, lineCol);
+          }
+          return;
+        }
+
+        // 8. ORDENADOR / MONITOR CON PANTALLA DE CÓDIGO
+        if (tipo === 'computer') {
+          drawRect(x - 5, y - 5, 11, 8, '#e2e8f0');
+          drawRect(x - 4, y - 4, 9, 6, '#0f172a');
+          const blinkCol = (action === 'glitch' || action === 'explode') ? '#ef4444' : '#10b981';
+          drawRect(x - 3, y - 3, 5, 1, blinkCol);
+          drawRect(x - 3, y - 1, 7, 1, '#ffd166');
+          drawRect(x - 1, y + 3, 3, 2, '#94a3b8');
+          drawRect(x - 3, y + 4, 7, 1, '#e2e8f0');
+          return;
+        }
+
+        // 9. SACO DE DINERO / LINGOTES DE ORO
+        if (tipo === 'money_bag' || tipo === 'gold_bars') {
+          for (let r = -3; r <= 3; r++) {
+            for (let c = -3; c <= 3; c++) {
+              if (Math.abs(c) + Math.abs(r) <= 5) put(c, r, '#ffd166');
+            }
+          }
+          put(0, -2, '#000000'); put(-1, -1, '#000000'); put(0, 0, '#000000'); put(1, 1, '#000000'); put(0, 2, '#000000');
+          return;
+        }
+
+        // 10. TROFEO DORADO (VICTORIA / RÉCORD / ESTATUS VIP)
+        if (tipo === 'trophy') {
+          for (let r = -4; r <= 0; r++) {
+            for (let c = -3; c <= 3; c++) put(c, r, '#ffd166');
+          }
+          put(-4, -3, '#ffd166'); put(4, -3, '#ffd166');
+          put(0, 1, '#f77f00'); put(0, 2, '#f77f00');
+          for (let c = -2; c <= 2; c++) put(c, 3, '#ffffff');
+          return;
+        }
+
+        // 11. VIRUS / BUG INFORMÁTICO O SEÑAL DE ALERTA
+        if (tipo === 'virus_bug' || tipo === 'alert_sign') {
+          for (let r = -3; r <= 2; r++) {
+            for (let c = -3; c <= 3; c++) put(c, r, '#ef233c');
+          }
+          const eye = (frameIdx % 6 < 3) ? '#ffd166' : '#ffffff';
+          put(-2, -1, eye); put(2, -1, eye);
+          const legShift = step === 0 ? 1 : -1;
+          put(-4, 0 + legShift, '#ffd166'); put(4, 0 - legShift, '#ffd166');
+          put(-4, 2 - legShift, '#ffd166'); put(4, 2 + legShift, '#ffd166');
+          return;
+        }
+
+        // 12. CAMIÓN DE REPARTO / COCHE
+        if (tipo === 'truck' || tipo === 'car') {
+          drawRect(x - 6, y - 3, 8, 5, '#ffffff'); // Remolque
+          drawRect(x + 2, y - 1, 4, 3, '#ef233c'); // Cabina
+          put(4, 0, '#90e0ef'); // Parabrisas
+          put(-4, 3, '#000000'); put(0, 3, '#000000'); put(3, 3, '#000000'); // Ruedas
+          return;
+        }
+
+        // 13. HUMANOIDES CONTEXTUALES (ENGINEER, BUSINESSMAN, HACKER, SCIENTIST, GUARD)
+        let shirtColor = '#38bdf8';
+        let pantsColor = '#1e3a8a';
+        let hatColor = null;
+
+        if (tipo === 'engineer') { shirtColor = '#f97316'; hatColor = '#ffd166'; } // Casco amarillo e indumentaria naranja
+        else if (tipo === 'businessman') { shirtColor = '#1e293b'; pantsColor = '#0f172a'; } // Traje ejecutivo oscuro con corbata roja
+        else if (tipo === 'scientist') { shirtColor = '#ffffff'; pantsColor = '#475569'; } // Bata blanca de laboratorio
+        else if (tipo === 'guard') { shirtColor = '#1d3557'; hatColor = '#1d3557'; }
+        else if (tipo === 'hacker') { shirtColor = '#10b981'; pantsColor = '#064e3b'; }
+
+        // Cabeza
+        for (let r = -5; r <= -3; r++) {
+          for (let c = -1; c <= 1; c++) put(c, r, '#ffcdb2');
+        }
+        if (hatColor) {
+          for (let c = -2; c <= 2; c++) put(c, -6, hatColor);
+        }
+        put(1, -4, '#000000'); // Ojo mirando al frente
+
+        // Torso
+        for (let r = -2; r <= 1; r++) {
+          for (let c = -1; c <= 1; c++) put(c, r, shirtColor);
+        }
+        if (tipo === 'businessman') { put(0, -1, '#ef233c'); put(0, 0, '#ef233c'); } // Corbata roja
+
+        // Brazos animados
+        if (step === 0) {
+          put(-2, -1, shirtColor); put(-2, 0, '#ffcdb2');
+          put(2, -2, shirtColor); put(2, -3, '#ffcdb2');
+        } else {
+          put(-2, -2, shirtColor); put(-2, -3, '#ffcdb2');
+          put(2, -1, shirtColor); put(2, 0, '#ffcdb2');
+        }
+
+        // Piernas caminando sobre el suelo firme (GROUND_Y)
+        if (step === 0) {
+          put(-1, 2, pantsColor); put(-2, 3, pantsColor); put(-2, 4, '#ffffff');
+          put(1, 2, pantsColor); put(1, 3, pantsColor); put(1, 4, '#ffffff');
+        } else {
+          put(-1, 2, pantsColor); put(-1, 3, pantsColor); put(-1, 4, '#ffffff');
+          put(1, 2, pantsColor); put(2, 3, pantsColor); put(2, 4, '#ffffff');
+        }
+      }
+
+      // FUENTE 3x5 PARA RÓTULOS PIXEL ART EN PANTALLA
       const FONT_3X5 = {
         'A': ['010','101','111','101','101'], 'B': ['110','101','110','101','110'],
         'C': ['111','100','100','100','111'], 'D': ['110','101','101','101','110'],
@@ -685,8 +1081,11 @@ async function main() {
 
       function drawPixelString(str, startX, startY, color) {
         const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!? ]/g, '').slice(0, 9);
+        if (!clean) return;
         const totalW = clean.length * 4 - 1;
-        let cx = Math.max(1, Math.floor(startX - totalW / 2));
+        let cx = Math.max(2, Math.floor(startX - totalW / 2));
+        // Caja oscura translúcida detrás del texto para legibilidad 100% sobre fondos claros
+        drawRect(cx - 2, startY - 1, totalW + 4, 7, '#080a14');
         for (let i = 0; i < clean.length; i++) {
           const ch = clean[i];
           const glyph = FONT_3X5[ch];
@@ -694,7 +1093,6 @@ async function main() {
             for (let r = 0; r < 5; r++) {
               for (let c = 0; c < 3; c++) {
                 if (glyph[r][c] === '1') {
-                  setCell(cx + c, startY + r + 1, '#000000'); // Sombra 8-bit
                   setCell(cx + c, startY + r, color);
                 }
               }
@@ -704,163 +1102,6 @@ async function main() {
         }
       }
 
-      // GENERADOR PROCEDURAL DE SPRITES EN BLOQUES CON EXTREMIDADES MÓVILES
-      function drawActor8Bit(tipo, baseX, baseY, action, frameIdx, primaryColor) {
-        // Cálculo de desplazamiento y física por frame
-        let x = baseX;
-        let y = baseY;
-        if (action === 'run_right') x = (baseX + Math.floor(frameIdx * 0.45)) % (COLS - 8);
-        else if (action === 'run_left') x = (baseX - Math.floor(frameIdx * 0.45) + COLS * 10) % (COLS - 8);
-        else if (action === 'jump') y = baseY - Math.abs(Math.round(Math.sin(frameIdx * 0.35) * 6));
-        else if (action === 'fall') y = Math.min(50, baseY + Math.floor((frameIdx % 30) * 0.6));
-        else if (action === 'float') y = baseY + Math.round(Math.sin(frameIdx * 0.25) * 2);
-
-        // Ciclo de patas/extremidades (cambia de bloque cada 3 frames)
-        const step = Math.floor(frameIdx / 3) % 2;
-        const isGlitch = (action === 'glitch' || action === 'explode');
-
-        const put = (dx, dy, col) => {
-          let gx = x + dx;
-          let gy = y + dy;
-          if (isGlitch && (frameIdx % 4 < 2)) {
-            gx += Math.round(Math.sin(frameIdx + dy) * 3);
-            gy += Math.round(Math.cos(frameIdx + dx) * 2);
-          }
-          setCell(gx, gy, col);
-        };
-
-        if (tipo === 'rocket') {
-          const ry = (action === 'launch' || action === 'jump') ? baseY - Math.floor((frameIdx % 35) * 0.7) : y;
-          const rPut = (dx, dy, col) => setCell(x + dx, ry + dy, col);
-          // Punta y fuselaje del cohete
-          rPut(0, -6, '#ff2a5f');
-          for (let c = -1; c <= 1; c++) rPut(c, -5, '#ff2a5f');
-          for (let r = -4; r <= 3; r++) {
-            for (let c = -2; c <= 2; c++) rPut(c, r, '#ffffff');
-          }
-          // Ventana
-          rPut(0, -2, '#00f2fe'); rPut(0, -1, '#00f2fe');
-          // Aletas laterales
-          rPut(-3, 2, '#ff2a5f'); rPut(-3, 3, '#ff2a5f'); rPut(-4, 3, '#ff2a5f');
-          rPut(3, 2, '#ff2a5f'); rPut(3, 3, '#ff2a5f'); rPut(4, 3, '#ff2a5f');
-          // Fuego animado del propulsor (cambia celda a celda en cada frame)
-          const flameLen = 3 + (frameIdx % 4);
-          for (let f = 1; f <= flameLen; f++) {
-            rPut(0, 3 + f, f % 2 === 0 ? '#ffd000' : '#ff6b00');
-            if (f < flameLen) {
-              rPut(-1, 3 + f, '#ff2a5f');
-              rPut(1, 3 + f, '#ff2a5f');
-            }
-          }
-          return;
-        }
-
-        if (tipo === 'dog' || tipo === 'wolf') {
-          // Cuerpo horizontal de cuadrúpedo 8-bit
-          for (let c = -3; c <= 2; c++) {
-            for (let r = -1; r <= 1; r++) put(c, r, primaryColor || '#ff9f1c');
-          }
-          // Cabeza y orejas
-          for (let c = 2; c <= 4; c++) {
-            for (let r = -3; r <= -1; r++) put(c, r, primaryColor || '#ff9f1c');
-          }
-          put(2, -4, '#ffffff'); put(4, -2, '#000000'); put(5, -2, '#ff2a5f');
-          // Cola animada
-          put(-4, step === 0 ? -2 : -1, '#ffffff');
-          put(-5, step === 0 ? -3 : -2, '#ffffff');
-          // 4 Patas corriendo (cambian de bloque en cada paso)
-          if (step === 0) {
-            put(-3, 2, '#ffffff'); put(-4, 3, '#ffffff');
-            put(-1, 2, primaryColor);
-            put(1, 2, '#ffffff'); put(2, 3, '#ffffff');
-            put(3, 2, primaryColor);
-          } else {
-            put(-3, 2, primaryColor);
-            put(-1, 2, '#ffffff'); put(0, 3, '#ffffff');
-            put(1, 2, primaryColor);
-            put(3, 2, '#ffffff'); put(4, 3, '#ffffff');
-          }
-          return;
-        }
-
-        if (tipo === 'skull_bug' || tipo === 'virus') {
-          for (let r = -4; r <= 1; r++) {
-            for (let c = -4; c <= 4; c++) {
-              if (Math.abs(c) === 4 && r === -4) continue;
-              put(c, r, primaryColor || '#ff2a5f');
-            }
-          }
-          // Ojos parpadeantes
-          const eyeCol = (frameIdx % 6 < 3) ? '#ffd000' : '#000000';
-          put(-2, -2, eyeCol); put(-1, -2, eyeCol);
-          put(1, -2, eyeCol); put(2, -2, eyeCol);
-          // Mandíbula / Patas de insecto código
-          put(-3, 2, '#ffffff'); put(-1, 2, '#ffffff'); put(1, 2, '#ffffff'); put(3, 2, '#ffffff');
-          const legOffset = step === 0 ? 1 : -1;
-          put(-5, 0 + legOffset, pal.primary); put(5, 0 - legOffset, pal.primary);
-          put(-5, 2 - legOffset, pal.primary); put(5, 2 + legOffset, pal.primary);
-          return;
-        }
-
-        if (tipo === 'computer' || tipo === 'server') {
-          for (let r = -5; r <= 2; r++) {
-            for (let c = -5; c <= 5; c++) put(c, r, '#ffffff');
-          }
-          for (let r = -4; r <= 0; r++) {
-            for (let c = -4; c <= 4; c++) put(c, r, '#081820');
-          }
-          // Líneas de código moviéndose dentro del monitor
-          const lineRow = -4 + (frameIdx % 4);
-          put(-3, lineRow, '#39ff14'); put(-2, lineRow, '#39ff14'); put(-1, lineRow, '#39ff14');
-          put(1, lineRow, '#ffd000'); put(2, lineRow, '#ffd000');
-          // Base del monitor
-          put(-1, 3, '#888899'); put(0, 3, '#888899'); put(1, 3, '#888899');
-          for (let c = -3; c <= 3; c++) put(c, 4, '#ffffff');
-          return;
-        }
-
-        if (tipo === 'money_bag' || tipo === 'coin') {
-          for (let r = -3; r <= 3; r++) {
-            for (let c = -3; c <= 3; c++) {
-              if (Math.abs(c) + Math.abs(r) <= 5) put(c, r, '#ffd000');
-            }
-          }
-          put(0, -2, '#000000'); put(-1, -1, '#000000'); put(0, 0, '#000000'); put(1, 1, '#000000'); put(0, 2, '#000000');
-          return;
-        }
-
-        // Por defecto: Humanoide 8-Bit (Hacker / Científico / Guardia / Banquero)
-        const headColor = '#ffccaa';
-        const suitColor = primaryColor || pal.primary;
-        // Cabeza 3x3
-        for (let r = -6; r <= -4; r++) {
-          for (let c = -1; c <= 1; c++) put(c, r, headColor);
-        }
-        // Gafas de hacker / Visor
-        put(0, -5, '#000000'); put(1, -5, pal.accent);
-        // Torso 3x4
-        for (let r = -3; r <= 0; r++) {
-          for (let c = -1; c <= 1; c++) put(c, r, suitColor);
-        }
-        // Brazos animados con el paso
-        if (step === 0) {
-          put(-2, -2, suitColor); put(-2, -1, headColor);
-          put(2, -3, suitColor); put(2, -4, headColor);
-        } else {
-          put(-2, -3, suitColor); put(-2, -4, headColor);
-          put(2, -2, suitColor); put(2, -1, headColor);
-        }
-        // Piernas alternando bloques para correr
-        if (step === 0) {
-          put(-1, 1, '#ffffff'); put(-2, 2, '#ffffff'); put(-2, 3, pal.secondary);
-          put(1, 1, '#ffffff'); put(1, 2, pal.secondary);
-        } else {
-          put(-1, 1, '#ffffff'); put(-1, 2, pal.secondary);
-          put(1, 1, '#ffffff'); put(2, 2, '#ffffff'); put(2, 3, pal.secondary);
-        }
-      }
-
-      // Pintar toda la matriz 45x80 en el Canvas HTML5
       function flushGridToCanvas() {
         ctx.clearRect(0, 0, 720, 1280);
         for (let r = 0; r < ROWS; r++) {
@@ -878,7 +1119,6 @@ async function main() {
       window.setFrameData = function(frameIdx, t) {
         const linearRatio = (frameIdx + 1) / totalFrames;
         document.getElementById('pbar').style.width = Math.min(100, linearRatio * 100) + '%';
-        hudFrame.textContent = 'FRM:' + String(frameIdx).padStart(3, '0');
 
         let activeIdx = escenas.findIndex((e, idx) => {
           if (idx === escenas.length - 1) return t >= e.inicio;
@@ -886,58 +1126,50 @@ async function main() {
         });
         if (activeIdx === -1 && escenas.length > 0) activeIdx = 0;
 
+        hudFrame.textContent = 'ESC:' + String(activeIdx + 1).padStart(2, '0') + '/' + String(escenas.length).padStart(2, '0');
+
         const esc = escenas[activeIdx] || {};
         const localFrame = Math.max(0, Math.floor((t - (esc.inicio || 0)) * 30));
 
-        // 1. Limpiar y construir fondo en la matriz 45x80
-        clearGrid(esc.bg_type || 'cyber_grid', frameIdx);
+        // 1. Pintar el escenario contextual rico y colorido
+        drawEnvironment(esc.bg_type || 'day_office', frameIdx);
 
-        // 2. Dibujar actores móviles en la cuadrícula
+        // 2. Pintar los objetos y actores coherentes con el guion
         const actors = Array.isArray(esc.actors) && esc.actors.length > 0
           ? esc.actors
-          : [
-              { tipo: 'hacker', x: 14, y: 50, action: 'run_right', color: pal.primary },
-              { tipo: 'computer', x: 32, y: 48, action: 'float', color: pal.secondary }
-            ];
+          : [{ tipo: 'engineer', x: 16, y: 49, action: 'walk_right' }];
 
         actors.forEach((act, aIdx) => {
-          const col = act.color || (aIdx % 2 === 0 ? pal.primary : pal.secondary);
           drawActor8Bit(
-            act.tipo || 'hacker',
-            Number(act.x) || 15 + aIdx * 14,
-            Number(act.y) || 50,
-            act.action || 'run_right',
-            localFrame,
-            col
+            { ...act, x: Number(act.x) || (14 + aIdx * 16) },
+            localFrame
           );
         });
 
-        // 3. Efecto especial de explosión de píxeles o lluvia de monedas
-        if (esc.efecto_matriz === 'explosion_pixel' || (localFrame > 18 && esc.sfx === 'explosion_8bit')) {
-          for (let p = 0; p < 22; p++) {
-            const angle = (p / 22) * Math.PI * 2;
-            const dist = (localFrame % 18) * 1.1;
-            const px = 22 + Math.cos(angle) * dist;
-            const py = 36 + Math.sin(angle) * dist;
-            setCell(px, py, p % 2 === 0 ? '#ffd000' : '#ff2a5f');
+        // 3. Efectos ambientales de partículas (explosión o lluvia de oro)
+        if (esc.efecto_matriz === 'explosion_pixel') {
+          for (let p = 0; p < 24; p++) {
+            const angle = (p / 24) * Math.PI * 2;
+            const dist = 2 + (localFrame % 16) * 0.9;
+            setCell(22 + Math.cos(angle) * dist, 30 + Math.sin(angle) * dist, p % 2 === 0 ? '#ffd166' : '#ef233c');
           }
         } else if (esc.efecto_matriz === 'coin_shower') {
-          for (let m = 0; m < 12; m++) {
-            const mx = (m * 7 + 3) % COLS;
-            const my = (localFrame * 2 + m * 9) % 55;
-            setCell(mx, my, '#ffd000');
-            setCell(mx, my + 1, '#ff9f1c');
+          for (let m = 0; m < 14; m++) {
+            const mx = (m * 7 + 4) % COLS;
+            const my = 12 + ((localFrame * 2 + m * 9) % 40);
+            setCell(mx, my, '#ffd166');
+            setCell(mx, my + 1, '#f77f00');
           }
         }
 
-        // 4. Rotular texto_1 y texto_2 en bloques 8-bit dentro de la cuadrícula
-        if (esc.texto_1) drawPixelString(esc.texto_1, 22, 10, pal.accent);
-        if (esc.texto_2) drawPixelString(esc.texto_2, 22, 58, '#ffffff');
+        // 4. Rótulos superiores e inferiores con caja de contraste
+        if (esc.texto_1) drawPixelString(esc.texto_1, 22, 8, '#ffd166');
+        if (esc.texto_2) drawPixelString(esc.texto_2, 22, 57, '#00f5d4');
 
-        // 5. Volcar matriz al lienzo
+        // 5. Renderizar la cuadrícula en el Canvas
         flushGridToCanvas();
 
-        // 6. Actualizar subtítulos sincronizados
+        // 6. Subtítulos sincronizados
         let cIdx = subtitleChunks.findIndex((c, idx) => {
           if (idx === subtitleChunks.length - 1) return t >= c.start;
           return t >= c.start && t < c.end;
@@ -986,7 +1218,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Matriz 8-Bit 45x80 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Matriz Contextual 8-Bit (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -996,13 +1228,13 @@ async function main() {
 
   await browser.close();
 
-  console.log('🔊 Ensamblando MP4 final 8-Bit...');
+  console.log('🔊 Ensamblando MP4 final 8-Bit v2.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo 8-Bit generado con éxito!');
+  console.log('✅ ¡Vídeo 8-Bit v2.0 generado con éxito!');
 }
 
 main().catch(err => {
