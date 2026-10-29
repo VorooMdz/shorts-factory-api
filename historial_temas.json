@@ -93,5 +93,18 @@
       "chabris y simons"
     ],
     "fecha_publicacion": "2026-10-29T11:31:53.560Z"
+  },
+  {
+    "id_concepto": "error_prediccion_recompensa_schultz",
+    "subrama": "Química y Dopamina",
+    "titulo": "La Verdadera Función de la Dopamina",
+    "keywords_concepto": [
+      "dopamina",
+      "error de prediccion",
+      "wolfram schultz",
+      "placer",
+      "anticipacion"
+    ],
+    "fecha_publicacion": "2026-10-29T11:46:19.971Z"
   }
 ]
