@@ -38,7 +38,6 @@ async function resolveAndFetchVector(rawQuery) {
   const cleanName = q.includes(':') ? q.split(':')[1] : q;
   const prefix = q.includes(':') ? q.split(':')[0] : 'lucide';
 
-  // Priorizar siempre Lucide (trazos limpios y continuos en viewBox 0 0 24 24)
   let svg = await fetchText(`https://api.iconify.design/lucide/${cleanName}.svg`);
   if (!svg || !svg.includes('<svg')) {
     svg = await fetchText(`https://api.iconify.design/${prefix}/${cleanName}.svg`);
@@ -63,7 +62,7 @@ async function resolveAndFetchVector(rawQuery) {
   }
 
   if (!svg || !svg.includes('<svg')) {
-    svg = await fetchText('https://api.iconify.design/lucide/brain.svg');
+    svg = await fetchText('https://api.iconify.design/lucide/sparkles.svg');
   }
 
   if (svg && svg.includes('<svg')) {
@@ -98,7 +97,7 @@ async function preloadAllSceneVectors(escenas) {
 }
 
 // ============================================================================
-// MEGABIBLIOTECA INTEGRADA DE ANIMALES, VEHÍCULOS, OBJETOS Y PROPS
+// MEGABIBLIOTECA INTEGRADA DE ANIMALES, VEHÍCULOS, OBJETOS Y EXPERIMENTOS
 // ============================================================================
 const EXPANDED_SVG_PACK = {
   diag_perro_pavlov: `
@@ -125,6 +124,43 @@ const EXPANDED_SVG_PACK = {
     </g>
     <text x="100" y="220" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
   `,
+  diag_tiburon_miedo: `
+    <text x="100" y="24" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-red draw" d="M75,135 L105,65 L125,135 Z" />
+      <path class="stroke-white draw" d="M20,140 Q45,125 70,140 T120,140 T180,140" />
+      <path class="stroke-yellow draw" d="M30,162 Q60,150 90,162 T150,162 T175,162" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_serpiente_alerta: `
+    <text x="100" y="24" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-yellow draw" d="M60,170 Q35,140 85,125 T130,90 T95,55" />
+      <polygon class="stroke-red pulse" points="95,42 112,58 95,70 78,58" />
+      <path class="stroke-red draw" d="M95,42 L90,28 M95,42 L100,28" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_mariposa_caos: `
+    <text x="100" y="24" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
+    <g class="pulse">
+      <path class="stroke-yellow draw" d="M100,95 C55,40 25,85 65,125 C35,155 65,185 100,145" />
+      <path class="stroke-red draw" d="M100,95 C145,40 175,85 135,125 C165,155 135,185 100,145" />
+      <line class="stroke-white draw" x1="100" y1="70" x2="100" y2="165" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_pulpo_mente: `
+    <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <circle class="stroke-white draw" cx="100" cy="82" r="28" />
+      <circle cx="90" cy="80" r="4" fill="#ffd000" />
+      <circle cx="110" cy="80" r="4" fill="#ffd000" />
+      <path class="stroke-red draw" d="M80,108 Q50,140 35,170 M92,110 Q75,150 68,180 M108,110 Q125,150 132,180 M120,108 Q150,140 165,170" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
   diag_dilema_tranvia: `
     <text x="52" y="26" text-anchor="middle" fill="#ffffff" font-size="12">{{TEXTO_1}}</text>
     <text x="148" y="26" text-anchor="middle" fill="#ff2a5f" font-size="12">{{TEXTO_2}}</text>
@@ -134,6 +170,16 @@ const EXPANDED_SVG_PACK = {
       <circle cx="88" cy="184" r="5" fill="#ffffff" />
       <circle cx="112" cy="184" r="5" fill="#ffffff" />
     </g>
+  `,
+  diag_cohete_euforia: `
+    <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-white draw" d="M100,45 C128,80 128,130 122,155 L78,155 C72,130 72,80 100,45 Z" />
+      <path class="stroke-red draw" d="M78,135 L55,162 L78,155 M122,135 L145,162 L122,155" />
+      <circle class="stroke-yellow draw" cx="100" cy="100" r="12" />
+      <polygon class="stroke-red pulse" points="88,158 100,192 112,158" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
   `,
   diag_ruleta_casino: `
     <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
@@ -146,6 +192,60 @@ const EXPANDED_SVG_PACK = {
     </g>
     <text x="100" y="220" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_2}}</text>
   `,
+  diag_dados_azar: `
+    <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <rect class="stroke-white draw" x="34" y="75" width="58" height="58" rx="10" />
+      <circle cx="50" cy="91" r="4.5" fill="#ff2a5f" />
+      <circle cx="76" cy="117" r="4.5" fill="#ff2a5f" />
+      <rect class="stroke-yellow draw" x="106" y="102" width="58" height="58" rx="10" />
+      <circle cx="122" cy="118" r="4.5" fill="#ffd000" />
+      <circle cx="135" cy="131" r="4.5" fill="#ffd000" />
+      <circle cx="148" cy="144" r="4.5" fill="#ffd000" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_adn_genetica: `
+    <text x="100" y="24" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <path class="stroke-white draw" d="M60,48 C140,85 60,155 140,192" />
+      <path class="stroke-red draw" d="M140,48 C60,85 140,155 60,192" />
+      <line class="stroke-yellow draw" x1="75" y1="68" x2="125" y2="68" />
+      <line class="stroke-yellow draw" x1="82" y1="120" x2="118" y2="120" />
+      <line class="stroke-yellow draw" x1="75" y1="172" x2="125" y2="172" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_jeringuilla_placebo: `
+    <text x="100" y="24" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <rect class="stroke-white draw" x="78" y="70" width="44" height="85" rx="4" />
+      <line class="stroke-yellow draw" x1="100" y1="40" x2="100" y2="70" />
+      <line class="stroke-yellow draw" x1="82" y1="40" x2="118" y2="40" />
+      <line class="stroke-red pulse" x1="100" y1="155" x2="100" y2="195" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_ajedrez_estrategia: `
+    <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <g class="float">
+      <polygon class="stroke-yellow draw" points="60,175 140,175 125,85 75,85" />
+      <circle class="stroke-white draw" cx="100" cy="65" r="16" />
+      <line class="stroke-red pulse" x1="100" y1="35" x2="100" y2="52" />
+      <line class="stroke-red pulse" x1="90" y1="43" x2="110" y2="43" />
+    </g>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+  `,
+  diag_pildora_eleccion: `
+    <text x="55" y="28" text-anchor="middle" fill="#ff2a5f" font-size="12">{{TEXTO_1}}</text>
+    <text x="145" y="28" text-anchor="middle" fill="#00f2fe" font-size="12">{{TEXTO_2}}</text>
+    <g class="pulse">
+      <rect class="stroke-red draw" x="35" y="75" width="42" height="88" rx="21" />
+      <line class="stroke-white draw" x1="35" y1="119" x2="77" y2="119" />
+      <rect class="stroke-yellow draw" x="123" y="75" width="42" height="88" rx="21" />
+      <line class="stroke-white draw" x1="123" y1="119" x2="165" y2="119" />
+    </g>
+  `,
   diag_caja_skinner: `
     <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
     <rect class="stroke-white draw" x="35" y="50" width="130" height="130" rx="12" />
@@ -153,6 +253,50 @@ const EXPANDED_SVG_PACK = {
     <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
   `
 };
+
+// Detector semántico automático de diagramas complejos del catálogo según el texto de la escena
+function matchSemanticCatalogDiagram(esc, catalogo, usedDiags) {
+  const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''}`.toLowerCase();
+  const rules = [
+    { rx: /pavlov|perro|saliva|campana/, id: 'diag_perro_pavlov' },
+    { rx: /rata|jaula|palanca|skinner/, id: 'diag_rata_experimento' },
+    { rx: /tranvía|tranvia|vía|via|dilema/, id: 'diag_dilema_tranvia' },
+    { rx: /ruleta|casino|apuesta/, id: 'diag_ruleta_casino' },
+    { rx: /dado|azar|suerte/, id: 'diag_dados_azar' },
+    { rx: /adn|genética|genetica|herencia/, id: 'diag_adn_genetica' },
+    { rx: /placebo|nocebo|inyección|jeringa|medicina/, id: 'diag_jeringuilla_placebo' },
+    { rx: /píldora|pildora|pastilla/, id: 'diag_pildora_eleccion' },
+    { rx: /ajedrez|estrategia|jaque/, id: 'diag_ajedrez_estrategia' },
+    { rx: /iceberg|inconsciente|subconsciente|oculto/, id: 'diag_iceberg' },
+    { rx: /balanza|justicia|compens|equilibrio|pesa/, id: 'diag_balanza' },
+    { rx: /laberinto|salida|atrapado|camino/, id: 'diag_laberinto_mente' },
+    { rx: /imán|iman|atracción|atrae|magnét/, id: 'diag_iman_atraccion' },
+    { rx: /espejo|reflejo|autoimagen|distorsión/, id: 'diag_espejo_distorsion' },
+    { rx: /máscara|mascara|falso|fingir|impostor/, id: 'diag_mascara_dual' },
+    { rx: /rebaño|rebano|oveja|conformidad|grupo|masa/, id: 'diag_efecto_rebano' },
+    { rx: /hámster|hamster|rueda|rutina/, id: 'diag_rueda_hamster' },
+    { rx: /pozo|hundido|invertido/, id: 'diag_pozo_costo_hundido' },
+    { rx: /embudo|filtro|atención|atencion/, id: 'diag_embudo_filtro' },
+    { rx: /batería|bateria|energía|energia|agotad|cansad/, id: 'diag_bateria_mental' },
+    { rx: /anzuelo|cebo|trampa|pesca/, id: 'diag_anzuelo_trampa' },
+    { rx: /ancla|anclaje/, id: 'diag_ancla_precio' },
+    { rx: /puerta|portazo|opción|opcion/, id: 'diag_dos_puertas' },
+    { rx: /diana|objetivo|centro/, id: 'diag_diana_foco' },
+    { rx: /eslabón|eslabon|cadena|roto/, id: 'diag_eslabon_roto' },
+    { rx: /espiral|bucle|infinito|círculo|ciclo/, id: 'diag_espiral_bucle' },
+    { rx: /descuento|rebaja|oferta|etiqueta/, id: 'diag_etiqueta_descuento' },
+    { rx: /neurona|sinapsis|red cerebral/, id: 'diag_red_neuronal' },
+    { rx: /termómetro|termometro|temperatura|fiebre/, id: 'diag_termometro_emocion' },
+    { rx: /muro|barrera|bloqueo|obstáculo/, id: 'diag_muro_bloqueo' }
+  ];
+
+  for (const r of rules) {
+    if (r.rx.test(text) && catalogo[r.id] && !usedDiags.has(r.id)) {
+      return r.id;
+    }
+  }
+  return null;
+}
 
 // 1. Extractor inteligente de textos internos para SVGs
 function sanitizeSvgTexts(esc, matchesDestacados) {
@@ -206,8 +350,8 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   ];
 }
 
-// 1.5 Renderizador de Iconify con Trazos 100% Completos y Continuos (Sin cortes de dasharray)
-function buildIllustratedSceneSvg(esc, vectorCache, t1, t2) {
+// 1.5 Renderizador de Escenas con 5 Layouts Visuales Distintos para que NUNCA se vean iguales
+function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
   const rawList = [];
   if (Array.isArray(esc.iconos)) rawList.push(...esc.iconos);
   if (esc.objeto_1 && !rawList.includes(esc.objeto_1)) rawList.push(esc.objeto_1);
@@ -216,55 +360,105 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2) {
   const cleanKeys = rawList.map(k => String(k || '').trim().toLowerCase()).filter(Boolean).slice(0, 2);
   if (cleanKeys.length === 0) cleanKeys.push('lucide:brain');
 
-  // IMPORTANTE: Usamos icon-stroke-* (con stroke-width: 1.85 nativo para viewBox 24x24 y SIN non-scaling-stroke)
-  // Así el trazado se dibuja de principio a fin sin romperse jamás en líneas discontinuas
   const styleStroke = (innerSvg, colorClass) => {
     return innerSvg.replace(/<(path|circle|rect|line|polyline|polygon|ellipse)\b/gi, `<$1 class="${colorClass} draw"`);
   };
 
-  if (cleanKeys.length === 1) {
-    const v1 = vectorCache[cleanKeys[0]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
+  const v1 = vectorCache[cleanKeys[0]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
+  const v2 = cleanKeys[1] ? (vectorCache[cleanKeys[1]] || v1) : null;
+
+  const layoutMode = (hash + idx * 3) % 5;
+
+  // Si solo hay 1 icono o toca el Layout Radar/Héroe
+  if (!v2 || layoutMode === 0) {
     const styled1 = styleStroke(v1.inner, 'icon-stroke-yellow');
+    const styledSat = v2 ? styleStroke(v2.inner, 'icon-stroke-red') : '';
     return `
       <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-      <circle cx="100" cy="118" r="64" class="stroke-white draw" opacity="0.20" />
+      <circle cx="100" cy="118" r="62" class="stroke-white draw" opacity="0.22" />
+      <polyline points="26,56 42,56 26,56 26,72" class="stroke-red draw" />
+      <polyline points="174,56 158,56 174,56 174,72" class="stroke-red draw" />
+      <polyline points="26,180 42,180 26,180 26,164" class="stroke-red draw" />
+      <polyline points="174,180 158,180 174,180 174,164" class="stroke-red draw" />
       <g class="float">
-        <g class="pulse">
-          <svg class="nested-icon" x="42" y="60" width="116" height="116" viewBox="${v1.viewBox}" overflow="visible">
-            ${styled1}
-          </svg>
-        </g>
+        <svg class="nested-icon" x="46" y="64" width="108" height="108" viewBox="${v1.viewBox}" overflow="visible">
+          ${styled1}
+        </svg>
+      </g>
+      ${v2 ? `<g class="pulse"><svg class="nested-icon" x="134" y="44" width="44" height="44" viewBox="${v2.viewBox}" overflow="visible">${styledSat}</svg></g>` : ''}
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    `;
+  }
+
+  const styled1 = styleStroke(v1.inner, 'icon-stroke-yellow');
+  const styled2 = styleStroke(v2.inner, 'icon-stroke-red');
+
+  // Layout 1: Diagonal Dinámica con Rayo de Energía Central
+  if (layoutMode === 1) {
+    return `
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <g class="float">
+        <circle cx="58" cy="86" r="40" class="stroke-white draw" opacity="0.25" />
+        <svg class="nested-icon" x="26" y="54" width="64" height="64" viewBox="${v1.viewBox}" overflow="visible">${styled1}</svg>
+      </g>
+      <polyline points="86,102 106,112 94,124 114,134" class="stroke-yellow draw pulse" stroke-width="4" />
+      <g class="pulse">
+        <circle cx="142" cy="150" r="40" class="stroke-red draw" opacity="0.28" />
+        <svg class="nested-icon" x="110" y="118" width="64" height="64" viewBox="${v2.viewBox}" overflow="visible">${styled2}</svg>
       </g>
       <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
     `;
   }
 
-  // Dos iconos emparejados en tarjetas o con flecha de conexión limpia (sin palo suelto)
-  const v1 = vectorCache[cleanKeys[0]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
-  const v2 = vectorCache[cleanKeys[1]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
-  const styled1 = styleStroke(v1.inner, 'icon-stroke-yellow');
-  const styled2 = styleStroke(v2.inner, 'icon-stroke-red');
+  // Layout 2: Balanza de Contraste Psicológico con los dos iconos encima
+  if (layoutMode === 2) {
+    return `
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <polygon points="86,188 114,188 100,158" class="stroke-white draw" />
+      <line x1="28" y1="168" x2="172" y2="148" class="stroke-yellow draw" stroke-width="5" />
+      <g class="float">
+        <svg class="nested-icon" x="22" y="92" width="66" height="66" viewBox="${v1.viewBox}" overflow="visible">${styled1}</svg>
+      </g>
+      <g class="pulse">
+        <svg class="nested-icon" x="114" y="72" width="66" height="66" viewBox="${v2.viewBox}" overflow="visible">${styled2}</svg>
+      </g>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    `;
+  }
 
+  // Layout 3: Enfrentamiento VS con Divisor Relámpago
+  if (layoutMode === 3) {
+    return `
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <g class="float">
+        <svg class="nested-icon" x="12" y="78" width="72" height="72" viewBox="${v1.viewBox}" overflow="visible">${styled1}</svg>
+      </g>
+      <circle cx="100" cy="116" r="16" class="stroke-white draw" />
+      <text x="100" y="121" text-anchor="middle" fill="#ffd000" font-size="12">VS</text>
+      <g class="pulse">
+        <svg class="nested-icon" x="116" y="78" width="72" height="72" viewBox="${v2.viewBox}" overflow="visible">${styled2}</svg>
+      </g>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    `;
+  }
+
+  // Layout 4: Tarjetas Duales con Flecha de Transformación
   return `
     <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-    <rect x="10" y="62" width="80" height="106" rx="14" class="stroke-white draw" opacity="0.22" />
-    <rect x="110" y="62" width="80" height="106" rx="14" class="stroke-white draw" opacity="0.22" />
+    <rect x="10" y="64" width="78" height="104" rx="14" class="stroke-white draw" opacity="0.25" />
+    <rect x="112" y="64" width="78" height="104" rx="14" class="stroke-red draw" opacity="0.35" />
     <g class="float">
-      <svg class="nested-icon" x="18" y="83" width="64" height="64" viewBox="${v1.viewBox}" overflow="visible">
-        ${styled1}
-      </svg>
+      <svg class="nested-icon" x="18" y="84" width="62" height="62" viewBox="${v1.viewBox}" overflow="visible">${styled1}</svg>
     </g>
+    <path d="M92,116 L108,116 M103,110 L109,116 L103,122" class="stroke-yellow draw pulse" />
     <g class="pulse">
-      <path d="M93,115 L107,115 M102,109 L108,115 L102,121" class="stroke-white draw" stroke-width="3.5" />
-      <svg class="nested-icon" x="118" y="83" width="64" height="64" viewBox="${v2.viewBox}" overflow="visible">
-        ${styled2}
-      </svg>
+      <svg class="nested-icon" x="120" y="84" width="62" height="62" viewBox="${v2.viewBox}" overflow="visible">${styled2}</svg>
     </g>
     <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
   `;
 }
 
-// 1.6 Visualización de Datos que coloca el número en la posición coherente (ej. 0% abajo si cae a cero)
+// 1.6 Visualización de Datos Ampliada (8 Gráficos Distintos para no repetir nunca el mismo círculo)
 function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   const dv = esc.data_viz || {};
   const sub = String(esc.subtitulo || '');
@@ -280,12 +474,14 @@ function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   let rawVal = String(dv.valor ?? '').replace(/undefined|null/gi, '').trim();
   let suf = String(dv.sufijo ?? '').replace(/undefined|null/gi, '').trim();
 
-  const subNumMatch = sub.match(/(\d+(?:[.,]\d+)?)\s*(%|€|\$|por\s*ciento|euros|horas|años)?/i);
+  const subNumMatch = sub.match(/(\d+(?:[.,]\d+)?)\s*(%|€|\$|por\s*ciento|euros|horas|años|segundos)?/i);
   if (subNumMatch) {
     rawVal = subNumMatch[1];
     const unit = (subNumMatch[2] || '').toLowerCase();
     if (unit.includes('por') || unit === '%') suf = '%';
     else if (unit.includes('euro') || unit === '€') suf = '€';
+    else if (unit.includes('seg')) suf = 'S';
+    else if (unit.includes('hora')) suf = 'H';
   } else {
     for (const [w, n] of Object.entries(wordNumMap)) {
       if (new RegExp(`\\b${w}\\b`, 'i').test(sub)) {
@@ -302,13 +498,55 @@ function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   const displayVal = `${rawVal}${suf}`.slice(0, 9);
   const isZeroOrDrop = /^0(%|$)/.test(displayVal) || /cero|cae|desploma|baja|apaga|olvida/i.test(sub);
 
-  const tipos = ['gauge_radial', 'versus_bars', 'crash_curve', 'split_brain', 'price_anchor'];
-  let chosenType = (dv.tipo && tipos.includes(dv.tipo)) ? dv.tipo : tipos[(hash + idx) % tipos.length];
+  const tipos = [
+    'speedometer_arc', 'battery_blocks', 'digital_timer', 'crash_curve',
+    'price_anchor', 'split_brain', 'versus_bars', 'pyramid_rank'
+  ];
+  let chosenType = tipos[(hash + idx * 3) % tipos.length];
   if (isZeroOrDrop) chosenType = 'crash_curve';
+  else if (/€|precio|oferta|caro|barato|cuesta/i.test(sub)) chosenType = 'price_anchor';
+  else if (/segundo|minuto|hora|tiempo|reloj/i.test(sub)) chosenType = 'digital_timer';
 
-  if (chosenType === 'crash_curve') {
-    const labelX = isZeroOrDrop ? 162 : 102;
-    const labelY = isZeroOrDrop ? 150 : 56;
+  if (chosenType === 'speedometer_arc') {
+    return `
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <path d="M32,152 A68,68 0 1,1 168,152" class="stroke-white draw" opacity="0.28" />
+      <path d="M32,152 A68,68 0 0,1 148,70" class="stroke-red draw" stroke-width="8" />
+      <line x1="100" y1="152" x2="142" y2="82" class="stroke-yellow draw pulse" />
+      <circle cx="100" cy="152" r="8" fill="#ffffff" />
+      <text x="100" y="186" text-anchor="middle" fill="#ffd000" font-size="24">${displayVal}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    `;
+  } else if (chosenType === 'battery_blocks') {
+    return `
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <rect x="48" y="54" width="104" height="128" rx="10" class="stroke-white draw" />
+      <rect x="78" y="42" width="44" height="12" rx="4" class="stroke-white draw" />
+      <rect x="60" y="142" width="80" height="26" rx="4" class="stroke-yellow draw" />
+      <rect x="60" y="106" width="80" height="26" rx="4" class="stroke-red draw pulse" />
+      <text x="100" y="88" text-anchor="middle" fill="#ffd000" font-size="22">${displayVal}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    `;
+  } else if (chosenType === 'digital_timer') {
+    return `
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <rect x="24" y="72" width="152" height="92" rx="16" class="stroke-white draw" />
+      <rect x="34" y="82" width="132" height="72" rx="10" class="stroke-red pulse" />
+      <text x="100" y="130" text-anchor="middle" fill="#ffd000" font-size="30">${displayVal}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    `;
+  } else if (chosenType === 'pyramid_rank') {
+    return `
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <polygon points="100,48 34,178 166,178" class="stroke-white draw" />
+      <polygon points="100,48 68,112 132,112" class="stroke-yellow pulse" />
+      <line x1="50" y1="146" x2="150" y2="146" class="stroke-red draw" />
+      <text x="100" y="102" text-anchor="middle" fill="#ffd000" font-size="18">${displayVal}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    `;
+  } else if (chosenType === 'crash_curve') {
+    const labelX = isZeroOrDrop ? 158 : 102;
+    const labelY = isZeroOrDrop ? 148 : 56;
     return `
       <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
       <polyline points="24,55 24,185 178,185" class="stroke-white draw" />
@@ -338,7 +576,7 @@ function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
       <line x1="100" y1="38" x2="100" y2="200" class="stroke-yellow draw" />
       <text x="100" y="222" text-anchor="middle" fill="#ffd000" font-size="15">${displayVal}</text>
     `;
-  } else if (chosenType === 'versus_bars') {
+  } else {
     return `
       <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
       <line x1="22" y1="184" x2="178" y2="184" class="stroke-white draw" />
@@ -348,18 +586,10 @@ function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
       <text x="146" y="47" text-anchor="middle" fill="#ffd000" font-size="15">${displayVal}</text>
       <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
     `;
-  } else {
-    return `
-      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-      <circle cx="100" cy="122" r="56" class="stroke-white draw" opacity="0.22" />
-      <circle cx="100" cy="122" r="56" class="stroke-red draw pulse" />
-      <text x="100" y="131" text-anchor="middle" fill="#ffd000" font-size="25">${displayVal}</text>
-      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
-    `;
   }
 }
 
-// 1.7 Asignador Emocional Semántico para que el Avatar nunca tenga poses incoherentes con el texto
+// 1.7 Asignador Emocional Semántico para el Avatar
 function pickSemanticAvatarKeys(esc, catalogo, usedCuerpos, usedCaras, usedProps, allCuerpos, allCaras, allProps, hash, idx) {
   const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''}`.toLowerCase();
 
@@ -367,7 +597,6 @@ function pickSemanticAvatarKeys(esc, catalogo, usedCuerpos, usedCaras, usedProps
   let fCand = esc.cara || esc.cara_id;
   let pCand = esc.prop || esc.prop_id;
 
-  // Reglas semánticas según lo que dice el narrador en la escena
   if (/shock|pánico|panico|miedo|boom|terror|alerta|peligro|borrado|olvida/.test(text)) {
     cCand = 'cuerpo_manos_cabeza';
     fCand = 'cara_shock';
@@ -910,7 +1139,7 @@ async function main() {
     await downloadFile(payloadUrl, 'payload.json');
   }
 
-  console.log('🚀 Iniciando motor de renderizado Viral v8.5 (Trazos Iconify 100% Continuos + Anti-Colisión de Texto + Avatar Emocional)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v9.0 (5 Layouts Iconify + 8 Gráficas + 60 Diagramas Semánticos)...');
 
   const rawCatalogo = fs.existsSync('catalogo.json') ? JSON.parse(fs.readFileSync('catalogo.json', 'utf8')) : {};
   const catalogo = { ...rawCatalogo, ...EXPANDED_SVG_PACK };
@@ -978,7 +1207,6 @@ async function main() {
     : duracionExactaVideo;
   const timeScale = duracionExactaVideo / Math.max(0.1, ultimaEscenaFinOriginal);
 
-  // Filtrar estrictamente los elementos artesanales del catálogo (excluyendo los rellenos _0.._229)
   const filterCleanCatalog = (prefix) => {
     const clean = Object.keys(catalogo).filter(k => k.startsWith(prefix) && !/_[0-9]+$/.test(k));
     return clean.length > 0 ? clean : Object.keys(catalogo).filter(k => k.startsWith(prefix));
@@ -1012,15 +1240,14 @@ async function main() {
     let svgInterno = '';
     let esDiagrama = false;
 
-    const diagCandidate = esc.diagrama || esc.diag_id;
+    // 1. Comprobar si Gemini indicó un diag_id o si el detector semántico encuentra un diagrama artesanal exacto para esta frase
+    const explicitDiag = esc.diagrama || esc.diag_id;
+    const semanticDiag = matchSemanticCatalogDiagram(esc, catalogo, usedDiags);
+    const chosenDiag = (explicitDiag && catalogo[explicitDiag] && !/_[0-9]+$/.test(explicitDiag)) ? explicitDiag : semanticDiag;
 
-    if (diagCandidate && catalogo[diagCandidate] && !/_[0-9]+$/.test(diagCandidate)) {
-      let diagKey = diagCandidate;
-      if (usedDiags.has(diagKey) && allDiags.length > usedDiags.size) {
-        diagKey = allDiags.find(d => !usedDiags.has(d)) || diagKey;
-      }
-      usedDiags.add(diagKey);
-      let rawDiagSvg = catalogo[diagKey];
+    if (chosenDiag && catalogo[chosenDiag] && !usedDiags.has(chosenDiag)) {
+      usedDiags.add(chosenDiag);
+      let rawDiagSvg = catalogo[chosenDiag];
       if (/LÓGICA/i.test(rawDiagSvg) && /EMOCIÓN/i.test(rawDiagSvg)) {
         rawDiagSvg = rawDiagSvg.replace(/LÓGICA/gi, t1).replace(/EMOCIÓN/gi, t2);
       }
@@ -1036,14 +1263,13 @@ async function main() {
       svgInterno = `<g class="layer-main">${buildDynamicDataVizSvg(esc, idx, hash, t1, t2)}</g>`;
       esDiagrama = true;
     } else if (esc.modo_visual === 'icon_composition' || esc.modo_visual === 'svg_custom') {
-      svgInterno = `<g class="layer-main">${buildIllustratedSceneSvg(esc, vectorCache, t1, t2)}</g>`;
+      svgInterno = `<g class="layer-main">${buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash)}</g>`;
       esDiagrama = true;
     } else {
       const { cuerpoKey, caraKey, propKey } = pickSemanticAvatarKeys(
         esc, catalogo, usedCuerpos, usedCaras, usedProps, allCuerpos, allCaras, allProps, hash, idx
       );
 
-      // Si el prop ya incluye {{TEXTO_1}} dentro (como prop_cartel_mano o prop_bocadillo_texto), no duplicamos el título arriba
       const propRaw = (propKey && catalogo[propKey]) ? catalogo[propKey] : '';
       const propHasInternalText = /\{\{TEXTO_1\}\}|\{TEXTO_1\}/.test(propRaw);
 
@@ -1051,7 +1277,6 @@ async function main() {
         svgInterno += `<text x="100" y="16" text-anchor="middle" fill="#ffd000" font-size="12.5">${t1}</text>`;
       }
 
-      // Desplazamos el avatar 14px hacia abajo para que los accesorios de cabeza (corona, bombilla, interrogaciones) nunca choquen con el título superior
       svgInterno += `<g transform="translate(0, 14) scale(0.95)" style="transform-origin: 100px 120px;">`;
       if (catalogo[cuerpoKey]) svgInterno += `<g class="layer-body">${catalogo[cuerpoKey]}</g>`;
       if (catalogo[caraKey]) svgInterno += `<g class="layer-face" data-cara="${caraKey}">${catalogo[caraKey]}</g>`;
@@ -1446,7 +1671,6 @@ async function main() {
         });
       });
 
-      // Medir longitud geométrica real (getTotalLength) en lugar de pathLength=100 para evitar trazos rotos en iconos anidados
       document.querySelectorAll('.scene svg.root-svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
         let idx = 0;
@@ -1729,7 +1953,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 v8.5 generado con éxito!');
+  console.log('✅ ¡Vídeo output.mp4 v9.0 generado con éxito!');
 }
 
 main().catch(err => {
