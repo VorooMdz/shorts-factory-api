@@ -33,30 +33,28 @@ function fetchText(url) {
   });
 }
 
-// Busca y descarga cualquier objeto del mundo real (perro, flor, jabón, ducha, luna...) como vector de línea limpia
 async function resolveAndFetchVector(rawQuery) {
   let q = String(rawQuery || 'brain').trim().toLowerCase();
   const cleanName = q.includes(':') ? q.split(':')[1] : q;
   const prefix = q.includes(':') ? q.split(':')[0] : 'lucide';
 
-  // 1. Intentar descarga directa en colecciones de línea limpia (Lucide / Tabler)
-  let svg = await fetchText(`https://api.iconify.design/${prefix}/${cleanName}.svg`);
+  // Priorizar siempre Lucide (trazos limpios y continuos en viewBox 0 0 24 24)
+  let svg = await fetchText(`https://api.iconify.design/lucide/${cleanName}.svg`);
   if (!svg || !svg.includes('<svg')) {
-    svg = await fetchText(`https://api.iconify.design/lucide/${cleanName}.svg`);
+    svg = await fetchText(`https://api.iconify.design/${prefix}/${cleanName}.svg`);
   }
   if (!svg || !svg.includes('<svg')) {
     svg = await fetchText(`https://api.iconify.design/tabler/${cleanName}.svg`);
   }
 
-  // 2. Si no existe con ese nombre exacto, usar el motor de búsqueda semántico de Iconify
   if (!svg || !svg.includes('<svg')) {
-    const searchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=lucide,tabler,fe,akar-icons&limit=5`;
+    const searchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=lucide,tabler&limit=5`;
     const searchRes = await fetchText(searchUrl);
     if (searchRes) {
       try {
         const parsed = JSON.parse(searchRes);
         if (Array.isArray(parsed.icons) && parsed.icons.length > 0) {
-          const bestMatch = parsed.icons[0]; // ej. "lucide:dog" o "tabler:soap"
+          const bestMatch = parsed.icons[0];
           const [bPref, bName] = bestMatch.split(':');
           svg = await fetchText(`https://api.iconify.design/${bPref}/${bName}.svg`);
         }
@@ -64,9 +62,8 @@ async function resolveAndFetchVector(rawQuery) {
     }
   }
 
-  // 3. Fallback garantizado si todo falla
   if (!svg || !svg.includes('<svg')) {
-    svg = await fetchText('https://api.iconify.design/lucide/sparkles.svg');
+    svg = await fetchText('https://api.iconify.design/lucide/brain.svg');
   }
 
   if (svg && svg.includes('<svg')) {
@@ -105,7 +102,7 @@ async function preloadAllSceneVectors(escenas) {
 // ============================================================================
 const EXPANDED_SVG_PACK = {
   diag_perro_pavlov: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
     <g class="float">
       <path class="stroke-white draw" d="M55,155 L55,115 L75,90 L115,90 L135,70 L155,75 L150,100 L130,115 L130,155" />
       <path class="stroke-yellow draw" d="M65,90 L50,110 L68,112 Z" />
@@ -114,10 +111,10 @@ const EXPANDED_SVG_PACK = {
       <path class="stroke-yellow pulse" d="M38,65 L52,65 L45,50 Z" />
       <circle class="pulse" cx="45" cy="72" r="4" fill="#ffd000" />
     </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
   `,
   diag_rata_experimento: `
-    <text x="100" y="26" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
+    <text x="100" y="24" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
     <rect class="stroke-white draw" x="28" y="45" width="144" height="140" rx="12" />
     <g class="float">
       <path class="stroke-white draw" d="M55,145 Q75,110 115,125 L140,140 L55,145 Z" />
@@ -126,11 +123,11 @@ const EXPANDED_SVG_PACK = {
       <path class="stroke-red draw" d="M55,142 Q35,135 42,115" />
       <rect class="stroke-red pulse" x="142" y="95" width="18" height="18" rx="4" />
     </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
+    <text x="100" y="220" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
   `,
   diag_dilema_tranvia: `
-    <text x="52" y="28" text-anchor="middle" fill="#ffffff" font-size="12">{{TEXTO_1}}</text>
-    <text x="148" y="28" text-anchor="middle" fill="#ff2a5f" font-size="12">{{TEXTO_2}}</text>
+    <text x="52" y="26" text-anchor="middle" fill="#ffffff" font-size="12">{{TEXTO_1}}</text>
+    <text x="148" y="26" text-anchor="middle" fill="#ff2a5f" font-size="12">{{TEXTO_2}}</text>
     <path class="stroke-white draw" d="M100,195 L100,125 L45,60 M100,125 L155,60" />
     <g class="pulse">
       <rect class="stroke-yellow draw" x="72" y="140" width="56" height="38" rx="6" />
@@ -139,7 +136,7 @@ const EXPANDED_SVG_PACK = {
     </g>
   `,
   diag_ruleta_casino: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
     <g class="pulse">
       <circle class="stroke-yellow draw" cx="100" cy="120" r="58" />
       <circle class="stroke-red draw" cx="100" cy="120" r="22" />
@@ -147,13 +144,13 @@ const EXPANDED_SVG_PACK = {
       <line class="stroke-white draw" x1="100" y1="62" x2="100" y2="178" />
       <circle cx="128" cy="85" r="6" fill="#ffffff" />
     </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_2}}</text>
+    <text x="100" y="220" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_2}}</text>
   `,
   diag_caja_skinner: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
+    <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
     <rect class="stroke-white draw" x="35" y="50" width="130" height="130" rx="12" />
     <circle class="stroke-red pulse" cx="100" cy="115" r="26" />
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
+    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
   `
 };
 
@@ -209,7 +206,7 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   ];
 }
 
-// 1.5 Renderizador de Escena Ilustrada con Vectores Profesionales Centrados al 100% (Usa <svg> anidado para evitar fallos de CSS transform)
+// 1.5 Renderizador de Iconify con Trazos 100% Completos y Continuos (Sin cortes de dasharray)
 function buildIllustratedSceneSvg(esc, vectorCache, t1, t2) {
   const rawList = [];
   if (Array.isArray(esc.iconos)) rawList.push(...esc.iconos);
@@ -219,101 +216,123 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2) {
   const cleanKeys = rawList.map(k => String(k || '').trim().toLowerCase()).filter(Boolean).slice(0, 2);
   if (cleanKeys.length === 0) cleanKeys.push('lucide:brain');
 
+  // IMPORTANTE: Usamos icon-stroke-* (con stroke-width: 1.85 nativo para viewBox 24x24 y SIN non-scaling-stroke)
+  // Así el trazado se dibuja de principio a fin sin romperse jamás en líneas discontinuas
   const styleStroke = (innerSvg, colorClass) => {
-    return innerSvg.replace(/<(path|circle|rect|line|polyline|polygon|ellipse)\b/gi, `<$1 class="${colorClass} draw" vector-effect="non-scaling-stroke"`);
+    return innerSvg.replace(/<(path|circle|rect|line|polyline|polygon|ellipse)\b/gi, `<$1 class="${colorClass} draw"`);
   };
 
-  // Si hay 1 objeto principal: se dibuja GIGANTE (124x124 dentro del lienzo 200x240) y centrado en (38, 56) + un anillo de energía sutil
   if (cleanKeys.length === 1) {
     const v1 = vectorCache[cleanKeys[0]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
-    const styled1 = styleStroke(v1.inner, 'stroke-yellow');
+    const styled1 = styleStroke(v1.inner, 'icon-stroke-yellow');
     return `
-      <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-      <circle cx="100" cy="118" r="68" class="stroke-white draw" opacity="0.16" stroke-dasharray="6,6" />
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <circle cx="100" cy="118" r="64" class="stroke-white draw" opacity="0.20" />
       <g class="float">
         <g class="pulse">
-          <svg x="38" y="56" width="124" height="124" viewBox="${v1.viewBox}" overflow="visible">
+          <svg class="nested-icon" x="42" y="60" width="116" height="116" viewBox="${v1.viewBox}" overflow="visible">
             ${styled1}
           </svg>
         </g>
       </g>
-      <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
     `;
   }
 
-  // Si hay 2 objetos (ej. Bolígrafo vs Jabón, o Perro + Campana): se dibujan grandes, centrados y conectados visualmente
+  // Dos iconos emparejados en tarjetas o con flecha de conexión limpia (sin palo suelto)
   const v1 = vectorCache[cleanKeys[0]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
   const v2 = vectorCache[cleanKeys[1]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
-  const styled1 = styleStroke(v1.inner, 'stroke-yellow');
-  const styled2 = styleStroke(v2.inner, 'stroke-red');
+  const styled1 = styleStroke(v1.inner, 'icon-stroke-yellow');
+  const styled2 = styleStroke(v2.inner, 'icon-stroke-red');
 
   return `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+    <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+    <rect x="10" y="62" width="80" height="106" rx="14" class="stroke-white draw" opacity="0.22" />
+    <rect x="110" y="62" width="80" height="106" rx="14" class="stroke-white draw" opacity="0.22" />
     <g class="float">
-      <svg x="14" y="68" width="82" height="82" viewBox="${v1.viewBox}" overflow="visible">
+      <svg class="nested-icon" x="18" y="83" width="64" height="64" viewBox="${v1.viewBox}" overflow="visible">
         ${styled1}
       </svg>
     </g>
-    <line x1="98" y1="92" x2="102" y2="128" class="stroke-white draw" opacity="0.45" />
     <g class="pulse">
-      <svg x="104" y="68" width="82" height="82" viewBox="${v2.viewBox}" overflow="visible">
+      <path d="M93,115 L107,115 M102,109 L108,115 L102,121" class="stroke-white draw" stroke-width="3.5" />
+      <svg class="nested-icon" x="118" y="83" width="64" height="64" viewBox="${v2.viewBox}" overflow="visible">
         ${styled2}
       </svg>
     </g>
-    <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
   `;
 }
 
-// 1.6 Visualización de Datos que extrae automáticamente el número real del subtítulo
+// 1.6 Visualización de Datos que coloca el número en la posición coherente (ej. 0% abajo si cae a cero)
 function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   const dv = esc.data_viz || {};
   const sub = String(esc.subtitulo || '');
 
-  // Extraer número real de la frase hablada si existe (ej. "75%", "50%", "300€")
-  const subNumMatch = sub.match(/(\d+(?:[.,]\d+)?)\s*(%|€|\$|por\s*ciento|euros|horas|años)?/i);
+  const wordNumMap = {
+    'cero': '0', 'un': '1', 'uno': '1', 'dos': '2', 'tres': '3', 'cuatro': '4',
+    'cinco': '5', 'diez': '10', 'doce': '12', 'quince': '15', 'veinte': '20',
+    'treinta': '30', 'cuarenta': '40', 'cincuenta': '50', 'sesenta': '60',
+    'setenta': '70', 'setenta y cinco': '75', 'ochenta': '80', 'ochenta y cinco': '85',
+    'noventa': '90', 'cien': '100'
+  };
+
   let rawVal = String(dv.valor ?? '').replace(/undefined|null/gi, '').trim();
   let suf = String(dv.sufijo ?? '').replace(/undefined|null/gi, '').trim();
 
+  const subNumMatch = sub.match(/(\d+(?:[.,]\d+)?)\s*(%|€|\$|por\s*ciento|euros|horas|años)?/i);
   if (subNumMatch) {
     rawVal = subNumMatch[1];
     const unit = (subNumMatch[2] || '').toLowerCase();
     if (unit.includes('por') || unit === '%') suf = '%';
     else if (unit.includes('euro') || unit === '€') suf = '€';
-    else if (unit.includes('hora')) suf = 'H';
-    else if (unit.includes('año')) suf = ' AÑOS';
+  } else {
+    for (const [w, n] of Object.entries(wordNumMap)) {
+      if (new RegExp(`\\b${w}\\b`, 'i').test(sub)) {
+        rawVal = n;
+        if (/por\s*ciento|%/i.test(sub)) suf = '%';
+        break;
+      }
+    }
   }
-  if (!rawVal) rawVal = '75';
+
+  if (!rawVal) rawVal = '90';
   if (!suf && !/[%€$a-zA-Z]/.test(rawVal)) suf = '%';
 
   const displayVal = `${rawVal}${suf}`.slice(0, 9);
-  const tipos = ['gauge_radial', 'versus_bars', 'crash_curve', 'split_brain', 'price_anchor'];
-  const chosenType = (dv.tipo && tipos.includes(dv.tipo)) ? dv.tipo : tipos[(hash + idx) % tipos.length];
+  const isZeroOrDrop = /^0(%|$)/.test(displayVal) || /cero|cae|desploma|baja|apaga|olvida/i.test(sub);
 
-  if (chosenType === 'price_anchor') {
+  const tipos = ['gauge_radial', 'versus_bars', 'crash_curve', 'split_brain', 'price_anchor'];
+  let chosenType = (dv.tipo && tipos.includes(dv.tipo)) ? dv.tipo : tipos[(hash + idx) % tipos.length];
+  if (isZeroOrDrop) chosenType = 'crash_curve';
+
+  if (chosenType === 'crash_curve') {
+    const labelX = isZeroOrDrop ? 162 : 102;
+    const labelY = isZeroOrDrop ? 150 : 56;
     return `
-      <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <polyline points="24,55 24,185 178,185" class="stroke-white draw" />
+      <path d="M28,165 Q75,55 105,72 L162,175" class="stroke-yellow draw" />
+      <circle cx="102" cy="72" r="6" fill="#ffd000" />
+      <circle cx="162" cy="175" r="8" fill="#ff2a5f" class="pulse" />
+      <text x="${labelX}" y="${labelY}" text-anchor="middle" fill="#ff2a5f" font-size="20" class="pulse">${displayVal}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+    `;
+  } else if (chosenType === 'price_anchor') {
+    return `
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
       <g class="float">
         <rect x="32" y="52" width="136" height="48" rx="10" class="stroke-white draw" />
         <line x1="42" y1="88" x2="158" y2="62" class="stroke-red draw" />
         <rect x="36" y="118" width="128" height="62" rx="12" class="stroke-yellow pulse" />
         <text x="100" y="158" text-anchor="middle" fill="#ffd000" font-size="25">${displayVal}</text>
       </g>
-      <text x="100" y="220" text-anchor="middle" fill="#ff2a5f" font-size="13">${t2}</text>
-    `;
-  } else if (chosenType === 'crash_curve') {
-    return `
-      <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-      <polyline points="24,55 24,185 178,185" class="stroke-white draw" />
-      <path d="M28,165 Q75,55 112,75 L165,175" class="stroke-red draw" />
-      <circle cx="102" cy="72" r="7" fill="#ffd000" class="pulse" />
-      <circle cx="165" cy="175" r="8" fill="#ff2a5f" class="pulse" />
-      <text x="135" y="65" text-anchor="middle" fill="#ffd000" font-size="18">${displayVal}</text>
-      <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ff2a5f" font-size="13">${t2}</text>
     `;
   } else if (chosenType === 'split_brain') {
     return `
-      <text x="55" y="28" text-anchor="middle" fill="#ffffff" font-size="12">${t1}</text>
-      <text x="145" y="28" text-anchor="middle" fill="#ff2a5f" font-size="12">${t2}</text>
+      <text x="55" y="26" text-anchor="middle" fill="#ffffff" font-size="12">${t1}</text>
+      <text x="145" y="26" text-anchor="middle" fill="#ff2a5f" font-size="12">${t2}</text>
       <path d="M96,52 C55,52 42,85 46,120 C42,155 68,185 96,185 Z" class="stroke-white draw" />
       <path d="M104,52 C145,52 158,85 154,120 C158,155 132,185 104,185 Z" class="stroke-red pulse" />
       <line x1="100" y1="38" x2="100" y2="200" class="stroke-yellow draw" />
@@ -321,23 +340,81 @@ function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
     `;
   } else if (chosenType === 'versus_bars') {
     return `
-      <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-      <line x1="22" y1="182" x2="178" y2="182" class="stroke-white draw" />
-      <rect x="36" y="116" width="36" height="66" rx="5" class="stroke-white draw" />
-      <rect x="82" y="84" width="36" height="98" rx="5" class="stroke-yellow draw" />
-      <rect x="128" y="48" width="36" height="134" rx="5" class="stroke-red pulse" />
-      <text x="146" y="38" text-anchor="middle" fill="#ffd000" font-size="14">${displayVal}</text>
-      <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <line x1="22" y1="184" x2="178" y2="184" class="stroke-white draw" />
+      <rect x="36" y="122" width="36" height="62" rx="5" class="stroke-white draw" />
+      <rect x="82" y="92" width="36" height="92" rx="5" class="stroke-yellow draw" />
+      <rect x="128" y="56" width="36" height="128" rx="5" class="stroke-red pulse" />
+      <text x="146" y="47" text-anchor="middle" fill="#ffd000" font-size="15">${displayVal}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
     `;
   } else {
     return `
-      <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-      <circle cx="100" cy="122" r="58" class="stroke-white draw" opacity="0.22" />
-      <circle cx="100" cy="122" r="58" class="stroke-yellow draw pulse" />
-      <text x="100" y="132" text-anchor="middle" fill="#ffd000" font-size="26">${displayVal}</text>
-      <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+      <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+      <circle cx="100" cy="122" r="56" class="stroke-white draw" opacity="0.22" />
+      <circle cx="100" cy="122" r="56" class="stroke-red draw pulse" />
+      <text x="100" y="131" text-anchor="middle" fill="#ffd000" font-size="25">${displayVal}</text>
+      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
     `;
   }
+}
+
+// 1.7 Asignador Emocional Semántico para que el Avatar nunca tenga poses incoherentes con el texto
+function pickSemanticAvatarKeys(esc, catalogo, usedCuerpos, usedCaras, usedProps, allCuerpos, allCaras, allProps, hash, idx) {
+  const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''}`.toLowerCase();
+
+  let cCand = esc.cuerpo || esc.cuerpo_id;
+  let fCand = esc.cara || esc.cara_id;
+  let pCand = esc.prop || esc.prop_id;
+
+  // Reglas semánticas según lo que dice el narrador en la escena
+  if (/shock|pánico|panico|miedo|boom|terror|alerta|peligro|borrado|olvida/.test(text)) {
+    cCand = 'cuerpo_manos_cabeza';
+    fCand = 'cara_shock';
+    pCand = 'prop_nube_tormenta';
+  } else if (/pregunta|duda|qué|que |cómo|como |por qué|curios|extrañ/.test(text)) {
+    cCand = 'cuerpo_rascando_cabeza';
+    fCand = 'cara_duda';
+    pCand = 'prop_interrogaciones';
+  } else if (/descubr|psicólog|psicolog|estudio|experimento|ciencia|idea|foco|paz/.test(text)) {
+    cCand = 'cuerpo_senalando_arriba';
+    fCand = 'cara_eureka';
+    pCand = 'prop_bombilla';
+  } else if (/dinero|precio|pagar|cuenta|euro|ganar|valor|coste/.test(text)) {
+    cCand = 'cuerpo_sosteniendo_objeto';
+    fCand = 'cara_ambicion';
+    pCand = 'prop_bolsa_dinero';
+  } else if (/no |rechaz|frena|para|basta|cierra|bloque/.test(text)) {
+    cCand = 'cuerpo_rechazando_stop';
+    fCand = 'cara_enfado';
+    pCand = 'prop_escudo';
+  }
+
+  let cuerpoKey = (cCand && catalogo[cCand] && !/_[0-9]+$/.test(cCand))
+    ? cCand
+    : allCuerpos[(hash + idx * 3) % allCuerpos.length];
+  if (usedCuerpos.has(cuerpoKey) && allCuerpos.length > usedCuerpos.size) {
+    cuerpoKey = allCuerpos.find(c => !usedCuerpos.has(c)) || cuerpoKey;
+  }
+  usedCuerpos.add(cuerpoKey);
+
+  let caraKey = (fCand && catalogo[fCand] && !/_[0-9]+$/.test(fCand))
+    ? fCand
+    : allCaras[(hash + idx * 5) % allCaras.length];
+  if (usedCaras.has(caraKey) && allCaras.length > usedCaras.size) {
+    caraKey = allCaras.find(c => !usedCaras.has(c)) || caraKey;
+  }
+  usedCaras.add(caraKey);
+
+  let propKey = (pCand && catalogo[pCand] && !/_[0-9]+$/.test(pCand))
+    ? pCand
+    : allProps[(hash + idx * 7) % allProps.length];
+  if (usedProps.has(propKey) && allProps.length > usedProps.size) {
+    propKey = allProps.find(p => !usedProps.has(p)) || propKey;
+  }
+  if (propKey) usedProps.add(propKey);
+
+  return { cuerpoKey, caraKey, propKey };
 }
 
 function normalizeForMatch(str) {
@@ -652,7 +729,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   return allChunks;
 }
 
-// 3. Sintetizador Procedural de 26 Efectos (16 Cinematográficos + 10 Contextuales del Guion)
+// 3. Sintetizador Procedural de 26 Efectos
 function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
   function getRecipe(type, pitchMod, customFreq) {
     const p = pitchMod.toFixed(3);
@@ -833,7 +910,7 @@ async function main() {
     await downloadFile(payloadUrl, 'payload.json');
   }
 
-  console.log('🚀 Iniciando motor de renderizado Viral v8.0 (Vectores Semánticos 100% Centrados + 7 Paletas + Audio Contextual)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v8.5 (Trazos Iconify 100% Continuos + Anti-Colisión de Texto + Avatar Emocional)...');
 
   const rawCatalogo = fs.existsSync('catalogo.json') ? JSON.parse(fs.readFileSync('catalogo.json', 'utf8')) : {};
   const catalogo = { ...rawCatalogo, ...EXPANDED_SVG_PACK };
@@ -901,6 +978,7 @@ async function main() {
     : duracionExactaVideo;
   const timeScale = duracionExactaVideo / Math.max(0.1, ultimaEscenaFinOriginal);
 
+  // Filtrar estrictamente los elementos artesanales del catálogo (excluyendo los rellenos _0.._229)
   const filterCleanCatalog = (prefix) => {
     const clean = Object.keys(catalogo).filter(k => k.startsWith(prefix) && !/_[0-9]+$/.test(k));
     return clean.length > 0 ? clean : Object.keys(catalogo).filter(k => k.startsWith(prefix));
@@ -936,7 +1014,6 @@ async function main() {
 
     const diagCandidate = esc.diagrama || esc.diag_id;
 
-    // 1. Si hay un diagrama específico del catálogo verificado (ej. diag_perro_pavlov, diag_dilema_tranvia, diag_iceberg)
     if (diagCandidate && catalogo[diagCandidate] && !/_[0-9]+$/.test(diagCandidate)) {
       let diagKey = diagCandidate;
       if (usedDiags.has(diagKey) && allDiags.length > usedDiags.size) {
@@ -949,58 +1026,39 @@ async function main() {
       }
       if (!/<text\b/i.test(rawDiagSvg) && !/\{?\{TEXTO_1\}?\}/.test(rawDiagSvg)) {
         rawDiagSvg += `
-          <text x="100" y="28" text-anchor="middle" fill="#ffffff" font-size="13">${t1}</text>
+          <text x="100" y="24" text-anchor="middle" fill="#ffffff" font-size="13">${t1}</text>
           <text x="100" y="222" text-anchor="middle" fill="#ffd000" font-size="13">${t2}</text>
         `;
       }
       svgInterno = `<g class="layer-main">${rawDiagSvg}</g>`;
       esDiagrama = true;
-    }
-    // 2. Si es data_viz (o la frase menciona un porcentaje explícito)
-    else if (esc.modo_visual === 'data_viz') {
+    } else if (esc.modo_visual === 'data_viz') {
       svgInterno = `<g class="layer-main">${buildDynamicDataVizSvg(esc, idx, hash, t1, t2)}</g>`;
       esDiagrama = true;
-    }
-    // 3. Si es icon_composition o svg_custom con objetos semánticos (jabón, bolígrafo, perro, flor, ducha, luna...)
-    else if (esc.modo_visual === 'icon_composition' || esc.modo_visual === 'svg_custom') {
+    } else if (esc.modo_visual === 'icon_composition' || esc.modo_visual === 'svg_custom') {
       svgInterno = `<g class="layer-main">${buildIllustratedSceneSvg(esc, vectorCache, t1, t2)}</g>`;
       esDiagrama = true;
-    }
-    // 4. Modo Avatar Expresivo Multicapa (Cuerpo + Cara + Prop)
-    else {
-      const cCand = esc.cuerpo || esc.cuerpo_id;
-      const fCand = esc.cara || esc.cara_id;
-      const pCand = esc.prop || esc.prop_id;
+    } else {
+      const { cuerpoKey, caraKey, propKey } = pickSemanticAvatarKeys(
+        esc, catalogo, usedCuerpos, usedCaras, usedProps, allCuerpos, allCaras, allProps, hash, idx
+      );
 
-      let cuerpoKey = (cCand && catalogo[cCand] && !/_[0-9]+$/.test(cCand))
-        ? cCand
-        : allCuerpos[(hash + idx * 3) % allCuerpos.length];
-      if (usedCuerpos.has(cuerpoKey) && allCuerpos.length > usedCuerpos.size) {
-        cuerpoKey = allCuerpos.find(c => !usedCuerpos.has(c)) || cuerpoKey;
+      // Si el prop ya incluye {{TEXTO_1}} dentro (como prop_cartel_mano o prop_bocadillo_texto), no duplicamos el título arriba
+      const propRaw = (propKey && catalogo[propKey]) ? catalogo[propKey] : '';
+      const propHasInternalText = /\{\{TEXTO_1\}\}|\{TEXTO_1\}/.test(propRaw);
+
+      if (!propHasInternalText) {
+        svgInterno += `<text x="100" y="16" text-anchor="middle" fill="#ffd000" font-size="12.5">${t1}</text>`;
       }
-      usedCuerpos.add(cuerpoKey);
 
-      let caraKey = (fCand && catalogo[fCand] && !/_[0-9]+$/.test(fCand))
-        ? fCand
-        : allCaras[(hash + idx * 5) % allCaras.length];
-      if (usedCaras.has(caraKey) && allCaras.length > usedCaras.size) {
-        caraKey = allCaras.find(c => !usedCaras.has(c)) || caraKey;
-      }
-      usedCaras.add(caraKey);
-
-      let propKey = (pCand && catalogo[pCand] && !/_[0-9]+$/.test(pCand))
-        ? pCand
-        : allProps[(hash + idx * 7) % allProps.length];
-      if (usedProps.has(propKey) && allProps.length > usedProps.size) {
-        propKey = allProps.find(p => !usedProps.has(p)) || propKey;
-      }
-      if (propKey) usedProps.add(propKey);
-
-      svgInterno += `<text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="12">${t1}</text>`;
+      // Desplazamos el avatar 14px hacia abajo para que los accesorios de cabeza (corona, bombilla, interrogaciones) nunca choquen con el título superior
+      svgInterno += `<g transform="translate(0, 14) scale(0.95)" style="transform-origin: 100px 120px;">`;
       if (catalogo[cuerpoKey]) svgInterno += `<g class="layer-body">${catalogo[cuerpoKey]}</g>`;
       if (catalogo[caraKey]) svgInterno += `<g class="layer-face" data-cara="${caraKey}">${catalogo[caraKey]}</g>`;
-      if (propKey && catalogo[propKey]) svgInterno += `<g class="layer-prop">${catalogo[propKey]}</g>`;
-      svgInterno += `<text x="100" y="232" text-anchor="middle" fill="#ffffff" font-size="12">${t2}</text>`;
+      if (propRaw) svgInterno += `<g class="layer-prop">${propRaw}</g>`;
+      svgInterno += `</g>`;
+
+      svgInterno += `<text x="100" y="234" text-anchor="middle" fill="#ffffff" font-size="12.5">${t2}</text>`;
     }
 
     svgInterno = svgInterno
@@ -1151,10 +1209,15 @@ async function main() {
         stroke-linejoin: round;
       }
 
-      /* TRAZOS NEÓN CON PALETA DINÁMICA POR VÍDEO */
+      /* TRAZOS NEÓN EN COORDENADAS RAÍZ (200x240) */
       .stroke-white { stroke: #ffffff; stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 8px rgba(255,255,255,0.42)); }
       .stroke-red { stroke: var(--accent-alt); stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px var(--accent-alt-glow)); }
       .stroke-yellow { stroke: var(--accent-color); stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px var(--accent-glow)); }
+
+      /* TRAZOS NEÓN NATIVOS PARA ICONIFY ANIDADO (24x24) -> 100% CONTINUOS Y SIN CORTES */
+      .icon-stroke-white { stroke: #ffffff; stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 6px rgba(255,255,255,0.45)); }
+      .icon-stroke-red { stroke: var(--accent-alt); stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 10px var(--accent-alt-glow)); }
+      .icon-stroke-yellow { stroke: var(--accent-color); stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 10px var(--accent-glow)); }
 
       .subtitle-container {
         position: absolute;
@@ -1383,6 +1446,7 @@ async function main() {
         });
       });
 
+      // Medir longitud geométrica real (getTotalLength) en lugar de pathLength=100 para evitar trazos rotos en iconos anidados
       document.querySelectorAll('.scene svg.root-svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
         let idx = 0;
@@ -1391,10 +1455,17 @@ async function main() {
           const hasSolidFill = fillAttr && fillAttr !== 'none' && !fillAttr.startsWith('rgba');
           if (hasSolidFill && !shape.classList.contains('draw')) return;
 
-          shape.setAttribute('pathLength', '100');
-          shape.dataset.drawIdx = idx++;
-          shape.style.strokeDasharray = '100';
-          shape.style.strokeDashoffset = '100';
+          let len = 100;
+          if (typeof shape.getTotalLength === 'function') {
+            try {
+              const measured = shape.getTotalLength();
+              if (measured && measured > 0) len = measured;
+            } catch (e) {}
+          }
+          shape.dataset.realLen = String(len);
+          shape.dataset.drawIdx = String(idx++);
+          shape.style.strokeDasharray = String(len);
+          shape.style.strokeDashoffset = String(len);
         });
         svg.dataset.totalShapes = String(idx);
       });
@@ -1456,7 +1527,7 @@ async function main() {
             sc.style.opacity = '1';
 
             let tx = 0;
-            let ty = Math.sin(localT * 5.2) * 10;
+            let ty = Math.sin(localT * 5.2) * 8;
             let scale = 1;
             let rot = 0;
 
@@ -1516,22 +1587,21 @@ async function main() {
             const totalShapes = Math.max(1, parseInt(svgEl?.dataset.totalShapes || '8', 10));
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
+              const realLen = parseFloat(shape.dataset.realLen || '100');
+              let drawP = 1;
               if (idx === 0) {
-                const drawP0 = Math.max(0.68, Math.min(1, 0.68 + (localT / 0.18) * 0.32));
-                shape.style.strokeDashoffset = String(100 * (1 - drawP0));
+                drawP = Math.max(0.68, Math.min(1, 0.68 + (localT / 0.18) * 0.32));
               } else if (e.drawMode === 1) {
-                const drawP = Math.max(0, Math.min(1, localT / 0.28));
-                shape.style.strokeDashoffset = String(100 * (1 - drawP));
+                drawP = Math.max(0, Math.min(1, localT / 0.28));
               } else if (e.drawMode === 2) {
                 const revIdx = Math.max(0, totalShapes - 1 - dIdx);
-                const delay = Math.min(0.18, revIdx * 0.025);
-                const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.32));
-                shape.style.strokeDashoffset = String(100 * (1 - drawP));
+                const delay = Math.min(0.16, revIdx * 0.02);
+                drawP = Math.max(0, Math.min(1, (localT - delay) / 0.30));
               } else {
-                const delay = Math.min(0.18, dIdx * 0.025);
-                const drawP = Math.max(0, Math.min(1, (localT - delay) / 0.34));
-                shape.style.strokeDashoffset = String(100 * (1 - drawP));
+                const delay = Math.min(0.16, dIdx * 0.02);
+                drawP = Math.max(0, Math.min(1, (localT - delay) / 0.32));
               }
+              shape.style.strokeDashoffset = String(realLen * (1 - drawP));
             });
 
             const bodyLayer = sc.querySelector('.layer-body');
@@ -1546,10 +1616,10 @@ async function main() {
             if (faceLayer) {
               const caraType = faceLayer.dataset.cara || '';
               let faceX = 0;
-              let faceY = Math.sin(localT * 7.5) * 3.8;
-              let faceRot = Math.sin(localT * 5.2) * 4.5;
+              let faceY = Math.sin(localT * 7.5) * 3.2;
+              let faceRot = Math.sin(localT * 5.2) * 4.0;
 
-              if (/estres|enfado|miedo|panico|grito/.test(caraType)) {
+              if (/estres|enfado|miedo|panico|grito|shock/.test(caraType)) {
                 faceX = Math.sin(localT * 38) * 2.2;
                 faceRot += Math.cos(localT * 32) * 3.0;
               } else if (/duda|pensando|sospecha/.test(caraType)) {
@@ -1562,22 +1632,22 @@ async function main() {
 
             const propLayer = sc.querySelector('.layer-prop');
             if (propLayer) {
-              const propX = Math.cos(localT * 5.0) * 5.5;
-              const propY = Math.sin(localT * 6.8 + 1) * 10;
-              const propScale = 1 + Math.sin(localT * 10.5) * 0.11;
-              const propRot = Math.sin(localT * 4.5) * 6;
+              const propX = Math.cos(localT * 5.0) * 4.0;
+              const propY = Math.sin(localT * 6.8 + 1) * 5.0;
+              const propScale = 1 + Math.sin(localT * 10.5) * 0.08;
+              const propRot = Math.sin(localT * 4.5) * 4.5;
               propLayer.style.transformOrigin = 'center';
               propLayer.style.transformBox = 'fill-box';
               propLayer.style.transform = \`translate(\${propX}px, \${propY}px) scale(\${propScale}) rotate(\${propRot}deg)\`;
             }
 
             sc.querySelectorAll('.float').forEach(el => {
-              const fOffset = Math.sin(localT * 6.8) * 8.5;
+              const fOffset = Math.sin(localT * 6.8) * 5.5;
               el.style.transform = \`translateY(\${fOffset}px)\`;
             });
 
             sc.querySelectorAll('.pulse').forEach(el => {
-              const pScale = 1 + Math.sin(localT * 11.5) * 0.11;
+              const pScale = 1 + Math.sin(localT * 11.5) * 0.08;
               el.style.transformOrigin = '100px 118px';
               el.style.transform = \`scale(\${pScale})\`;
             });
@@ -1659,7 +1729,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 v8.0 generado con éxito!');
+  console.log('✅ ¡Vídeo output.mp4 v8.5 generado con éxito!');
 }
 
 main().catch(err => {
