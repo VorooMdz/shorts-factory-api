@@ -43,5 +43,19 @@
     ],
     "programado_para_madrid": "29/10/2026 a las 16:08",
     "fecha_publicacion": "2026-10-29T15:08:21.207Z"
+  },
+  {
+    "id_concepto": "therac_25_disaster",
+    "subrama": "Ingenieria de Software y Biomedicina",
+    "titulo": "El Error Mortal del Therac-25",
+    "keywords_concepto": [
+      "Therac-25",
+      "condicion de carrera",
+      "bug",
+      "seguridad informatica",
+      "radioterapia"
+    ],
+    "programado_para_madrid": "29/10/2026 a las 16:15",
+    "fecha_publicacion": "2026-10-29T15:15:27.932Z"
   }
 ]
