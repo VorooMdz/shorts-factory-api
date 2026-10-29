@@ -67,5 +67,18 @@
       "psicologia cognitiva"
     ],
     "fecha_publicacion": "2026-10-29T11:13:52.029Z"
+  },
+  {
+    "id_concepto": "efecto_near_miss_azar",
+    "subrama": "Psicología del Azar",
+    "titulo": "La trampa neuroquímica del 'casi acierto'",
+    "keywords_concepto": [
+      "efecto near-miss",
+      "casi acierto",
+      "dopamina",
+      "ludopatía",
+      "tragaperras"
+    ],
+    "fecha_publicacion": "2026-10-29T11:25:41.182Z"
   }
 ]
