@@ -1,0 +1,89 @@
+name: Render & Send Short 8-BIT
+
+on:
+  workflow_dispatch:
+    inputs:
+      payload_json:
+        description: 'URL del JSON con el payload del short 8-BIT'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies (FFmpeg & Puppeteer deps)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64 pango-1.0
+
+      - name: Install Node modules
+        run: npm install
+
+      - name: Install Python dependencies
+        run: pip install requests
+
+      - name: Download payload and run 8-BIT renderer
+        env:
+          PAYLOAD_URL: ${{ github.event.inputs.payload_json }}
+        run: |
+          node Proyecto8BIT/render_8bit.js "$PAYLOAD_URL"
+
+      - name: Send rendered 8-BIT Video to Telegram Bot
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python Proyecto8BIT/upload_8bit.py
+
+      - name: Auto-Registro Post-Envío en Proyecto8BIT/historial_8bit.json
+        if: success()
+        run: |
+          git pull --rebase origin main || true
+          node -e '
+            const fs = require("fs");
+            const histPath = "Proyecto8BIT/historial_8bit.json";
+            const payload = JSON.parse(fs.readFileSync("payload.json", "utf8"));
+            let hist = [];
+            if (fs.existsSync(histPath)) {
+              try { hist = JSON.parse(fs.readFileSync(histPath, "utf8")); } catch(e) { hist = []; }
+            }
+            if (!Array.isArray(hist)) hist = [];
+            const existingIdx = hist.findIndex(item => item.id_concepto === payload.id_concepto);
+            const entry = {
+              id_concepto: payload.id_concepto,
+              subrama: payload.subrama || "Glitches en la Matrix",
+              titulo: payload.tema_titulo || payload.TituloYT,
+              keywords_concepto: payload.keywords_concepto || [],
+              programado_para_madrid: payload.programado_para_madrid || null,
+              fecha_publicacion: new Date().toISOString()
+            };
+            if (existingIdx === -1) {
+              hist.push(entry);
+            } else {
+              hist[existingIdx] = entry;
+            }
+            fs.writeFileSync(histPath, JSON.stringify(hist, null, 2));
+          '
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Proyecto8BIT/historial_8bit.json
+          git diff --staged --quiet || (git commit -m "chore(8bit): auto-registro tema en historial_8bit.json [skip ci]" && git push)
