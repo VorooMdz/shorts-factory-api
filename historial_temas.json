@@ -181,5 +181,19 @@
     ],
     "programado_para_madrid": "02/11/2026 a las 14:00",
     "fecha_publicacion": "2026-10-29T13:37:43.939Z"
+  },
+  {
+    "id_concepto": "efecto_lengua_extranjera_moral",
+    "subrama": "Neuroética y Moral",
+    "titulo": "¿Matarías en inglés pero no en español?",
+    "keywords_concepto": [
+      "neuroetica",
+      "dilema moral",
+      "lengua extranjera",
+      "albert costa",
+      "toma de decisiones"
+    ],
+    "programado_para_madrid": "02/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-10-29T16:01:55.259Z"
   }
 ]
