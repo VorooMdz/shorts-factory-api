@@ -1329,7 +1329,7 @@ async function main() {
     if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
       execSync(
-        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.60,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.90,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
         { stdio: 'inherit' }
       );
 
