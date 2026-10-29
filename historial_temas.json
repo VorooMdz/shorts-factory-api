@@ -139,5 +139,19 @@
     ],
     "programado_para_madrid": "01/11/2026 a las 14:00",
     "fecha_publicacion": "2026-10-29T13:13:45.076Z"
+  },
+  {
+    "id_concepto": "efecto_foco_gilovich_1999",
+    "subrama": "Identidad y Ego",
+    "titulo": "El Efecto Foco y la Ilusión de Atención",
+    "keywords_concepto": [
+      "efecto foco",
+      "spotlight effect",
+      "thomas gilovich",
+      "sesgo egocéntrico",
+      "ilusión de atención"
+    ],
+    "programado_para_madrid": "01/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-10-29T13:19:10.664Z"
   }
 ]
