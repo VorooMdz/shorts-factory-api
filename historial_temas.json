@@ -55,5 +55,19 @@
     ],
     "programado_para_madrid": "30/10/2026 a las 14:00",
     "fecha_publicacion": "2026-10-29T12:20:25.772Z"
+  },
+  {
+    "id_concepto": "efecto_senuelo_ariely",
+    "subrama": "Economía Conductual",
+    "titulo": "El Efecto Señuelo: Cómo manipulan tus decisiones",
+    "keywords_concepto": [
+      "efecto señuelo",
+      "Dan Ariely",
+      "economía conductual",
+      "toma de decisiones",
+      "heurística de anclaje"
+    ],
+    "programado_para_madrid": "30/10/2026 a las 18:00",
+    "fecha_publicacion": "2026-10-29T12:24:36.179Z"
   }
 ]
