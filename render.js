@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 // ============================================================================
-// 0. DESCARGA DEL PAYLOAD DESDE URL (SI SE PASA POR ARGUMENTO EN GITHUB ACTIONS)
+// 0. UTILIDADES DE RED Y BÚSQUEDA SEMÁNTICA DE VECTORES PROFESIONALES
 // ============================================================================
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -33,8 +33,75 @@ function fetchText(url) {
   });
 }
 
+// Busca y descarga cualquier objeto del mundo real (perro, flor, jabón, ducha, luna...) como vector de línea limpia
+async function resolveAndFetchVector(rawQuery) {
+  let q = String(rawQuery || 'brain').trim().toLowerCase();
+  const cleanName = q.includes(':') ? q.split(':')[1] : q;
+  const prefix = q.includes(':') ? q.split(':')[0] : 'lucide';
+
+  // 1. Intentar descarga directa en colecciones de línea limpia (Lucide / Tabler)
+  let svg = await fetchText(`https://api.iconify.design/${prefix}/${cleanName}.svg`);
+  if (!svg || !svg.includes('<svg')) {
+    svg = await fetchText(`https://api.iconify.design/lucide/${cleanName}.svg`);
+  }
+  if (!svg || !svg.includes('<svg')) {
+    svg = await fetchText(`https://api.iconify.design/tabler/${cleanName}.svg`);
+  }
+
+  // 2. Si no existe con ese nombre exacto, usar el motor de búsqueda semántico de Iconify
+  if (!svg || !svg.includes('<svg')) {
+    const searchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=lucide,tabler,fe,akar-icons&limit=5`;
+    const searchRes = await fetchText(searchUrl);
+    if (searchRes) {
+      try {
+        const parsed = JSON.parse(searchRes);
+        if (Array.isArray(parsed.icons) && parsed.icons.length > 0) {
+          const bestMatch = parsed.icons[0]; // ej. "lucide:dog" o "tabler:soap"
+          const [bPref, bName] = bestMatch.split(':');
+          svg = await fetchText(`https://api.iconify.design/${bPref}/${bName}.svg`);
+        }
+      } catch (e) {}
+    }
+  }
+
+  // 3. Fallback garantizado si todo falla
+  if (!svg || !svg.includes('<svg')) {
+    svg = await fetchText('https://api.iconify.design/lucide/sparkles.svg');
+  }
+
+  if (svg && svg.includes('<svg')) {
+    const vbMatch = svg.match(/viewBox=["']([^"']+)["']/i);
+    const viewBox = vbMatch ? vbMatch[1] : '0 0 24 24';
+    const inner = svg
+      .replace(/<svg[^>]*>/gi, '')
+      .replace(/<\/svg>/gi, '')
+      .replace(/fill\s*=\s*["'][^"']*["']/gi, 'fill="none"')
+      .replace(/stroke\s*=\s*["'][^"']*["']/gi, '')
+      .replace(/stroke-width\s*=\s*["'][^"']*["']/gi, '');
+    return { viewBox, inner };
+  }
+
+  return { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
+}
+
+async function preloadAllSceneVectors(escenas) {
+  const vectorCache = {};
+  for (const s of (escenas || [])) {
+    const list = Array.isArray(s.iconos) ? [...s.iconos] : [];
+    if (s.objeto_1) list.push(s.objeto_1);
+    if (s.objeto_2) list.push(s.objeto_2);
+    for (const item of list) {
+      const key = String(item || '').trim().toLowerCase();
+      if (key && !vectorCache[key]) {
+        vectorCache[key] = await resolveAndFetchVector(key);
+      }
+    }
+  }
+  return vectorCache;
+}
+
 // ============================================================================
-// MEGABIBLIOTECA INTEGRADA DE ANIMALES, VEHÍCULOS, OBJETOS Y PROPS (v6.0)
+// MEGABIBLIOTECA INTEGRADA DE ANIMALES, VEHÍCULOS, OBJETOS Y PROPS
 // ============================================================================
 const EXPANDED_SVG_PACK = {
   diag_perro_pavlov: `
@@ -61,75 +128,6 @@ const EXPANDED_SVG_PACK = {
     </g>
     <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
   `,
-  diag_tiburon_miedo: `
-    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <path class="stroke-red draw" d="M75,135 L105,65 L125,135 Z" />
-      <path class="stroke-white draw" d="M20,140 Q45,125 70,140 T120,140 T180,140" />
-      <path class="stroke-yellow draw" d="M30,162 Q60,150 90,162 T150,162 T175,162" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
-  `,
-  diag_ovejas_rebano: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <circle class="stroke-white draw" cx="55" cy="115" r="20" />
-      <circle class="stroke-white draw" cx="105" cy="115" r="20" />
-      <circle class="stroke-red pulse" cx="155" cy="115" r="20" />
-      <path class="stroke-yellow draw" d="M40,70 L155,70 L142,58 M155,70 L142,82" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
-  `,
-  diag_serpiente_alerta: `
-    <text x="100" y="26" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <path class="stroke-yellow draw" d="M60,170 Q35,140 85,125 T130,90 T95,55" />
-      <polygon class="stroke-red pulse" points="95,42 112,58 95,70 78,58" />
-      <path class="stroke-red draw" d="M95,42 L90,28 M95,42 L100,28" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
-  `,
-  diag_mariposa_caos: `
-    <text x="100" y="26" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
-    <g class="pulse">
-      <path class="stroke-yellow draw" d="M100,95 C55,40 25,85 65,125 C35,155 65,185 100,145" />
-      <path class="stroke-red draw" d="M100,95 C145,40 175,85 135,125 C165,155 135,185 100,145" />
-      <line class="stroke-white draw" x1="100" y1="70" x2="100" y2="165" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
-  `,
-  diag_pulpo_mente: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <circle class="stroke-white draw" cx="100" cy="82" r="28" />
-      <circle cx="90" cy="80" r="4" fill="#ffd000" />
-      <circle cx="110" cy="80" r="4" fill="#ffd000" />
-      <path class="stroke-red draw" d="M80,108 Q50,140 35,170 M92,110 Q75,150 68,180 M108,110 Q125,150 132,180 M120,108 Q150,140 165,170" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
-  `,
-  diag_aguila_foco: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
-    <g class="pulse">
-      <circle class="stroke-red draw" cx="100" cy="120" r="52" />
-      <circle class="stroke-yellow draw" cx="100" cy="120" r="24" />
-      <circle cx="100" cy="120" r="7" fill="#ff2a5f" />
-      <line class="stroke-white draw" x1="30" y1="120" x2="170" y2="120" />
-      <line class="stroke-white draw" x1="100" y1="50" x2="100" y2="190" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
-  `,
-  diag_coche_deportivo: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <path class="stroke-red draw" d="M22,140 L38,110 L75,92 L135,92 L168,115 L182,140 Z" />
-      <circle class="stroke-white pulse" cx="58" cy="145" r="18" />
-      <circle class="stroke-white pulse" cx="148" cy="145" r="18" />
-      <line class="stroke-yellow draw" x1="15" y1="72" x2="55" y2="72" />
-      <line class="stroke-yellow draw" x1="5" y1="88" x2="40" y2="88" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
-  `,
   diag_dilema_tranvia: `
     <text x="52" y="28" text-anchor="middle" fill="#ffffff" font-size="12">{{TEXTO_1}}</text>
     <text x="148" y="28" text-anchor="middle" fill="#ff2a5f" font-size="12">{{TEXTO_2}}</text>
@@ -139,16 +137,6 @@ const EXPANDED_SVG_PACK = {
       <circle cx="88" cy="184" r="5" fill="#ffffff" />
       <circle cx="112" cy="184" r="5" fill="#ffffff" />
     </g>
-  `,
-  diag_cohete_euforia: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <path class="stroke-white draw" d="M100,45 C128,80 128,130 122,155 L78,155 C72,130 72,80 100,45 Z" />
-      <path class="stroke-red draw" d="M78,135 L55,162 L78,155 M122,135 L145,162 L122,155" />
-      <circle class="stroke-yellow draw" cx="100" cy="100" r="12" />
-      <polygon class="stroke-red pulse" points="88,158 100,192 112,158" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
   `,
   diag_ruleta_casino: `
     <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
@@ -161,48 +149,12 @@ const EXPANDED_SVG_PACK = {
     </g>
     <text x="100" y="218" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_2}}</text>
   `,
-  diag_dados_azar: `
+  diag_caja_skinner: `
     <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <rect class="stroke-white draw" x="34" y="75" width="58" height="58" rx="10" />
-      <circle cx="50" cy="91" r="4.5" fill="#ff2a5f" />
-      <circle cx="76" cy="117" r="4.5" fill="#ff2a5f" />
-      <rect class="stroke-yellow draw" x="106" y="102" width="58" height="58" rx="10" />
-      <circle cx="122" cy="118" r="4.5" fill="#ffd000" />
-      <circle cx="135" cy="131" r="4.5" fill="#ffd000" />
-      <circle cx="148" cy="144" r="4.5" fill="#ffd000" />
-    </g>
+    <rect class="stroke-white draw" x="35" y="50" width="130" height="130" rx="12" />
+    <circle class="stroke-red pulse" cx="100" cy="115" r="26" />
     <text x="100" y="218" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_2}}</text>
-  `,
-  diag_adn_genetica: `
-    <text x="100" y="26" text-anchor="middle" fill="#00f2fe" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <path class="stroke-white draw" d="M60,48 C140,85 60,155 140,192" />
-      <path class="stroke-red draw" d="M140,48 C60,85 140,155 60,192" />
-      <line class="stroke-yellow draw" x1="75" y1="68" x2="125" y2="68" />
-      <line class="stroke-yellow draw" x1="82" y1="120" x2="118" y2="120" />
-      <line class="stroke-yellow draw" x1="75" y1="172" x2="125" y2="172" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ffd000" font-size="13">{{TEXTO_2}}</text>
-  `,
-  diag_jeringuilla_placebo: `
-    <text x="100" y="26" text-anchor="middle" fill="#ffffff" font-size="13">{{TEXTO_1}}</text>
-    <g class="float">
-      <rect class="stroke-white draw" x="78" y="70" width="44" height="85" rx="4" />
-      <line class="stroke-yellow draw" x1="100" y1="40" x2="100" y2="70" />
-      <line class="stroke-yellow draw" x1="82" y1="40" x2="118" y2="40" />
-      <line class="stroke-red pulse" x1="100" y1="155" x2="100" y2="195" />
-    </g>
-    <text x="100" y="218" text-anchor="middle" fill="#ff2a5f" font-size="13">{{TEXTO_2}}</text>
-  `,
-  prop_dado_mano: `<g class="float"><rect class="stroke-yellow draw" x="132" y="88" width="34" height="34" rx="6"/><circle cx="142" cy="98" r="3" fill="#ff2a5f"/><circle cx="156" cy="112" r="3" fill="#ff2a5f"/></g>`,
-  prop_iman_mano: `<g class="pulse"><path class="stroke-red draw" d="M132,85 L132,115 A16,16 0 0,0 164,115 L164,85"/></g>`,
-  prop_jeringa_mano: `<g class="float"><rect class="stroke-white draw" x="138" y="80" width="18" height="42" rx="3"/><line class="stroke-red draw" x1="147" y1="122" x2="147" y2="142"/></g>`,
-  prop_bandera_alerta: `<g class="float"><line class="stroke-white draw" x1="135" y1="65" x2="135" y2="145"/><polygon class="stroke-red pulse" points="135,65 178,80 135,98"/></g>`,
-  prop_llave_secreta: `<g class="float"><circle class="stroke-yellow draw" cx="148" cy="85" r="12"/><line class="stroke-yellow draw" x1="148" y1="97" x2="148" y2="135"/><line class="stroke-yellow draw" x1="148" y1="125" x2="160" y2="125"/></g>`,
-  prop_billete_euro: `<g class="pulse"><rect class="stroke-yellow draw" x="126" y="88" width="48" height="28" rx="4"/><text x="150" y="107" text-anchor="middle" fill="#ffd000" font-size="14">€</text></g>`,
-  prop_copa_premio: `<g class="float"><polygon class="stroke-yellow draw" points="132,82 166,82 156,115 142,115"/><line class="stroke-white draw" x1="149" y1="115" x2="149" y2="135"/></g>`,
-  prop_brujula_moral: `<g class="pulse"><circle class="stroke-white draw" cx="148" cy="105" r="20"/><polygon class="stroke-red draw" points="148,90 154,105 148,120 142,105"/></g>`
+  `
 };
 
 // 1. Extractor inteligente de textos internos para SVGs
@@ -215,10 +167,6 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
     const parts = raw1.split(/ vs\.? /i);
     raw1 = parts[0].trim();
     raw2 = (parts[1] || '').trim();
-  }
-
-  if (/^(vs\.?|contra|versus)$/i.test(raw2)) {
-    raw2 = matchesDestacados[1] || '';
   }
 
   const cleanRedundant = (str) => String(str || '')
@@ -261,133 +209,94 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   ];
 }
 
-// 1.5 Saneador y Estilizador Automático de SVGs dibujados por Gemini (Garantiza CERO formas negras)
-function sanitizeAndStyleCustomSvg(rawSvg, t1, t2, t3) {
-  let s = String(rawSvg || '').trim();
-  s = s.replace(/<svg[^>]*>/gi, '').replace(/<\/svg>/gi, '').trim();
+// 1.5 Renderizador de Escena Ilustrada con Vectores Profesionales Centrados al 100% (Usa <svg> anidado para evitar fallos de CSS transform)
+function buildIllustratedSceneSvg(esc, vectorCache, t1, t2) {
+  const rawList = [];
+  if (Array.isArray(esc.iconos)) rawList.push(...esc.iconos);
+  if (esc.objeto_1 && !rawList.includes(esc.objeto_1)) rawList.push(esc.objeto_1);
+  if (esc.objeto_2 && !rawList.includes(esc.objeto_2)) rawList.push(esc.objeto_2);
 
-  // Asegurar que cada forma geométrica tenga clase de trazo neón y animación draw
-  const colorClasses = ['stroke-white', 'stroke-yellow', 'stroke-red'];
-  let shapeIdx = 0;
-  s = s.replace(/<(path|line|polyline|polygon|rect|circle|ellipse)\b([^>]*)>/gi, (match, tag, attrs) => {
-    let newAttrs = attrs;
-    const pickedColor = colorClasses[shapeIdx % colorClasses.length];
-    shapeIdx++;
+  const cleanKeys = rawList.map(k => String(k || '').trim().toLowerCase()).filter(Boolean).slice(0, 2);
+  if (cleanKeys.length === 0) cleanKeys.push('lucide:brain');
 
-    if (!/class\s*=/i.test(newAttrs)) {
-      newAttrs += ` class="${pickedColor} draw"`;
-    } else if (!/stroke-(white|yellow|red|neon|alt)/i.test(newAttrs)) {
-      newAttrs = newAttrs.replace(/class\s*=\s*["']([^"']*)["']/i, `class="$1 ${pickedColor} draw"`);
-    } else if (!/\bdraw\b/i.test(newAttrs)) {
-      newAttrs = newAttrs.replace(/class\s*=\s*["']([^"']*)["']/i, `class="$1 draw"`);
-    }
+  const styleStroke = (innerSvg, colorClass) => {
+    return innerSvg.replace(/<(path|circle|rect|line|polyline|polygon|ellipse)\b/gi, `<$1 class="${colorClass} draw" vector-effect="non-scaling-stroke"`);
+  };
 
-    // Evitar rellenos negros accidentales en formas grandes
-    if (!/fill\s*=/i.test(newAttrs)) {
-      newAttrs += ' fill="none"';
-    } else {
-      newAttrs = newAttrs.replace(/fill\s*=\s*["'](#000|#000000|black|currentColor)["']/gi, 'fill="none"');
-    }
-    return `<${tag}${newAttrs}>`;
-  });
-
-  s = s
-    .replace(/\{\{TEXTO_1\}\}/g, t1).replace(/\{TEXTO_1\}/g, t1)
-    .replace(/\{\{TEXTO_2\}\}/g, t2).replace(/\{TEXTO_2\}/g, t2)
-    .replace(/\{\{TEXTO_3\}\}/g, t3).replace(/\{TEXTO_3\}/g, t3)
-    .replace(/undefined/gi, '');
-
-  if (!/<text\b/i.test(s)) {
-    s = `
+  // Si hay 1 objeto principal: se dibuja GIGANTE (124x124 dentro del lienzo 200x240) y centrado en (38, 56) + un anillo de energía sutil
+  if (cleanKeys.length === 1) {
+    const v1 = vectorCache[cleanKeys[0]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
+    const styled1 = styleStroke(v1.inner, 'stroke-yellow');
+    return `
       <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-      <g class="float">${s}</g>
-      <text x="100" y="222" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
+      <circle cx="100" cy="118" r="68" class="stroke-white draw" opacity="0.16" stroke-dasharray="6,6" />
+      <g class="float">
+        <g class="pulse">
+          <svg x="38" y="56" width="124" height="124" viewBox="${v1.viewBox}" overflow="visible">
+            ${styled1}
+          </svg>
+        </g>
+      </g>
+      <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
     `;
-  } else {
-    s = `<g class="float">${s}</g>`;
   }
 
-  return s;
-}
-
-// 1.6 Precarga y conversión de Iconify a vectores Neón puros (0% relleno negro)
-async function preloadIconifyNeonSvgs(escenas) {
-  const iconMap = {};
-  for (const s of (escenas || [])) {
-    if (Array.isArray(s.iconos)) {
-      for (const rawIcon of s.iconos) {
-        const clean = String(rawIcon || 'lucide:brain').trim();
-        const [prefix, name] = clean.includes(':') ? clean.split(':') : ['lucide', clean];
-        const key = `${prefix}:${name}`;
-        if (!iconMap[key]) {
-          let svg = await fetchText(`https://api.iconify.design/${prefix}/${name}.svg`);
-          if (!svg || !svg.includes('<svg')) {
-            svg = await fetchText(`https://api.iconify.design/lucide/${name}.svg`);
-          }
-          if (svg && svg.includes('<svg')) {
-            const inner = svg
-              .replace(/<svg[^>]*>/gi, '')
-              .replace(/<\/svg>/gi, '')
-              .replace(/fill\s*=\s*["'][^"']*["']/gi, 'fill="none"')
-              .replace(/stroke\s*=\s*["'][^"']*["']/gi, '');
-            iconMap[key] = inner;
-          }
-        }
-      }
-    }
-  }
-  return iconMap;
-}
-
-// 1.7 Constructor de Composición de Iconos o DataViz dentro del lienzo SVG 200x240
-function buildIconCompositionSvg(esc, iconMap, t1, t2) {
-  const icons = (Array.isArray(esc.iconos) && esc.iconos.length > 0) ? esc.iconos.slice(0, 2) : ['lucide:brain', 'lucide:zap'];
-  const colors = ['stroke-yellow', 'stroke-red', 'stroke-white'];
-
-  let innerElements = '';
-  if (icons.length === 1) {
-    const clean = String(icons[0]).trim();
-    const key = clean.includes(':') ? clean : `lucide:${clean}`;
-    const paths = (iconMap[key] || '<circle cx="12" cy="12" r="9"/>')
-      .replace(/<(path|circle|rect|line|polyline|polygon|ellipse)\b/gi, `<$1 class="stroke-yellow draw"`);
-    innerElements = `<g class="pulse" transform="translate(46, 62) scale(4.5)">${paths}</g>`;
-  } else {
-    icons.slice(0, 2).forEach((ic, idx) => {
-      const clean = String(ic).trim();
-      const key = clean.includes(':') ? clean : `lucide:${clean}`;
-      const col = colors[idx % colors.length];
-      const paths = (iconMap[key] || '<circle cx="12" cy="12" r="9"/>')
-        .replace(/<(path|circle|rect|line|polyline|polygon|ellipse)\b/gi, `<$1 class="${col} draw"`);
-      const xPos = idx === 0 ? 18 : 108;
-      const animCls = idx === 0 ? 'float' : 'pulse';
-      innerElements += `<g class="${animCls}" transform="translate(${xPos}, 76) scale(3.1)">${paths}</g>`;
-    });
-  }
+  // Si hay 2 objetos (ej. Bolígrafo vs Jabón, o Perro + Campana): se dibujan grandes, centrados y conectados visualmente
+  const v1 = vectorCache[cleanKeys[0]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
+  const v2 = vectorCache[cleanKeys[1]] || { viewBox: '0 0 24 24', inner: '<circle cx="12" cy="12" r="9"/>' };
+  const styled1 = styleStroke(v1.inner, 'stroke-yellow');
+  const styled2 = styleStroke(v2.inner, 'stroke-red');
 
   return `
-    <text x="100" y="28" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-    ${innerElements}
+    <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
+    <g class="float">
+      <svg x="14" y="68" width="82" height="82" viewBox="${v1.viewBox}" overflow="visible">
+        ${styled1}
+      </svg>
+    </g>
+    <line x1="98" y1="92" x2="102" y2="128" class="stroke-white draw" opacity="0.45" />
+    <g class="pulse">
+      <svg x="104" y="68" width="82" height="82" viewBox="${v2.viewBox}" overflow="visible">
+        ${styled2}
+      </svg>
+    </g>
     <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
   `;
 }
 
+// 1.6 Visualización de Datos que extrae automáticamente el número real del subtítulo
 function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   const dv = esc.data_viz || {};
-  const rawVal = String(dv.valor ?? '85').replace(/undefined/gi, '').trim() || '85';
-  const suf = String(dv.sufijo ?? '%').replace(/undefined/gi, '').trim();
-  const displayVal = `${rawVal}${suf}`.slice(0, 8);
-  const tipos = ['gauge_radial', 'price_anchor', 'crash_curve', 'versus_bars', 'split_brain', ' radar_scan'];
-  const chosenType = dv.tipo && tipos.includes(dv.tipo) ? dv.tipo : tipos[(hash + idx) % tipos.length];
+  const sub = String(esc.subtitulo || '');
+
+  // Extraer número real de la frase hablada si existe (ej. "75%", "50%", "300€")
+  const subNumMatch = sub.match(/(\d+(?:[.,]\d+)?)\s*(%|€|\$|por\s*ciento|euros|horas|años)?/i);
+  let rawVal = String(dv.valor ?? '').replace(/undefined|null/gi, '').trim();
+  let suf = String(dv.sufijo ?? '').replace(/undefined|null/gi, '').trim();
+
+  if (subNumMatch) {
+    rawVal = subNumMatch[1];
+    const unit = (subNumMatch[2] || '').toLowerCase();
+    if (unit.includes('por') || unit === '%') suf = '%';
+    else if (unit.includes('euro') || unit === '€') suf = '€';
+    else if (unit.includes('hora')) suf = 'H';
+    else if (unit.includes('año')) suf = ' AÑOS';
+  }
+  if (!rawVal) rawVal = '75';
+  if (!suf && !/[%€$a-zA-Z]/.test(rawVal)) suf = '%';
+
+  const displayVal = `${rawVal}${suf}`.slice(0, 9);
+  const tipos = ['gauge_radial', 'versus_bars', 'crash_curve', 'split_brain', 'price_anchor'];
+  const chosenType = (dv.tipo && tipos.includes(dv.tipo)) ? dv.tipo : tipos[(hash + idx) % tipos.length];
 
   if (chosenType === 'price_anchor') {
     return `
       <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
       <g class="float">
-        <rect x="28" y="52" width="144" height="52" rx="10" class="stroke-white draw" />
-        <text x="100" y="85" text-anchor="middle" fill="#ffffff" font-size="22">300€</text>
-        <line x1="38" y1="92" x2="162" y2="62" class="stroke-red draw" />
-        <rect x="38" y="122" width="124" height="60" rx="12" class="stroke-yellow pulse" />
-        <text x="100" y="160" text-anchor="middle" fill="#ffd000" font-size="26">${displayVal}</text>
+        <rect x="32" y="52" width="136" height="48" rx="10" class="stroke-white draw" />
+        <line x1="42" y1="88" x2="158" y2="62" class="stroke-red draw" />
+        <rect x="36" y="118" width="128" height="62" rx="12" class="stroke-yellow pulse" />
+        <text x="100" y="158" text-anchor="middle" fill="#ffd000" font-size="25">${displayVal}</text>
       </g>
       <text x="100" y="220" text-anchor="middle" fill="#ff2a5f" font-size="13">${t2}</text>
     `;
@@ -414,18 +323,18 @@ function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
     return `
       <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
       <line x1="22" y1="182" x2="178" y2="182" class="stroke-white draw" />
-      <rect x="36" y="112" width="36" height="70" rx="5" class="stroke-white draw" />
-      <rect x="82" y="82" width="36" height="100" rx="5" class="stroke-red draw" />
-      <rect x="128" y="46" width="36" height="136" rx="5" class="stroke-yellow pulse" />
+      <rect x="36" y="116" width="36" height="66" rx="5" class="stroke-white draw" />
+      <rect x="82" y="84" width="36" height="98" rx="5" class="stroke-yellow draw" />
+      <rect x="128" y="48" width="36" height="134" rx="5" class="stroke-red pulse" />
       <text x="146" y="38" text-anchor="middle" fill="#ffd000" font-size="14">${displayVal}</text>
       <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
     `;
   } else {
     return `
       <text x="100" y="26" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
-      <circle cx="100" cy="122" r="58" class="stroke-white draw" opacity="0.25" />
-      <circle cx="100" cy="122" r="58" class="stroke-red draw pulse" />
-      <text x="100" y="132" text-anchor="middle" fill="#ffd000" font-size="28">${displayVal}</text>
+      <circle cx="100" cy="122" r="58" class="stroke-white draw" opacity="0.22" />
+      <circle cx="100" cy="122" r="58" class="stroke-yellow draw pulse" />
+      <text x="100" y="132" text-anchor="middle" fill="#ffd000" font-size="26">${displayVal}</text>
       <text x="100" y="220" text-anchor="middle" fill="#ffffff" font-size="13">${t2}</text>
     `;
   }
@@ -439,7 +348,7 @@ function normalizeForMatch(str) {
     .toLowerCase();
 }
 
-// 2. Motor de alineación de subtítulos y escenas (idéntico a render (5).js)
+// 2. Motor de alineación de subtítulos y escenas
 function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   const stopWords = new Set([
     'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
@@ -743,14 +652,13 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   return allChunks;
 }
 
-// 3. Sintetizador Procedural de 26 Efectos (16 Cinematográficos + 10 Contextuales del Guion: Perro, Campana, Sirena, Gota, etc.)
+// 3. Sintetizador Procedural de 26 Efectos (16 Cinematográficos + 10 Contextuales del Guion)
 function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
   function getRecipe(type, pitchMod, customFreq) {
     const p = pitchMod.toFixed(3);
     const cf = (customFreq && customFreq >= 80 && customFreq <= 2400) ? customFreq : Math.round(440 * pitchMod);
 
     const catalog = {
-      // --- 16 SFX CINEMATOGRÁFICOS BASE ---
       sub_drop: {
         expr: `0.36*exp(-6*t)*sin(2*PI*(150*${p}*exp(-4.2*t)+38)*t)+0.12*exp(-16*t)*sin(2*PI*720*${p}*t)`,
         dur: 0.65
@@ -815,8 +723,6 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
         expr: `0.19*exp(-5.0*t)*sin(2*PI*(290*${p}+290*t)*t)`,
         dur: 0.45
       },
-
-      // --- 10 SONIDOS CONTEXTUALES ADAPTADOS AL OBJETO DEL GUIÓN ---
       dog_bark: {
         expr: `0.32*exp(-14*t)*sin(2*PI*(320+90*sin(2*PI*12*t))*exp(-2.8*t)*t)+0.26*exp(-14*max(0,t-0.18))*gt(t,0.18)*sin(2*PI*360*exp(-3*max(0,t-0.18))*max(0,t-0.18))`,
         dur: 0.42
@@ -851,32 +757,19 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
       }
     };
 
-    // Alias semánticos en español e inglés para cuando Gemini describe el sonido del guion
     catalog.perro = catalog.dog_bark;
     catalog.ladrido = catalog.dog_bark;
-    catalog.bark = catalog.dog_bark;
     catalog.campana = catalog.bell_ring;
-    catalog.bell = catalog.bell_ring;
-    catalog.ding = catalog.bell_ring;
     catalog.sirena = catalog.siren_alert;
     catalog.alarma = catalog.siren_alert;
-    catalog.alarm = catalog.siren_alert;
     catalog.gota = catalog.water_drop;
     catalog.agua = catalog.water_drop;
     catalog.magia = catalog.magic_chime;
-    catalog.florecer = catalog.magic_chime;
     catalog.explosion = catalog.explosion_boom;
-    catalog.golpe = catalog.explosion_boom;
-    catalog.silbido = catalog.whistle_bird;
-    catalog.pajaro = catalog.whistle_bird;
     catalog.dinero = catalog.coin_cash;
-    catalog.moneda = catalog.coin_cash;
     catalog.reloj = catalog.clock_tick;
-    catalog.tick = catalog.clock_tick;
     catalog.latido = catalog.heartbeat;
-    catalog.corazon = catalog.heartbeat;
     catalog.shock = catalog.sub_drop;
-    catalog.bass = catalog.sub_drop;
     catalog.whoosh = catalog.whoosh_fast;
     catalog.pop = catalog.glass_ping;
 
@@ -896,7 +789,7 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
 
   escenas.forEach((esc, idx) => {
     let rawType = String(esc.sfx || '').toLowerCase().trim();
-    if (!rawType || (usedSfx.has(rawType) && !['dog_bark', 'bell_ring', 'coin_cash'].includes(rawType))) {
+    if (!rawType || (usedSfx.has(rawType) && !['dog_bark', 'bell_ring', 'coin_cash', 'water_drop'].includes(rawType))) {
       rawType = allTypes[(videoHash + idx * 3) % allTypes.length];
     }
     usedSfx.add(rawType);
@@ -940,7 +833,7 @@ async function main() {
     await downloadFile(payloadUrl, 'payload.json');
   }
 
-  console.log('🚀 Iniciando motor de renderizado Viral v7.0 (7 Paletas + Dibujo IA Libre + Audio Contextual)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v8.0 (Vectores Semánticos 100% Centrados + 7 Paletas + Audio Contextual)...');
 
   const rawCatalogo = fs.existsSync('catalogo.json') ? JSON.parse(fs.readFileSync('catalogo.json', 'utf8')) : {};
   const catalogo = { ...rawCatalogo, ...EXPANDED_SVG_PACK };
@@ -978,7 +871,6 @@ async function main() {
   const totalFrames = Math.ceil(realAudioDuration * fps);
   const duracionExactaVideo = totalFrames / fps;
 
-  // Las 7 paletas cromáticas dinámicas de render (5).js
   const accentPalettes = [
     { name: 'Cian Eléctrico', hex: '#00f2fe', altHex: '#ff2a85', glow: 'rgba(0, 242, 254, 0.78)', altGlow: 'rgba(255, 42, 133, 0.72)', bgCenter: '#0f293a', bgEdge: '#04070b' },
     { name: 'Verde Neón', hex: '#39ff14', altHex: '#00f2fe', glow: 'rgba(57, 255, 20, 0.72)', altGlow: 'rgba(0, 242, 254, 0.72)', bgCenter: '#112c1a', bgEdge: '#050906' },
@@ -1001,7 +893,8 @@ async function main() {
   console.log(`🎨 Paleta: ${chosenAccent.name} | Atmósfera: #${bgPatternMode} | Estilo Sub: #${subStyleMode}`);
 
   const escenasOriginales = payload.escenas || [];
-  const iconSvgMap = await preloadIconifyNeonSvgs(escenasOriginales);
+  console.log('🔍 Buscando y descargando vectores profesionales para cada escena del guion...');
+  const vectorCache = await preloadAllSceneVectors(escenasOriginales);
 
   const ultimaEscenaFinOriginal = escenasOriginales.length > 0
     ? Number(escenasOriginales[escenasOriginales.length - 1].fin || 25)
@@ -1041,16 +934,10 @@ async function main() {
     let svgInterno = '';
     let esDiagrama = false;
 
-    const rawCustomSvg = String(esc.svg_code || '').trim();
     const diagCandidate = esc.diagrama || esc.diag_id;
 
-    // PRIORIDAD 1: Si Gemini ha dibujado un SVG específico para el guion (un perro, una flor, una camisa, etc.), ¡lo usamos SIEMPRE!
-    if (esc.modo_visual === 'svg_custom' && rawCustomSvg.length > 25 && /<(path|circle|rect|polygon|polyline|line|ellipse)\b/i.test(rawCustomSvg)) {
-      svgInterno = `<g class="layer-main">${sanitizeAndStyleCustomSvg(rawCustomSvg, t1, t2, t3)}</g>`;
-      esDiagrama = true;
-    }
-    // PRIORIDAD 2: Si el guion pide un diagrama específico de la megabiblioteca (ej. diag_perro_pavlov, diag_ruleta_casino, etc.)
-    else if (diagCandidate && catalogo[diagCandidate]) {
+    // 1. Si hay un diagrama específico del catálogo verificado (ej. diag_perro_pavlov, diag_dilema_tranvia, diag_iceberg)
+    if (diagCandidate && catalogo[diagCandidate] && !/_[0-9]+$/.test(diagCandidate)) {
       let diagKey = diagCandidate;
       if (usedDiags.has(diagKey) && allDiags.length > usedDiags.size) {
         diagKey = allDiags.find(d => !usedDiags.has(d)) || diagKey;
@@ -1069,17 +956,17 @@ async function main() {
       svgInterno = `<g class="layer-main">${rawDiagSvg}</g>`;
       esDiagrama = true;
     }
-    // PRIORIDAD 3: Composición de vectores de Iconify convertidos a trazos neón
-    else if (esc.modo_visual === 'icon_composition' && Array.isArray(esc.iconos) && esc.iconos.length > 0) {
-      svgInterno = `<g class="layer-main">${buildIconCompositionSvg(esc, iconSvgMap, t1, t2)}</g>`;
-      esDiagrama = true;
-    }
-    // PRIORIDAD 4: Visualización de datos dinámica (precios tachados, curvas, medidores)
+    // 2. Si es data_viz (o la frase menciona un porcentaje explícito)
     else if (esc.modo_visual === 'data_viz') {
       svgInterno = `<g class="layer-main">${buildDynamicDataVizSvg(esc, idx, hash, t1, t2)}</g>`;
       esDiagrama = true;
     }
-    // PRIORIDAD 5: Avatar expresivo multicapa (respiración + cara animada + prop) sin repetir nunca
+    // 3. Si es icon_composition o svg_custom con objetos semánticos (jabón, bolígrafo, perro, flor, ducha, luna...)
+    else if (esc.modo_visual === 'icon_composition' || esc.modo_visual === 'svg_custom') {
+      svgInterno = `<g class="layer-main">${buildIllustratedSceneSvg(esc, vectorCache, t1, t2)}</g>`;
+      esDiagrama = true;
+    }
+    // 4. Modo Avatar Expresivo Multicapa (Cuerpo + Cara + Prop)
     else {
       const cCand = esc.cuerpo || esc.cuerpo_id;
       const fCand = esc.cara || esc.cara_id;
@@ -1249,10 +1136,10 @@ async function main() {
         display: flex; justify-content: center; align-items: center;
         will-change: transform, filter;
       }
-      svg { width: 530px; height: 630px; overflow: visible; filter: drop-shadow(0 16px 32px rgba(0,0,0,0.88)); }
-      .plano-primer_plano svg { width: 645px; height: 765px; }
-      .plano-medio svg { width: 585px; height: 695px; }
-      .plano-general svg { width: 525px; height: 625px; }
+      svg.root-svg { width: 530px; height: 630px; overflow: visible; filter: drop-shadow(0 16px 32px rgba(0,0,0,0.88)); }
+      .plano-primer_plano svg.root-svg { width: 645px; height: 765px; }
+      .plano-medio svg.root-svg { width: 585px; height: 695px; }
+      .plano-general svg.root-svg { width: 525px; height: 625px; }
 
       svg text {
         font-family: 'Montserrat', sans-serif;
@@ -1347,7 +1234,7 @@ async function main() {
       ${escenasProcesadas.map(e => `
         <div class="scene plano-${e.plano}" id="scene-${e.id}">
           <div class="scene-inner" id="inner-${e.id}">
-            <svg viewBox="0 0 200 240">${e.svgInterno}</svg>
+            <svg class="root-svg" viewBox="0 0 200 240">${e.svgInterno}</svg>
           </div>
         </div>
       `).join('')}
@@ -1456,7 +1343,7 @@ async function main() {
       }
 
       document.fonts.ready.then(() => {
-        document.querySelectorAll('.scene svg').forEach(svg => {
+        document.querySelectorAll('.scene svg.root-svg').forEach(svg => {
           const texts = Array.from(svg.querySelectorAll('text'));
           texts.forEach(txt => {
             const content = (txt.textContent || '').trim();
@@ -1496,7 +1383,7 @@ async function main() {
         });
       });
 
-      document.querySelectorAll('.scene svg').forEach(svg => {
+      document.querySelectorAll('.scene svg.root-svg').forEach(svg => {
         const shapes = svg.querySelectorAll('.draw, line, polyline, path, rect, polygon, circle, ellipse');
         let idx = 0;
         shapes.forEach(shape => {
@@ -1625,7 +1512,7 @@ async function main() {
 
             inner.style.transform = \`translate(\${tx.toFixed(1)}px, \${ty.toFixed(1)}px) scale(\${scale.toFixed(3)}) rotate(\${rot.toFixed(2)}deg)\`;
 
-            const svgEl = sc.querySelector('svg');
+            const svgEl = sc.querySelector('svg.root-svg');
             const totalShapes = Math.max(1, parseInt(svgEl?.dataset.totalShapes || '8', 10));
             sc.querySelectorAll('[data-draw-idx]').forEach(shape => {
               const dIdx = parseInt(shape.dataset.drawIdx, 10);
@@ -1690,9 +1577,8 @@ async function main() {
             });
 
             sc.querySelectorAll('.pulse').forEach(el => {
-              const pScale = 1 + Math.sin(localT * 11.5) * 0.14;
-              el.style.transformOrigin = 'center';
-              el.style.transformBox = 'fill-box';
+              const pScale = 1 + Math.sin(localT * 11.5) * 0.11;
+              el.style.transformOrigin = '100px 118px';
               el.style.transform = \`scale(\${pScale})\`;
             });
 
@@ -1773,7 +1659,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 v7.0 generado con éxito!');
+  console.log('✅ ¡Vídeo output.mp4 v8.0 generado con éxito!');
 }
 
 main().catch(err => {
