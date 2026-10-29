@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "id_concepto": "efecto_near_miss_azar",
+    "subrama": "Psicología del Azar",
+    "titulo": "El Efecto Near-Miss: Por Qué 'Casi Ganar' te Arruina",
+    "keywords_concepto": [
+      "near-miss",
+      "refuerzo intermitente",
+      "falacia del jugador",
+      "tragaperras",
+      "dopamina",
+      "sesgo cognitivo"
+    ],
+    "programado_para_madrid": "29/10/2026 a las 14:00",
+    "fecha_publicacion": "2026-10-29T12:04:40.141Z"
+  }
+]
