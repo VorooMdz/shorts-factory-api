@@ -195,5 +195,19 @@
     ],
     "programado_para_madrid": "02/11/2026 a las 18:00",
     "fecha_publicacion": "2026-10-29T16:01:55.259Z"
+  },
+  {
+    "id_concepto": "problema_vela_duncker",
+    "subrama": "Creatividad e Insight",
+    "titulo": "El Experimento de la Vela de Duncker",
+    "keywords_concepto": [
+      "fijación funcional",
+      "problema de la vela",
+      "karl duncker",
+      "insight",
+      "efecto eureka"
+    ],
+    "programado_para_madrid": "02/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-10-29T16:56:06.891Z"
   }
 ]
