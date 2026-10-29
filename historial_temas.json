@@ -153,5 +153,19 @@
     ],
     "programado_para_madrid": "01/11/2026 a las 18:00",
     "fecha_publicacion": "2026-10-29T13:19:10.664Z"
+  },
+  {
+    "id_concepto": "analgesia_por_precio",
+    "subrama": "Dolor y Placebo",
+    "titulo": "Analgesia por Precio",
+    "keywords_concepto": [
+      "efecto placebo",
+      "analgesia por precio",
+      "percepción del dolor",
+      "psicología del consumidor",
+      "sesgo de expectativa"
+    ],
+    "programado_para_madrid": "01/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-10-29T13:27:04.314Z"
   }
 ]
