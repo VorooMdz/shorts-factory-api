@@ -54,5 +54,18 @@
       "persuasion"
     ],
     "fecha_publicacion": "2026-10-29T10:56:14.532Z"
+  },
+  {
+    "id_concepto": "efecto_zeigarnik",
+    "subrama": "Memoria y Olvido",
+    "titulo": "El Efecto Zeigarnik y las tareas incompletas",
+    "keywords_concepto": [
+      "efecto zeigarnik",
+      "memoria de trabajo",
+      "tareas incompletas",
+      "atencion",
+      "psicologia cognitiva"
+    ],
+    "fecha_publicacion": "2026-10-29T11:13:52.029Z"
   }
 ]
