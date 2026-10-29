@@ -70,5 +70,19 @@
     ],
     "programado_para_madrid": "29/10/2026 a las 16:32",
     "fecha_publicacion": "2026-10-29T15:33:02.698Z"
+  },
+  {
+    "id_concepto": "bio_tardigrado_001",
+    "subrama": "Biología Extrema",
+    "titulo": "El Secreto del Tardígrado Indestructible",
+    "keywords_concepto": [
+      "tardigrado",
+      "oso de agua",
+      "criptobiosis",
+      "espacio",
+      "microbiologia"
+    ],
+    "programado_para_madrid": "29/10/2026 a las 16:41",
+    "fecha_publicacion": "2026-10-29T15:41:31.027Z"
   }
 ]
