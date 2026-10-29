@@ -8,12 +8,17 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -51,3 +56,30 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python upload.py
+
+      - name: Auto-Registro Post-Subida en historial_temas.json
+        if: success()
+        run: |
+          node -e '
+            const fs = require("fs");
+            const payload = JSON.parse(fs.readFileSync("payload.json", "utf8"));
+            let hist = [];
+            if (fs.existsSync("historial_temas.json")) {
+              try { hist = JSON.parse(fs.readFileSync("historial_temas.json", "utf8")); } catch(e) { hist = []; }
+            }
+            if (!Array.isArray(hist)) hist = [];
+            if (!hist.some(item => item.id_concepto === payload.id_concepto)) {
+              hist.push({
+                id_concepto: payload.id_concepto,
+                subrama: payload.subrama || "Psicología",
+                titulo: payload.tema_titulo || payload.TituloYT,
+                keywords_concepto: payload.keywords_concepto || [],
+                fecha_publicacion: new Date().toISOString()
+              });
+              fs.writeFileSync("historial_temas.json", JSON.stringify(hist, null, 2));
+            }
+          '
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add historial_temas.json
+          git diff --staged --quiet || (git commit -m "chore: auto-registro tema publicado en historial_temas.json [skip ci]" && git push)
