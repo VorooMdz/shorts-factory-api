@@ -84,5 +84,20 @@
     ],
     "programado_para_madrid": "29/10/2026 a las 16:41",
     "fecha_publicacion": "2026-10-29T15:41:31.027Z"
+  },
+  {
+    "id_concepto": "anticitera_pc_antigua",
+    "subrama": "Arqueología y Tecnología Antigua",
+    "titulo": "El Mecanismo de Anticitera: La Computadora de hace 2000 años",
+    "keywords_concepto": [
+      "anticitera",
+      "computadora",
+      "grecia",
+      "historia",
+      "arqueología",
+      "misterio"
+    ],
+    "programado_para_madrid": "29/10/2026 a las 16:51",
+    "fecha_publicacion": "2026-10-29T15:51:14.461Z"
   }
 ]
