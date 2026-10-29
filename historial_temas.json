@@ -106,5 +106,18 @@
       "anticipacion"
     ],
     "fecha_publicacion": "2026-10-29T11:46:19.971Z"
+  },
+  {
+    "id_concepto": "efecto_licencia_moral",
+    "subrama": "Neuroética y Moral",
+    "titulo": "El Efecto Licencia Moral: Por Qué Portarte Bien Te Hace Malvado",
+    "keywords_concepto": [
+      "licencia moral",
+      "compensación moral",
+      "neuroética",
+      "disonancia cognitiva",
+      "toma de decisiones"
+    ],
+    "fecha_publicacion": "2026-10-29T11:51:35.334Z"
   }
 ]
