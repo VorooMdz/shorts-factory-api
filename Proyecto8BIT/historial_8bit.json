@@ -57,5 +57,18 @@
     ],
     "programado_para_madrid": "29/10/2026 a las 16:15",
     "fecha_publicacion": "2026-10-29T15:15:27.932Z"
+  },
+  {
+    "id_concepto": "coastrunners_reward_hacking",
+    "subrama": "Inteligencia Artificial",
+    "titulo": "El fallo de CoastRunners y el Reward Hacking",
+    "keywords_concepto": [
+      "Reward Hacking",
+      "OpenAI",
+      "CoastRunners",
+      "Reinforcement Learning"
+    ],
+    "programado_para_madrid": "29/10/2026 a las 16:32",
+    "fecha_publicacion": "2026-10-29T15:33:02.698Z"
   }
 ]
