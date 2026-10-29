@@ -1,6 +1,8 @@
 import os
 import json
 import requests
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import google.oauth2.credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -16,11 +18,25 @@ def send_telegram_message(text):
             "parse_mode": "Markdown"
         }
         try:
-            requests.post(url, json=payload, timeout=10)
+            res = requests.post(url, json=payload, timeout=10)
+            if not res.ok:
+                print(f"⚠️ Respuesta de error de Telegram: {res.text}")
         except Exception as e:
             print(f"❌ Error al enviar notificación a Telegram: {e}")
     else:
         print("⚠️ Advertencia: TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no están configurados en el entorno.")
+
+def get_next_18h_utc():
+    madrid_tz = ZoneInfo("Europe/Madrid")
+    now_madrid = datetime.now(madrid_tz)
+    target_madrid = now_madrid.replace(hour=18, minute=0, second=0, microsecond=0)
+    
+    # Si ya han pasado las 17:45 hoy, programamos para mañana a las 18:00
+    if now_madrid >= (target_madrid - timedelta(minutes=15)):
+        target_madrid += timedelta(days=1)
+        
+    target_utc = target_madrid.astimezone(timezone.utc)
+    return target_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), target_madrid.strftime("%d/%m/%Y a las %H:%M")
 
 def upload_video():
     client_id = os.environ.get("YOUTUBE_CLIENT_ID", "").strip()
@@ -48,24 +64,29 @@ def upload_video():
             payload = json.load(f)
 
         title = payload.get("TituloYT", "Short de Psicología 🧠 #shorts")
+        if "#shorts" not in title.lower():
+            title = f"{title} #shorts"
         description = payload.get("DescripcionYT", "Descubre más en nuestro canal #shorts #psicologia")
+
+        publish_at_utc, publish_str_madrid = get_next_18h_utc()
 
         body = {
             "snippet": {
-                "title": title,
+                "title": title[:100],
                 "description": description,
-                "tags": ["shorts", "psicologia", "mente", "curiosidades"],
-                "categoryId": "27"  # Education
+                "tags": ["shorts", "psicologia", "mente", "curiosidades", "neurociencia"],
+                "categoryId": "27"
             },
             "status": {
                 "privacyStatus": "private",
+                "publishAt": publish_at_utc,
                 "selfDeclaredMadeForKids": False
             }
         }
 
         media = MediaFileUpload("output.mp4", chunksize=-1, resumable=True)
 
-        print("🚀 Subiendo vídeo a YouTube...")
+        print(f"🚀 Subiendo y programando vídeo en YouTube para el {publish_str_madrid}...")
         request = youtube.videos().insert(
             part="snippet,status",
             body=body,
@@ -79,7 +100,12 @@ def upload_video():
                 print(f"Uploaded {int(status.progress() * 100)}%")
 
         video_id = response['id']
-        success_msg = f"✅ *¡Vídeo subido con éxito a YouTube!*\n\n📌 *Título:* {title}\n🔗 https://youtu.be/{video_id}"
+        success_msg = (
+            f"✅ *¡Short subido y programado con éxito!*\n\n"
+            f"📌 *Título:* {title}\n"
+            f"🗓️ *Programado para:* {publish_str_madrid} (Hora Madrid)\n"
+            f"🔗 https://youtube.com/shorts/{video_id}"
+        )
         print(success_msg)
         send_telegram_message(success_msg)
 
