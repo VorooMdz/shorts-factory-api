@@ -28,5 +28,20 @@
     ],
     "programado_para_madrid": "29/10/2026 a las 15:51",
     "fecha_publicacion": "2026-10-29T14:51:26.600Z"
+  },
+  {
+    "id_concepto": "stuxnet_natanz_2010",
+    "subrama": "Ciberseguridad / Historia Militar",
+    "titulo": "El Ataque de Stuxnet a Natanz",
+    "keywords_concepto": [
+      "Stuxnet",
+      "Natanz",
+      "Ciberguerra",
+      "PLC Siemens",
+      "Centrifugadoras",
+      "Guerra Digital"
+    ],
+    "programado_para_madrid": "29/10/2026 a las 16:08",
+    "fecha_publicacion": "2026-10-29T15:08:21.207Z"
   }
 ]
