@@ -16,5 +16,17 @@
       "amígdala"
     ],
     "fecha_publicacion": "2026-10-29T10:02:58.284Z"
+  },
+  {
+    "id_concepto": "efecto_anclaje",
+    "subrama": "Sesgos Cognitivos",
+    "titulo": "El Efecto Anclaje",
+    "keywords_concepto": [
+      "efecto anclaje",
+      "precio relativo",
+      "Kahneman",
+      "toma de decisiones"
+    ],
+    "fecha_publicacion": "2026-10-29T10:13:02.558Z"
   }
 ]
