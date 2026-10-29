@@ -27,5 +27,19 @@
     ],
     "programado_para_madrid": "29/10/2026 a las 18:00",
     "fecha_publicacion": "2026-10-29T12:10:12.404Z"
+  },
+  {
+    "id_concepto": "procesos_ironicos_wegner",
+    "subrama": "Efectos Paradójicos",
+    "titulo": "La trampa de no pensar en el oso blanco",
+    "keywords_concepto": [
+      "efecto oso blanco",
+      "procesos irónicos",
+      "supresión del pensamiento",
+      "daniel wegner",
+      "reactancia mental"
+    ],
+    "programado_para_madrid": "29/10/2026 a las 21:00",
+    "fecha_publicacion": "2026-10-29T12:15:38.101Z"
   }
 ]
