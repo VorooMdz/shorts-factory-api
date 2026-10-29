@@ -167,5 +167,19 @@
     ],
     "programado_para_madrid": "01/11/2026 a las 21:00",
     "fecha_publicacion": "2026-10-29T13:27:04.314Z"
+  },
+  {
+    "id_concepto": "cronostasis_reloj_detenido",
+    "subrama": "Neurociencia del Tiempo",
+    "titulo": "El Engaño del Reloj Detenido",
+    "keywords_concepto": [
+      "cronostasis",
+      "tiempo subjetivo",
+      "sacadas oculares",
+      "dilatacion temporal",
+      "neurociencia"
+    ],
+    "programado_para_madrid": "02/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-10-29T13:37:43.939Z"
   }
 ]
