@@ -111,5 +111,19 @@
     ],
     "programado_para_madrid": "31/10/2026 a las 18:00",
     "fecha_publicacion": "2026-10-29T12:57:21.424Z"
+  },
+  {
+    "id_concepto": "supresion_parpadeo_mentiras",
+    "subrama": "Detección de Mentiras",
+    "titulo": "La anomalía del parpadeo en mentirosos",
+    "keywords_concepto": [
+      "parpadeo",
+      "carga cognitiva",
+      "mentiras",
+      "supresión ocular",
+      "efecto rebote"
+    ],
+    "programado_para_madrid": "31/10/2026 a las 21:00",
+    "fecha_publicacion": "2026-10-29T13:03:12.377Z"
   }
 ]
