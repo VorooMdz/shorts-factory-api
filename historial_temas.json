@@ -223,5 +223,19 @@
     ],
     "programado_para_madrid": "03/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-03T13:43:11.133Z"
+  },
+  {
+    "id_concepto": "hiperfijacion_contacto_visual_mentira",
+    "subrama": "Detección de Mentiras",
+    "titulo": "La Paradoja de la Mirada Fija al Mentir",
+    "keywords_concepto": [
+      "contacto visual",
+      "detección de mentiras",
+      "aldert vrij",
+      "hiperfijación ocular",
+      "monitoreo del engaño"
+    ],
+    "programado_para_madrid": "03/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-03T14:04:27.680Z"
   }
 ]
