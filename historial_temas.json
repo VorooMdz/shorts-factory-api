@@ -237,5 +237,19 @@
     ],
     "programado_para_madrid": "03/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-03T14:04:27.680Z"
+  },
+  {
+    "id_concepto": "efecto_fiesta_coctel",
+    "subrama": "Atención y Foco",
+    "titulo": "El Efecto Fiesta de Cóctel",
+    "keywords_concepto": [
+      "efecto cóctel",
+      "atención selectiva",
+      "colin cherry",
+      "procesamiento inconsciente",
+      "escucha dicótica"
+    ],
+    "programado_para_madrid": "04/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-03T14:13:22.309Z"
   }
 ]
