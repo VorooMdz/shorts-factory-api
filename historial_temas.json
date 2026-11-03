@@ -209,5 +209,19 @@
     ],
     "programado_para_madrid": "02/11/2026 a las 21:00",
     "fecha_publicacion": "2026-10-29T16:56:06.891Z"
+  },
+  {
+    "id_concepto": "inercia_del_sueno_severa",
+    "subrama": "Neurobiología del Sueño",
+    "titulo": "La Inercia del Sueño y la Pérdida de Juicio al Despertar",
+    "keywords_concepto": [
+      "inercia del sueño",
+      "borrachera de sueño",
+      "corteza prefrontal",
+      "somnolencia",
+      "ritmo circadiano"
+    ],
+    "programado_para_madrid": "03/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-03T13:43:11.133Z"
   }
 ]
