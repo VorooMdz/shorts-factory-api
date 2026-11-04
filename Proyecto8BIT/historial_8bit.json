@@ -175,5 +175,19 @@
     ],
     "programado_para_madrid": "04/11/2026 a las 15:15",
     "fecha_publicacion": "2026-11-04T14:15:19.488Z"
+  },
+  {
+    "id_concepto": "f22_raptor_date_line_bug_2007",
+    "subrama": "fallos_tecnologicos_militares",
+    "titulo": "El bug del reloj que derribó al F-22",
+    "keywords_concepto": [
+      "F-22 Raptor",
+      "Bug de software",
+      "Línea internacional de cambio de fecha",
+      "Fuerza Aérea de EE. UU.",
+      "Glitches militares"
+    ],
+    "programado_para_madrid": "04/11/2026 a las 15:47",
+    "fecha_publicacion": "2026-11-04T14:47:41.288Z"
   }
 ]
