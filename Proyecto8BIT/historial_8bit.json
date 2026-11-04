@@ -130,5 +130,20 @@
     ],
     "programado_para_madrid": "04/11/2026 a las 13:10",
     "fecha_publicacion": "2026-11-04T12:10:08.906Z"
+  },
+  {
+    "id_concepto": "historia_phone_phreaking_john_draper",
+    "subrama": "historia_de_la_ciberseguridad",
+    "titulo": "El Silbato que Hackeo la Red Telefonica",
+    "keywords_concepto": [
+      "phreaking",
+      "john draper",
+      "capn crunch",
+      "hackeo",
+      "at&t",
+      "2600 hz"
+    ],
+    "programado_para_madrid": "04/11/2026 a las 13:52",
+    "fecha_publicacion": "2026-11-04T12:52:16.069Z"
   }
 ]
