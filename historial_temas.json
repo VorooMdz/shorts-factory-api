@@ -293,5 +293,19 @@
     ],
     "programado_para_madrid": "05/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-04T08:04:44.586Z"
+  },
+  {
+    "id_concepto": "scroll_infinito_refuerzo_intermitente",
+    "subrama": "Redes y Atención",
+    "titulo": "La Trampa del Scroll Infinito",
+    "keywords_concepto": [
+      "scroll infinito",
+      "Aza Raskin",
+      "refuerzo intermitente",
+      "caja de Skinner",
+      "dopamina"
+    ],
+    "programado_para_madrid": "05/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-04T12:02:28.097Z"
   }
 ]
