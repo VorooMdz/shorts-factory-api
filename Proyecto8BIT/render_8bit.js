@@ -1350,11 +1350,18 @@ async function main() {
   }
 
   await browser.close();
+  if (browser.process()) {
+    browser.process().kill('SIGKILL');
+  }
 
   console.log('🔊 Ensamblando MP4 final Universal 8-Bit v5.0...');
-  execSync(`ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`, { stdio: 'inherit' });
+  execSync(
+    `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
+    { stdio: 'inherit' }
+  );
 
   console.log('✅ ¡Vídeo Universal 8-Bit v5.0 generado con éxito!');
+  process.exit(0);
 }
 
 main().catch(err => {
