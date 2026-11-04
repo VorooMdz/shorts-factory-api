@@ -333,12 +333,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR PRINCIPAL v9.0 (MOTOR GENERATIVO LIBRE PROGRAMADO POR IA)
+// 3. MOTOR MULTI-AGENTE PIXEL-ART STUDIO v10.0
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload Generativo v9.0 desde URL...');
+    console.log('📥 Descargando payload Multi-Agente v10.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -380,6 +380,7 @@ async function main() {
     texto_2: cleanArcadeLabel(esc.texto_2 || 'HISTORIA REAL').slice(0, 15)
   }));
 
+  const customSpritesDict = payload.custom_sprites || {};
   const subtitleChunks = buildSubtitleChunks(escenas, payload.alignment, duracionExactaVideo);
 
   // Mezcla de Audio con bg_music2.mp3
@@ -407,6 +408,7 @@ async function main() {
   }
 
   const safeEscenasJson = JSON.stringify(escenas).replace(/<\/script>/gi, '<\\/script>');
+  const safeSpritesJson = JSON.stringify(customSpritesDict).replace(/<\/script>/gi, '<\\/script>');
   const safeChunksJson = JSON.stringify(subtitleChunks).replace(/<\/script>/gi, '<\\/script>');
   const safeSubrama = cleanArcadeLabel(payload.subrama || 'HISTORIA 8-BIT').slice(0, 28);
 
@@ -437,7 +439,6 @@ async function main() {
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
-      /* HUD SUPERIOR LIMPIO (SIN EL CONTADOR DE ESCENAS A LA DERECHA) */
       .arcade-hud {
         position: absolute; top: 32px; left: 26px; right: 26px;
         display: flex; justify-content: center; align-items: center;
@@ -509,11 +510,10 @@ async function main() {
 
     <script>
       const escenas = ${safeEscenasJson};
+      const customSprites = ${safeSpritesJson};
       const subtitleChunks = ${safeChunksJson};
       const totalFrames = ${totalFrames};
 
-      // LIENZO PIXEL-ART DE 120x213 PÍXELES VIRTUALES (6x6 px reales continuos)
-      // Zona visible principal entre rótulos: X = 0..120, Y = 34..144 (GROUND_Y = 138)
       const COLS = 120;
       const ROWS = 213;
       const CELL = 6;
@@ -524,7 +524,7 @@ async function main() {
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1a1c2c'));
 
       // ======================================================================
-      // API GRÁFICA PIXEL-ART COMPLETA PARA EL NODO PROGRAMADOR DE IA
+      // 1. PRIMITIVAS PIXEL-ART CON ANTI-DESBORDAMIENTO
       // ======================================================================
       function setPx(x, y, color) {
         const cx = Math.round(x);
@@ -632,8 +632,249 @@ async function main() {
         fillPolygon([[x1, y1], [x2, y2], [x3, y3]], fillColor, borderColor);
       }
 
-      // CIELO CON DITHERING 8-BIT + SUELO PERSONALIZABLE
-      function drawSky(skyTop = '#1e293b', skyMid = '#3b82f6', skyBot = '#93c5fd', groundCol = '#1e293b', horizonY = GROUND_Y) {
+      // ======================================================================
+      // 2. RENDERIZADOR DE SPRITES CUSTOM 16x16 DISEÑADOS POR EL AGENTE 2
+      // (CON CONTORNO NEGRO AUTOMÁTICO DE 1PX PARA ACABADO PROFESIONAL)
+      // ======================================================================
+      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.25, flipX = false) {
+        const key = String(spriteName || '').toLowerCase().trim();
+        const def = customSprites[key] || Object.values(customSprites)[0];
+        if (!def || !Array.isArray(def.rows) || def.rows.length === 0) {
+          fillBorderedCircle(centerX, centerY, Math.round(6 * scale), '#ffd166', '#0b0c10');
+          return;
+        }
+        const rows = def.rows;
+        const pal = def.palette || { '1': '#ffd166', '2': '#ffffff', '3': '#ef4444', '4': '#38bdf8', '5': '#475569' };
+        const h = rows.length;
+        const w = String(rows[0]).length;
+        const destH = Math.max(6, Math.round(h * scale));
+        const destW = Math.max(6, Math.round(w * scale));
+        const x0 = Math.round(centerX - destW / 2);
+        const y0 = Math.round(centerY - destH / 2);
+
+        // Matriz temporal escalada para añadir contorno negro automático de 1px
+        const temp = Array.from({ length: destH + 2 }, () => Array(destW + 2).fill(null));
+        for (let dy = 0; dy < destH; dy++) {
+          const srcY = Math.min(h - 1, Math.floor((dy / destH) * h));
+          const rStr = String(rows[srcY]);
+          for (let dx = 0; dx < destW; dx++) {
+            const rawX = Math.min(w - 1, Math.floor((dx / destW) * w));
+            const srcX = flipX ? (w - 1 - rawX) : rawX;
+            const ch = rStr[srcX];
+            if (ch && ch !== '.' && ch !== '0' && ch !== ' ') {
+              temp[dy + 1][dx + 1] = pal[ch] || '#ffd166';
+            }
+          }
+        }
+
+        // Pintar borde negro exterior de 1px y luego los píxeles de color
+        for (let r = 1; r <= destH; r++) {
+          for (let c = 1; c <= destW; c++) {
+            if (!temp[r][c]) {
+              if (temp[r - 1][c] || temp[r + 1][c] || temp[r][c - 1] || temp[r][c + 1]) {
+                setPx(x0 + c - 1, y0 + r - 1, '#0b0c10');
+              }
+            }
+          }
+        }
+        for (let r = 1; r <= destH; r++) {
+          for (let c = 1; c <= destW; c++) {
+            if (temp[r][c]) {
+              setPx(x0 + c - 1, y0 + r - 1, temp[r][c]);
+            }
+          }
+        }
+      }
+
+      // ======================================================================
+      // 3. CONSTRUCTORES DE ARQUITECTURA, VEGETACIÓN Y VEHÍCULOS RICOS (16-BIT)
+      // (ERRADICA LOS RECTÁNGULOS MARRONES SIN VENTANAS Y LAS CAJAS CON RUEDAS)
+      // ======================================================================
+      function drawDetailedBuilding(x, w, h, opts = {}, localFrame = 0) {
+        const wallCol = opts.wallColor || '#475569';
+        const roofCol = opts.roofColor || '#1e293b';
+        const winCol = opts.windowColor || '#fde047';
+        const topY = GROUND_Y - h;
+
+        // Fachada con textura de ladrillo/piedra y borde
+        fillBorderedRect(x, topY, w, h, wallCol, '#0b0c10');
+        for (let ry = topY + 4; ry < GROUND_Y - 4; ry += 6) {
+          fillRect(x + 2, ry, w - 4, 1, 'rgba(0,0,0,0.2)');
+        }
+        // Tejado triangular o cornisa señorial
+        if (opts.peakedRoof) {
+          fillTriangle(x - 2, topY, x + w + 2, topY, x + Math.floor(w / 2), topY - 14, roofCol, '#0b0c10');
+        } else {
+          fillBorderedRect(x - 2, topY - 4, w + 4, 5, roofCol, '#0b0c10');
+        }
+        // Cuadrícula de ventanas con marcos e iluminación interior
+        for (let wy = topY + 6; wy < GROUND_Y - 16; wy += 11) {
+          for (let wx = x + 4; wx < x + w - 7; wx += 9) {
+            const isLit = ((wx + wy) % 3 !== 0);
+            fillBorderedRect(wx, wy, 6, 7, isLit ? winCol : '#1e293b', '#0b0c10');
+          }
+        }
+        // Puerta en planta baja anclada a GROUND_Y
+        if (w >= 18) {
+          const dx = x + Math.floor(w / 2) - 4;
+          fillBorderedRect(dx, GROUND_Y - 12, 8, 12, '#2b1d14', '#0b0c10');
+        }
+      }
+
+      function drawDetailedTree(x, scale = 1.0, localFrame = 0) {
+        const trunkW = Math.max(3, Math.round(5 * scale));
+        const trunkH = Math.round(18 * scale);
+        const sway = Math.round(Math.sin(localFrame * 0.1 + x) * 1);
+        // Tronco con raíces y corteza
+        fillBorderedRect(x - Math.floor(trunkW / 2), GROUND_Y - trunkH, trunkW, trunkH, '#5c3a21', '#0b0c10');
+        // Copa multicapa con sombreado 16-bit (oscuro -> medio -> brillo superior)
+        const rMain = Math.round(11 * scale);
+        fillBorderedCircle(x + sway, GROUND_Y - trunkH - Math.round(4 * scale), rMain, '#14532d', '#0b0c10');
+        fillCircle(x - 3 + sway, GROUND_Y - trunkH - Math.round(7 * scale), Math.round(8 * scale), '#166534');
+        fillCircle(x + 4 + sway, GROUND_Y - trunkH - Math.round(6 * scale), Math.round(7 * scale), '#15803d');
+        fillCircle(x - 1 + sway, GROUND_Y - trunkH - Math.round(10 * scale), Math.round(6 * scale), '#22c55e');
+      }
+
+      function drawDetailedVehicle(x, type = 'truck', color = '#3f6212', facingLeft = false, localFrame = 0) {
+        const dir = facingLeft ? -1 : 1;
+        const bounce = localFrame % 4 < 2 ? -1 : 0;
+        const vy = GROUND_Y + bounce;
+
+        if (type === 'truck' || type === 'van') {
+          // Caja trasera detallada con lonas/nervaduras
+          const cargoX = facingLeft ? x - 4 : x - 28;
+          fillBorderedRect(cargoX, vy - 24, 30, 18, color, '#0b0c10');
+          fillRect(cargoX + 3, vy - 21, 24, 2, 'rgba(255,255,255,0.2)');
+          fillRect(cargoX + 3, vy - 14, 24, 2, 'rgba(0,0,0,0.25)');
+          // Cabina con parabrisas y faro delantero luminoso
+          const cabX = facingLeft ? x - 16 : x + 2;
+          fillBorderedRect(cabX, vy - 19, 14, 13, color, '#0b0c10');
+          const winX = facingLeft ? cabX + 2 : cabX + 6;
+          fillBorderedRect(winX, vy - 17, 6, 6, '#7dd3fc', '#0b0c10');
+          const lightX = facingLeft ? cabX - 1 : cabX + 13;
+          fillRect(lightX, vy - 11, 2, 3, '#fde047');
+          // Haz de luz de los faros
+          fillTriangle(lightX, vy - 10, lightX + dir * 18, vy - 16, lightX + dir * 18, vy - 2, 'rgba(253, 224, 71, 0.22)', null);
+          // Ruedas con llanta girando sobre GROUND_Y
+          const w1 = facingLeft ? x - 10 : x - 20;
+          const w2 = facingLeft ? x + 16 : x + 8;
+          [w1, w2].forEach(wx => {
+            fillBorderedCircle(wx, GROUND_Y - 5, 5, '#1e293b', '#0b0c10');
+            fillCircle(wx, GROUND_Y - 5, 2, '#94a3b8');
+          });
+          return;
+        }
+        // Coche deportivo / Policial / Sedán
+        fillBorderedRect(x - 18, vy - 14, 36, 9, color, '#0b0c10');
+        fillBorderedRect(x - 10, vy - 21, 20, 8, color, '#0b0c10');
+        fillBorderedRect(x - 8, vy - 19, 7, 5, '#7dd3fc', '#0b0c10');
+        fillBorderedRect(x + 1, vy - 19, 7, 5, '#7dd3fc', '#0b0c10');
+        fillBorderedCircle(x - 11, GROUND_Y - 4, 4, '#1e293b', '#0b0c10');
+        fillBorderedCircle(x + 11, GROUND_Y - 4, 4, '#1e293b', '#0b0c10');
+      }
+
+      // ======================================================================
+      // 4. PERSONAJES EXPRESIVOS ARTICULADOS 16-BIT (CON ROSTRO, OJOS, BOCA Y BRAZOS)
+      // + EFECTOS DE DISPARO/SPRAY ANCLADOS MATEMÁTICAMENTE A LA MANO
+      // ======================================================================
+      function drawActor(x, y, opts = {}, localFrame = 0) {
+        const anchorY = (y === undefined || y === null || y > GROUND_Y) ? GROUND_Y : y;
+        const suitCol = opts.suitColor || '#3b82f6';
+        const skinCol = opts.skinColor || '#e6ad86';
+        const hatCol = opts.hatColor !== undefined ? opts.hatColor : '#1e293b';
+        const facingLeft = !!opts.facingLeft;
+        const dir = facingLeft ? -1 : 1;
+        const isMoving = !!opts.isMoving;
+        const isTalking = !!opts.isTalking;
+        const expr = opts.expression || 'determined';
+        const step = isMoving ? (Math.floor(localFrame / 4) % 2) : 0;
+
+        // Sombra firme en el suelo
+        fillRect(x - 6, anchorY, 13, 2, 'rgba(0,0,0,0.45)');
+
+        // Piernas articuladas con botas
+        const legL = step === 0 ? -2 : 0;
+        const legR = step === 1 ? -2 : 0;
+        fillBorderedRect(x - 5, anchorY - 9 + legL, 5, 9, '#1e293b', '#0b0c10');
+        fillBorderedRect(x + 1, anchorY - 9 + legR, 5, 9, '#1e293b', '#0b0c10');
+
+        // Torso detallado con cinturón/corbata
+        fillBorderedRect(x - 7, anchorY - 22, 15, 14, suitCol, '#0b0c10');
+        fillRect(x - 1, anchorY - 20, 3, 8, opts.tieColor || '#ef4444');
+        fillRect(x - 6, anchorY - 10, 13, 2, '#0b0c10');
+
+        // Cabeza Expresiva 16-Bit (con ojos, pupilas, cejas y boca)
+        const headY = anchorY - 35 + (isMoving ? (step ? -1 : 0) : 0);
+        fillBorderedRect(x - 7, headY, 15, 14, skinCol, '#0b0c10');
+
+        // Sombrero / Casco / Pelo
+        if (hatCol) {
+          fillBorderedRect(x - 9, headY - 2, 19, 3, hatCol, '#0b0c10');
+          fillBorderedRect(x - 7, headY - 6, 15, 5, hatCol, '#0b0c10');
+        } else {
+          fillRect(x - 6, headY + 1, 13, 3, '#2b1d14');
+        }
+
+        // Ojos con pupilas orientadas hacia donde mira el actor
+        const eye1X = facingLeft ? x - 5 : x - 2;
+        const eye2X = facingLeft ? x + 1 : x + 3;
+        fillRect(eye1X, headY + 5, 3, 3, '#ffffff');
+        fillRect(eye2X, headY + 5, 3, 3, '#ffffff');
+        setPx(facingLeft ? eye1X : eye1X + 2, headY + 6, '#0b0c10');
+        setPx(facingLeft ? eye2X : eye2X + 2, headY + 6, '#0b0c10');
+
+        // Cejas expresivas
+        fillRect(eye1X, headY + 3, 3, 1, '#2b1d14');
+        fillRect(eye2X, headY + 3, 3, 1, '#2b1d14');
+
+        // Boca animada
+        if (isTalking && (Math.floor(localFrame / 3) % 2 === 0)) {
+          fillRect(x - 2, headY + 10, 5, 2, '#991b1b');
+        } else {
+          fillRect(x - 2, headY + 10, 4, 1, '#2b1d14');
+        }
+
+        // Brazo extendido y Mano sosteniendo un Sprite Custom si se indica 'holdSprite'
+        const handX = x + dir * 10;
+        const handY = anchorY - 16;
+        fillBorderedRect(facingLeft ? x - 10 : x + 6, anchorY - 19, 5, 5, suitCol, '#0b0c10');
+        fillRect(handX - 1, handY - 1, 3, 3, skinCol);
+
+        if (opts.holdSprite) {
+          drawCustomSprite(opts.holdSprite, handX + dir * 5, handY - 1, opts.spriteScale || 0.9, facingLeft);
+        }
+
+        return { handX: handX + dir * 6, handY: handY - 1, headX: x, headY };
+      }
+
+      // HAZ DE ACCIÓN CONECTADO MATEMÁTICAMENTE ENTRE MANO Y OBJETIVO (CERO LÍNEAS ROTAS)
+      function drawActionBeam(fromX, fromY, toX, toY, type = 'bullets', localFrame = 0) {
+        if (type === 'spray' || type === 'smoke') {
+          for (let i = 0; i < 10; i++) {
+            const t = ((i / 10) + (localFrame * 0.04)) % 1;
+            const px = fromX + (toX - fromX) * t + Math.sin(localFrame * 0.3 + i) * (t * 5);
+            const py = fromY + (toY - fromY) * t + Math.cos(localFrame * 0.2 + i) * (t * 4);
+            fillBorderedCircle(px, py, 2 + Math.floor(t * 3), '#e2e8f0', '#94a3b8');
+          }
+          return;
+        }
+        if (type === 'laser' || type === 'flashlight') {
+          drawPixelLine(fromX, fromY, toX, toY, 2, '#ef4444');
+          fillCircle(toX, toY, 3 + (localFrame % 3), '#fde047');
+          return;
+        }
+        // Ráfaga de disparos con fogonazo en el cañón y chispas en el punto exacto de impacto
+        if (localFrame % 4 < 2) {
+          fillCircle(fromX, fromY, 4, '#fde047');
+          drawPixelLine(fromX, fromY, toX, toY, 1, '#fef08a');
+          fillCircle(toX, toY, 4, '#f97316');
+        }
+      }
+
+      // ======================================================================
+      // 5. FONDOS ESCÉNICOS RICOS CONFIGURADOS POR EL AGENTE 3
+      // ======================================================================
+      function drawSky(skyTop = '#0f172a', skyMid = '#1e293b', skyBot = '#334155', groundCol = '#1e293b', horizonY = GROUND_Y) {
         const bands = [skyTop, skyMid, skyBot];
         const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
         for (let r = 0; r < horizonY; r++) {
@@ -649,7 +890,7 @@ async function main() {
         fillRect(0, horizonY, COLS, 2, '#0b0c10');
         for (let r = horizonY + 2; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
-            grid[r][c] = ((r + c) % 6 === 0) ? '#0f172a' : groundCol;
+            grid[r][c] = ((r + c) % 6 === 0) ? '#090d16' : groundCol;
           }
         }
       }
@@ -662,6 +903,41 @@ async function main() {
           for (let c = 0; c < COLS; c++) {
             grid[r][c] = ((r + c) % 5 === 0) ? '#451a03' : floorCol;
           }
+        }
+      }
+
+      function renderSceneBackground(bgConfig = {}, localFrame = 0) {
+        const preset = bgConfig.preset || 'city_street';
+        const skyCols = Array.isArray(bgConfig.sky_colors) && bgConfig.sky_colors.length >= 3
+          ? bgConfig.sky_colors
+          : ['#090d16', '#1e293b', '#334155'];
+        const groundCol = bgConfig.ground_color || '#1e293b';
+
+        if (preset === 'interior_office' || preset === 'interior_vault' || preset === 'interior_lab') {
+          drawRoom(skyCols[0], skyCols[1], groundCol, GROUND_Y);
+          if (preset === 'interior_vault') {
+            fillBorderedCircle(60, 84, 32, '#475569', '#0b0c10');
+            fillBorderedCircle(60, 84, 24, '#94a3b8', '#0b0c10');
+            fillBorderedCircle(60, 84, 8, '#eab308', '#0b0c10');
+          } else {
+            // Ventanal o pizarra detallada en la pared
+            fillBorderedRect(14, 46, 36, 28, '#38bdf8', '#0b0c10');
+            fillRect(31, 46, 2, 28, '#0b0c10');
+            fillRect(14, 59, 36, 2, '#0b0c10');
+          }
+          return;
+        }
+
+        drawSky(skyCols[0], skyCols[1], skyCols[2], groundCol, GROUND_Y);
+
+        if (preset === 'forest_woods' || preset === 'nature_park') {
+          drawDetailedTree(18, 1.1, localFrame);
+          drawDetailedTree(52, 1.25, localFrame);
+          drawDetailedTree(96, 1.05, localFrame);
+        } else if (preset === 'city_street' || preset === 'military_base') {
+          drawDetailedBuilding(8, 30, 74, { wallColor: '#475569', roofColor: '#1e293b', peakedRoof: true }, localFrame);
+          drawDetailedBuilding(44, 34, 82, { wallColor: '#334155', roofColor: '#0f172a', peakedRoof: false }, localFrame);
+          drawDetailedBuilding(84, 28, 68, { wallColor: '#64748b', roofColor: '#1e293b', peakedRoof: true }, localFrame);
         }
       }
 
@@ -693,50 +969,6 @@ async function main() {
         }
       }
 
-      // DIBUJAR SPRITE DESDE MATRIZ DE STRINGS (SI LA IA DEFINE UN MAPA DE PÍXELES A MEDIDA)
-      function drawSpriteMap(rowsArray, centerX, centerY, paletteMap, scale = 1, flipX = false) {
-        if (!Array.isArray(rowsArray) || rowsArray.length === 0) return;
-        const h = rowsArray.length;
-        const w = String(rowsArray[0]).length;
-        const destH = Math.round(h * scale);
-        const destW = Math.round(w * scale);
-        const startX = Math.round(centerX - destW / 2);
-        const startY = Math.round(centerY - destH / 2);
-
-        for (let dy = 0; dy < destH; dy++) {
-          const srcY = Math.min(h - 1, Math.floor((dy / destH) * h));
-          const rowStr = String(rowsArray[srcY]);
-          for (let dx = 0; dx < destW; dx++) {
-            const rawX = Math.min(w - 1, Math.floor((dx / destW) * w));
-            const srcX = flipX ? (w - 1 - rawX) : rawX;
-            const ch = rowStr[srcX];
-            if (ch && ch !== '0' && ch !== '.' && ch !== ' ') {
-              const col = (paletteMap && paletteMap[ch]) || '#ffd166';
-              setPx(startX + dx, startY + dy, col);
-            }
-          }
-        }
-      }
-
-      // DIBUJAR AVIÓN CAZA / COMERCIAL PARAMÉTRICO (MUY ÚTIL PARA ESCENAS DE AVIACIÓN)
-      function drawJet(cx, cy, color = '#94a3b8', scale = 1.0, angleTilt = 0, afterburner = true, localFrame = 0) {
-        const s = scale;
-        // Fuego de turbina
-        if (afterburner) {
-          const fl = Math.round((6 + (localFrame % 5)) * s);
-          fillTriangle(cx - Math.round(14 * s) - fl, cy + angleTilt, cx - Math.round(12 * s), cy - Math.round(3 * s), cx - Math.round(12 * s), cy + Math.round(3 * s), '#f97316', null);
-          fillTriangle(cx - Math.round(14 * s) - Math.floor(fl * 0.6), cy + angleTilt, cx - Math.round(12 * s), cy - Math.round(2 * s), cx - Math.round(12 * s), cy + Math.round(2 * s), '#fde047', null);
-        }
-        // Fuselaje delta furtivo
-        fillTriangle(cx + Math.round(16 * s), cy - angleTilt, cx - Math.round(14 * s), cy - Math.round(4 * s), cx - Math.round(14 * s), cy + Math.round(4 * s), color, '#0b0c10');
-        // Alas delta
-        fillTriangle(cx + Math.round(2 * s), cy, cx - Math.round(12 * s), cy - Math.round(12 * s), cx - Math.round(6 * s), cy, '#64748b', '#0b0c10');
-        fillTriangle(cx + Math.round(2 * s), cy, cx - Math.round(12 * s), cy + Math.round(12 * s), cx - Math.round(6 * s), cy, '#475569', '#0b0c10');
-        // Cabina de cristal
-        fillBorderedRect(cx + Math.round(2 * s), cy - Math.round(2 * s), Math.round(7 * s), Math.round(4 * s), '#38bdf8', '#0b0c10');
-      }
-
-      // BUSTO EXPRESIVO CONFIGURABLE (ESTILO ESTAFADOR / PILOTO / CIENTÍFICO)
       function drawBusto(cx, headY, opts = {}, localFrame = 0) {
         const s = opts.scale || 0.85;
         const suitCol = opts.suitColor || '#334155';
@@ -744,7 +976,6 @@ async function main() {
         const hatCol = opts.hatColor !== undefined ? opts.hatColor : '#eab308';
         const hairCol = opts.hairColor || '#2b1d14';
         const skinCol = opts.skinColor || '#e6ad86';
-        const expr = opts.expression || 'normal';
         const isTalking = opts.isTalking !== undefined ? opts.isTalking : true;
 
         const bobY = headY + Math.round(Math.sin(localFrame * 0.15) * 1);
@@ -764,13 +995,8 @@ async function main() {
           fillBorderedRect(cx - Math.round(16 * s), hy - Math.round(10 * s), Math.round(32 * s), Math.round(9 * s), hatCol, '#0b0c10');
         }
 
-        // Ojos
         const blink = (localFrame % 55 < 3);
-        if (expr === 'visor') {
-          // Casco / Visor de piloto de caza
-          fillBorderedRect(cx - Math.round(12 * s), bobY - Math.round(6 * s), Math.round(24 * s), Math.round(8 * s), '#0284c7', '#0b0c10');
-          fillRect(cx - Math.round(9 * s), bobY - Math.round(4 * s), Math.round(6 * s), 2, '#bae6fd');
-        } else if (blink) {
+        if (blink) {
           fillRect(cx - Math.round(9 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
           fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
         } else {
@@ -786,21 +1012,12 @@ async function main() {
         } else {
           fillRect(cx - Math.round(5 * s), bobY + Math.round(7 * s), Math.round(10 * s), 2, '#0b0c10');
         }
+
+        if (opts.holdSprite) {
+          drawCustomSprite(opts.holdSprite, cx + 18, bobY + 26, 1.2, false);
+        }
       }
 
-      // HUMANO DE CUERPO COMPLETO ARTICULADO
-      function drawHuman(x, y, color = '#38bdf8', hatColor = null, isMoving = true, localFrame = 0, facingLeft = false) {
-        const step = isMoving ? (Math.floor(localFrame / 4) % 2) : 0;
-        fillRect(x - 4, y + 1, 9, 2, 'rgba(0,0,0,0.4)');
-        fillBorderedRect(x - 3, y - 7 + (step ? -2 : 0), 3, 8, '#1e293b', '#0b0c10');
-        fillBorderedRect(x + 1, y - 7 + (step ? 0 : -2), 3, 8, '#1e293b', '#0b0c10');
-        fillBorderedRect(x - 4, y - 18, 9, 12, color, '#0b0c10');
-        fillBorderedRect(x - 3, y - 26, 7, 9, '#e6ad86', '#0b0c10');
-        setPx(facingLeft ? x - 2 : x + 2, y - 22, '#0b0c10');
-        if (hatColor) fillBorderedRect(x - 5, y - 28, 11, 4, hatColor, '#0b0c10');
-      }
-
-      // TEXTO PIXELADO 3x5 DENTRO DEL LIENZO (PARA MONITORES, RADARES Y PIZARRAS)
       const FONT_3X5 = {
         'A': ['010','101','111','101','101'], 'B': ['110','101','110','101','110'],
         'C': ['111','100','100','100','111'], 'D': ['110','101','101','101','110'],
@@ -845,7 +1062,6 @@ async function main() {
         }
       }
 
-      // Objeto API unificado inyectado en las funciones generadas por la IA
       const sandboxApi = {
         COLS, ROWS, GROUND_Y,
         setPx, px: setPx,
@@ -859,19 +1075,23 @@ async function main() {
         fillTriangle, triangle: fillTriangle,
         drawSky, sky: drawSky,
         drawRoom, room: drawRoom,
+        renderSceneBackground,
         drawStars, stars: drawStars,
         drawClouds, clouds: drawClouds,
         drawFire, fire: drawFire,
-        drawSpriteMap, spriteMap: drawSpriteMap,
-        drawJet, jet: drawJet,
+        drawCustomSprite, customSprite: drawCustomSprite,
+        drawDetailedBuilding, building: drawDetailedBuilding,
+        drawDetailedTree, tree: drawDetailedTree,
+        drawDetailedVehicle, vehicle: drawDetailedVehicle,
+        drawActor, actor: drawActor,
+        drawHuman: (x, y, col, hat, mov, lf, fl) => drawActor(x, y, { suitColor: col, hatColor: hat, isMoving: mov, facingLeft: fl }, lf),
+        drawActionBeam, actionBeam: drawActionBeam,
         drawBusto, busto: drawBusto,
-        drawHuman, human: drawHuman,
         drawTinyText, text: drawTinyText,
         sin: Math.sin, cos: Math.cos, abs: Math.abs, floor: Math.floor,
         round: Math.round, min: Math.min, max: Math.max, PI: Math.PI
       };
 
-      // Compilar las funciones personalizadas que diseñó el Nodo Programador de IA
       const compiledRenderers = escenas.map((esc, idx) => {
         if (esc.js_code && typeof esc.js_code === 'string' && esc.js_code.trim().length > 10) {
           try {
@@ -885,9 +1105,8 @@ async function main() {
       });
 
       function renderFallbackScene(esc, progress, localFrame) {
-        drawSky('#0f172a', '#1e293b', '#334155', '#090d16', GROUND_Y);
-        drawStars(18, localFrame);
-        drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', hatColor: null, isTalking: true }, localFrame);
+        renderSceneBackground(esc.bg_config || { preset: 'city_street' }, localFrame);
+        drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, localFrame);
       }
 
       function flushGridToCanvas() {
@@ -927,8 +1146,10 @@ async function main() {
           labelBot.textContent = esc.texto_2 || 'CASO REAL';
         }
 
-        // Limpiar lienzo y ejecutar el código gráfico hecho a medida para esta escena
-        drawSky('#0f172a', '#1e293b', '#334155', '#090d16', GROUND_Y);
+        // 1. Pintar el fondo rico diseñado por el Agente Arquitecto
+        renderSceneBackground(esc.bg_config || {}, localFrame);
+
+        // 2. Ejecutar la coreografía programada por el Agente Animador (con Sprites 16x16 del Agente Artista)
         const customFn = compiledRenderers[activeIdx];
         if (customFn) {
           try {
@@ -986,7 +1207,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Generativo Libre v9.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Multi-Agente v10.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -999,13 +1220,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v9.0...');
+  console.log('🔊 Ensamblando MP4 final v10.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Generativo Libre v9.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Multi-Agente v10.0 generado con éxito!');
   process.exit(0);
 }
 
