@@ -115,5 +115,20 @@
     ],
     "programado_para_madrid": "04/11/2026 a las 13:06",
     "fecha_publicacion": "2026-11-04T12:06:07.091Z"
+  },
+  {
+    "id_concepto": "boeing787overflow248dias",
+    "subrama": "Bugs Históricos de Software",
+    "titulo": "El bug del Boeing 787 que apagaba el avión en pleno vuelo",
+    "keywords_concepto": [
+      "boeing 787",
+      "integer overflow",
+      "32 bits",
+      "faa",
+      "seguridad aerea",
+      "bug"
+    ],
+    "programado_para_madrid": "04/11/2026 a las 13:10",
+    "fecha_publicacion": "2026-11-04T12:10:08.906Z"
   }
 ]
