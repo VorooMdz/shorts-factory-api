@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 // ============================================================================
-// 1. UTILIDADES DE RED Y AUTO-BUSCADOR DE SPRITES (ICONIFY COLOR + VECTOR)
+// 1. DESCARGA Y RESOLUCIÓN DE SPRITES SÓLIDOS A COLOR (ICONIFY)
 // ============================================================================
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -33,19 +33,29 @@ function fetchText(url) {
   });
 }
 
-// Diccionario rápido de traducción Español -> Inglés por si la IA envía algún término en español
 const ES_TO_EN_MAP = {
   'perro': 'dog', 'pelota': 'tennis', 'avion': 'airplane', 'cohete': 'rocket',
   'virus': 'biohazard', 'calavera': 'skull', 'esqueleto': 'skull', 'mago': 'mage',
   'espada': 'crossed-swords', 'escudo': 'shield', 'chip': 'microchip', 'reloj': 'stopwatch',
-  'ordenador': 'laptop', 'servidor': 'server', 'dinero': 'money-bag', 'moneda': 'coin',
+  'ordenador': 'laptop', 'servidor': 'desktop-computer', 'dinero': 'money-bag', 'moneda': 'coin',
   'banco': 'bank', 'fuego': 'fire', 'explosion': 'collision', 'alerta': 'warning',
   'medico': 'health-worker', 'hospital': 'hospital', 'coche': 'automobile', 'camion': 'delivery-truck',
   'tren': 'high-speed-train', 'barco': 'ship', 'mundo': 'globe-showing-americas', 'ciencia': 'microscope',
   'dragon': 'dragon', 'gato': 'cat', 'leon': 'lion', 'comida': 'hamburger', 'pizza': 'pizza',
-  'corazon': 'red-heart', 'cerebro': 'brain', 'robot': 'robot', 'telefono': 'mobile-phone',
-  'satelite': 'satellite', 'bomba': 'bomb', 'llave': 'key', 'candado': 'locked', 'trofeo': 'trophy'
+  'corazon': 'red-heart', 'cerebro': 'brain', 'robot': 'robot', 'telefono': 'telephone',
+  'satelite': 'satellite', 'bomba': 'bomb', 'llave': 'key', 'candado': 'locked', 'trofeo': 'trophy',
+  'silbato': 'postal-horn', 'cereal': 'bowl-with-spoon', 'caja': 'package', 'casa-blanca': 'classical-building',
+  'antena': 'satellite-antenna', 'altavoz': 'loudspeaker', 'musica': 'musical-note', 'hacker': 'detective'
 };
+
+// Pool de iconos de respaldo variados (100% ilustrados a color) para impedir repeticiones
+const FALLBACK_COLOR_ICONS = [
+  'telephone', 'package', 'loudspeaker', 'satellite-antenna', 'laptop',
+  'globe-showing-americas', 'classical-building', 'detective', 'trophy',
+  'rocket', 'microscope', 'money-bag', 'stopwatch', 'shield', 'key',
+  'locked', 'bomb', 'fire', 'high-voltage', 'gear', 'magnet', 'compass',
+  'crystal-ball', 'joystick', 'video-game', 'battery', 'light-bulb', 'crown'
+];
 
 async function resolveSvgForPixelArt(rawQuery) {
   let q = String(rawQuery || 'sparkles').trim().toLowerCase()
@@ -55,47 +65,159 @@ async function resolveSvgForPixelArt(rawQuery) {
   if (ES_TO_EN_MAP[q]) q = ES_TO_EN_MAP[q];
   const cleanName = q.includes(':') ? q.split(':')[1] : q.replace(/\s+/g, '-');
 
-  // 1. Intentar primero packs a todo color (Twemoji / Noto) ideales para rasterizar a Pixel Art
-  const directPrefixes = ['twemoji', 'noto', 'fluent-emoji-flat', 'lucide', 'tabler'];
-  for (const pref of directPrefixes) {
+  // Prioridad absoluta a colecciones ilustradas SÓLIDAS y rellenas a color (nunca iconos huecos de líneas finas)
+  const colorPrefixes = ['fluent-emoji-flat', 'twemoji', 'noto', 'flat-color-icons'];
+  for (const pref of colorPrefixes) {
     const svg = await fetchText(`https://api.iconify.design/${pref}/${cleanName}.svg`);
     if (svg && svg.includes('<svg')) {
-      return { svg, isColorPack: ['twemoji', 'noto', 'fluent-emoji-flat'].includes(pref) };
+      return { svg, isColorPack: true };
     }
   }
 
-  // 2. Búsqueda semántica en Iconify priorizando packs coloridos y de videojuegos
-  const searchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=twemoji,noto,fluent-emoji-flat,game-icons,lucide,tabler&limit=6`;
-  const searchRes = await fetchText(searchUrl);
-  if (searchRes) {
+  // Búsqueda semántica restringida primero a packs rellenos a todo color
+  const colorSearchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=fluent-emoji-flat,twemoji,noto,flat-color-icons&limit=5`;
+  const colorRes = await fetchText(colorSearchUrl);
+  if (colorRes) {
     try {
-      const parsed = JSON.parse(searchRes);
+      const parsed = JSON.parse(colorRes);
       if (Array.isArray(parsed.icons) && parsed.icons.length > 0) {
-        // Priorizar twemoji o noto si están en los resultados
-        const colorMatch = parsed.icons.find(ic => ic.startsWith('twemoji:') || ic.startsWith('noto:') || ic.startsWith('fluent-emoji-flat:'));
-        const chosen = colorMatch || parsed.icons[0];
-        const [bPref, bName] = chosen.split(':');
+        const [bPref, bName] = parsed.icons[0].split(':');
         const svg = await fetchText(`https://api.iconify.design/${bPref}/${bName}.svg`);
         if (svg && svg.includes('<svg')) {
-          return { svg, isColorPack: ['twemoji', 'noto', 'fluent-emoji-flat'].includes(bPref) };
+          return { svg, isColorPack: true };
         }
       }
     } catch (e) {}
   }
 
-  // 3. Fallback garantizado
+  // Si no existe en emojis, buscar en game-icons (que son siluetas sólidas rellenas, no líneas huecas)
+  const gameSearchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=game-icons&limit=3`;
+  const gameRes = await fetchText(gameSearchUrl);
+  if (gameRes) {
+    try {
+      const parsed = JSON.parse(gameRes);
+      if (Array.isArray(parsed.icons) && parsed.icons.length > 0) {
+        const [bPref, bName] = parsed.icons[0].split(':');
+        const svg = await fetchText(`https://api.iconify.design/${bPref}/${bName}.svg`);
+        if (svg && svg.includes('<svg')) {
+          return { svg, isColorPack: false };
+        }
+      }
+    } catch (e) {}
+  }
+
   const fallbackSvg = await fetchText('https://api.iconify.design/twemoji/sparkles.svg');
-  return { svg: fallbackSvg || '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="#ffd166"/></svg>', isColorPack: true };
+  return { svg: fallbackSvg || '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ffd166"/></svg>', isColorPack: true };
+}
+
+// ============================================================================
+// 2. DEDUPLICADOR ESTRICTO DE SPRITES Y MUNDOS POR ESCENA
+// ============================================================================
+function enforceUniqueScenesAndSprites(escenas, hash) {
+  const allWorlds = [
+    'city_night', 'suburban_room', 'telecom_central', 'retro_office',
+    'server_datacenter', 'world_map_room', 'science_lab', 'nature_park',
+    'sky_airspace', 'bank_vault', 'industrial_plant', 'grand_hall'
+  ];
+  const allLayouts = [
+    'versus_confrontation', 'unbox_discovery', 'signal_transmission',
+    'system_override_console', 'world_map_routing', 'dialogue_stage',
+    'chain_reaction', 'vehicle_journey', 'chase_pursuit', 'grand_monument'
+  ];
+
+  const usedIcons = new Set();
+  let fallbackCursor = 0;
+
+  function getUniqueIcon(requestedIcon) {
+    let key = String(requestedIcon || '').toLowerCase().trim();
+    if (ES_TO_EN_MAP[key]) key = ES_TO_EN_MAP[key];
+    if (!key || usedIcons.has(key)) {
+      while (fallbackCursor < FALLBACK_COLOR_ICONS.length) {
+        const cand = FALLBACK_COLOR_ICONS[(fallbackCursor + hash) % FALLBACK_COLOR_ICONS.length];
+        fallbackCursor++;
+        if (!usedIcons.has(cand)) {
+          key = cand;
+          break;
+        }
+      }
+    }
+    usedIcons.add(key);
+    return key;
+  }
+
+  let prevWorld = '';
+  let prevLayout = '';
+
+  return (escenas || []).map((esc, idx) => {
+    const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''} ${esc.narrativa_visual || ''}`.toLowerCase();
+
+    // 1. Asignar layout narrativo coherente con el texto y sin repetir el anterior
+    let layout = esc.stage_layout || esc.choreography || '';
+    if (!allLayouts.includes(layout) || layout === prevLayout) {
+      if (idx === (escenas.length - 1)) layout = 'grand_monument';
+      else if (/dentro|caja|descubri|encontr|oculto|escondid/.test(text)) layout = 'unbox_discovery';
+      else if (/frecuencia|hercio|hz|sonido|soplar|tono|senal|onda|llamada/.test(text)) layout = 'signal_transmission';
+      else if (/continente|mundo|ruta|desviar|pais|global|mapa|casa blanca/.test(text)) layout = 'world_map_routing';
+      else if (/sistema|reinici|abierta|control|codigo|contador|red|troncal/.test(text)) layout = 'system_override_console';
+      else if (/derrotad|mayor|gigante|contra|poderos|juguete/.test(text)) layout = 'versus_confrontation';
+      else if (/avion|vuelo|coche|tren|viaj|despeg/.test(text)) layout = 'vehicle_journey';
+      else if (/perro|pelota|perseguir|correr|huir|escap/.test(text)) layout = 'chase_pursuit';
+      else if (/contagi|miles|millones|masivo|propag/.test(text)) layout = 'chain_reaction';
+      else layout = allLayouts[(idx * 3 + hash) % allLayouts.length];
+
+      if (layout === prevLayout) {
+        layout = allLayouts.find(l => l !== prevLayout) || 'system_override_console';
+      }
+    }
+    prevLayout = layout;
+
+    // 2. Asignar mundo coherente sin repetir el anterior
+    let world = esc.world_theme || '';
+    if (!allWorlds.includes(world) || world === prevWorld) {
+      if (layout === 'world_map_routing') world = 'world_map_room';
+      else if (/cereal|cocina|casa|juguete|niño/.test(text)) world = 'suburban_room';
+      else if (/frecuencia|2600|troncal|telefon|at&t|central/.test(text)) world = 'telecom_central';
+      else if (/servidor|sistema|red|codigo|hacker|phreak/.test(text)) world = 'server_datacenter';
+      else if (/parque|perro|pelota|arbol|bosque|montaña/.test(text)) world = 'nature_park';
+      else if (/avion|cielo|vuelo|nube/.test(text)) world = 'sky_airspace';
+      else if (/banco|millon|dinero|bolsa|gratis/.test(text)) world = 'bank_vault';
+      else if (/ciencia|medico|hospital|estudio/.test(text)) world = 'science_lab';
+      else world = allWorlds[(idx + hash) % allWorlds.length];
+
+      if (world === prevWorld) {
+        world = allWorlds.find(w => w !== prevWorld) || allWorlds[(idx + 2) % allWorlds.length];
+      }
+    }
+    prevWorld = world;
+
+    // 3. Garantizar que actor_1 y actor_2 sean únicos en todo el vídeo
+    const rawIcon1 = esc.actor_1?.icon || 'telephone';
+    const rawIcon2 = esc.actor_2?.icon || 'package';
+
+    const uniqueIcon1 = getUniqueIcon(rawIcon1);
+    const uniqueIcon2 = getUniqueIcon(rawIcon2);
+
+    // El fondo SOLO se mueve si es un viaje en vehículo o una persecución corriendo
+    const shouldScrollBg = (layout === 'vehicle_journey' || layout === 'chase_pursuit');
+
+    return {
+      ...esc,
+      world_theme: world,
+      stage_layout: layout,
+      bg_scroll: shouldScrollBg,
+      actor_1: { icon: uniqueIcon1 },
+      actor_2: { icon: uniqueIcon2 }
+    };
+  });
 }
 
 async function preloadAllSceneSprites(escenas) {
   const spriteCache = {};
-  const keysToFetch = new Set(['dog', 'tennis', 'airplane', 'microchip', 'skull', 'biohazard', 'robot', 'money-bag', 'fire', 'warning', 'sparkles']);
+  const keysToFetch = new Set(['sparkles']);
 
   for (const s of (escenas || [])) {
-    if (s.actor_1?.icon) keysToFetch.add(String(s.actor_1.icon).toLowerCase().trim());
-    if (s.actor_2?.icon) keysToFetch.add(String(s.actor_2.icon).toLowerCase().trim());
-    if (s.projectile_icon) keysToFetch.add(String(s.projectile_icon).toLowerCase().trim());
+    if (s.actor_1?.icon) keysToFetch.add(s.actor_1.icon);
+    if (s.actor_2?.icon) keysToFetch.add(s.actor_2.icon);
   }
 
   for (const key of keysToFetch) {
@@ -107,7 +229,7 @@ async function preloadAllSceneSprites(escenas) {
 }
 
 // ============================================================================
-// 2. ALINEACIÓN FONÉTICA DE SUBTÍTULOS
+// 3. ALINEACIÓN FONÉTICA DE SUBTÍTULOS
 // ============================================================================
 function normalizeForMatch(str) {
   return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
@@ -354,7 +476,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 }
 
 // ============================================================================
-// 3. SINTETIZADOR CHIPTUNE 8-BIT PROCEDURAL (CORREGIDO Y AMPLIADO)
+// 4. SINTETIZADOR CHIPTUNE 8-BIT PROCEDURAL
 // ============================================================================
 function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   const allTypes = [
@@ -409,105 +531,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 4. AUTO-SANITIZADOR SEMÁNTICO DE ESCENAS (GARANTIZA CERO ESCENAS VACÍAS)
-// ============================================================================
-function enrichScenesWithSemantics(escenas) {
-  const worldThemes = ['sky_clouds', 'city_street', 'tech_lab', 'nature_park', 'office_interior', 'medieval_fantasy', 'hospital_clinic', 'financial_floor', 'industrial_plant', 'deep_space'];
-  const choreographies = ['chase_and_catch', 'sky_flight_crisis', 'crowd_contagion', 'counter_overflow_boom', 'projectile_impact', 'dialogue_interaction', 'workstation_action', 'hero_showcase'];
-  const timeModes = ['day', 'sunset', 'night', 'cyber'];
-
-  return (escenas || []).map((esc, idx) => {
-    const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''} ${esc.narrativa_visual || ''}`.toLowerCase();
-
-    // Inferencia inteligente si la IA usó otro esquema o dejó algún campo vacío
-    let world = esc.world_theme || esc.bg_type || '';
-    let choreo = esc.choreography || esc.diorama || '';
-    let icon1 = esc.actor_1?.icon || (Array.isArray(esc.actors) && esc.actors[0]?.tipo) || '';
-    let icon2 = esc.actor_2?.icon || (Array.isArray(esc.actors) && esc.actors[1]?.tipo) || '';
-    let proj = esc.projectile_icon || '';
-
-    if (!world || !worldThemes.includes(world)) {
-      if (/avion|boeing|vuelo|aire|piloto|aeropuerto|cielo/.test(text)) world = 'sky_clouds';
-      else if (/perro|parque|pelota|bosque|montana|animal|arbol|campo/.test(text)) world = 'nature_park';
-      else if (/warcraft|jefe|hechizo|castillo|espada|juego|fantasia|heroe/.test(text)) world = 'medieval_fantasy';
-      else if (/calle|ciudad|capital|edificio|trafico|gente|habitante/.test(text)) world = 'city_street';
-      else if (/hospital|medico|paciente|clinica|pandemia|virus|enfermedad|ciencia|cientifico/.test(text)) world = 'hospital_clinic';
-      else if (/bolsa|dinero|millon|precio|banco|accion|mercado/.test(text)) world = 'financial_floor';
-      else if (/generador|motor|energia|planta|nuclear|fabrica|maquina/.test(text)) world = 'industrial_plant';
-      else if (/espacio|cohete|satelite|planeta|orbita/.test(text)) world = 'deep_space';
-      else if (/software|codigo|bit|contador|servidor|computadora|sistema|reboot|reset/.test(text)) world = 'tech_lab';
-      else world = worldThemes[idx % worldThemes.length];
-    }
-
-    if (!choreo || !choreographies.includes(choreo)) {
-      if (/avion|boeing|vuelo|cohete|apagar|aire/.test(text)) choreo = 'sky_flight_crisis';
-      else if (/contagi|pandemia|esparci|propag|infect|esqueleto|habitante|masivo/.test(text)) choreo = 'crowd_contagion';
-      else if (/contador|bit|248|dos mil millones|overflow|desbordamiento|negativo|numero/.test(text)) choreo = 'counter_overflow_boom';
-      else if (/perro|pelota|perseguir|correr|huir|escapar|cazar|huyeron/.test(text)) choreo = 'chase_and_catch';
-      else if (/lanzaba|ataque|dispar|hechizo|maldicion|cortando|rayo/.test(text)) choreo = 'projectile_impact';
-      else if (/estudio|cientifico|programador|reiniciar|servidor|consola/.test(text)) choreo = 'workstation_action';
-      else if (/hablar|comerciante|orden|ley|acuerdo/.test(text)) choreo = 'dialogue_interaction';
-      else choreo = choreographies[idx % choreographies.length];
-    }
-
-    if (!icon1) {
-      if (/avion|boeing|vuelo/.test(text)) icon1 = 'airplane';
-      else if (/perro|mascota/.test(text)) icon1 = 'dog';
-      else if (/hakkar|jefe|monstruo|dragon/.test(text)) icon1 = 'dragon';
-      else if (/jugador|guerrero|personaje|heroe/.test(text)) icon1 = 'mage';
-      else if (/cientifico|medico|estudio/.test(text)) icon1 = 'microscope';
-      else if (/servidor|blizzard|computadora/.test(text)) icon1 = 'laptop';
-      else if (/generador|energia|luz/.test(text)) icon1 = 'zap';
-      else icon1 = 'robot';
-    }
-
-    if (!icon2) {
-      if (/pelota|bola/.test(text)) icon2 = 'tennis';
-      else if (/chip|software|bit|codigo/.test(text)) icon2 = 'microchip';
-      else if (/esqueleto|muerte|caos/.test(text)) icon2 = 'skull';
-      else if (/virus|pandemia|contagio|maldicion/.test(text)) icon2 = 'biohazard';
-      else if (/reloj|tiempo|dia|segundo|meses/.test(text)) icon2 = 'stopwatch';
-      else if (/alerta|peligro|panico|fallo|error/.test(text)) icon2 = 'warning';
-      else icon2 = 'sparkles';
-    }
-
-    if (!proj) {
-      if (/virus|contagio|maldicion|hechizo/.test(text)) proj = 'biohazard';
-      else if (/energia|luz|electrica|rayo/.test(text)) proj = 'zap';
-      else if (/fuego|explosion|ataque/.test(text)) proj = 'fire';
-      else proj = 'sparkles';
-    }
-
-    return {
-      ...esc,
-      world_theme: world,
-      time_of_day: esc.time_of_day || timeModes[idx % timeModes.length],
-      weather: esc.weather || (idx % 3 === 0 ? 'sparks' : 'clear'),
-      choreography: choreo,
-      camera_mode: esc.camera_mode || (idx % 2 === 0 ? 'pan_right' : 'zoom_in'),
-      actor_1: {
-        icon: String(icon1).toLowerCase().trim(),
-        color: esc.actor_1?.color || '#00f5d4',
-        label: esc.actor_1?.label || ''
-      },
-      actor_2: {
-        icon: String(icon2).toLowerCase().trim(),
-        color: esc.actor_2?.color || '#ffd166',
-        label: esc.actor_2?.label || ''
-      },
-      projectile_icon: String(proj).toLowerCase().trim(),
-      counter_value: esc.counter_value || (/\d+/.exec(text)?.[0] || '2147483647')
-    };
-  });
-}
-
-// ============================================================================
-// 5. FUNCIÓN PRINCIPAL Y MOTOR DE RENDERIZADO 8-BIT v5.0 (60x106 BLOQUES)
+// 5. MOTOR PRINCIPAL v6.0 (REJILLA HD 90x160 + SPRITES SÓLIDOS SIN HUECOS)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload Universal 8-BIT v5.0 desde URL...');
+    console.log('📥 Descargando payload Universal 8-BIT v6.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -543,28 +572,16 @@ async function main() {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
 
-  // Enriquecer y blindar todas las escenas para que ninguna quede vacía jamás
-  const escenasEnriquecidas = enrichScenesWithSemantics(payload.escenas || []);
-  // Evitar repetir el mismo mundo o coreografía en dos escenas consecutivas
-  const allWorlds = ['sky_clouds', 'city_street', 'tech_lab', 'nature_park', 'office_interior', 'medieval_fantasy', 'hospital_clinic', 'financial_floor', 'industrial_plant', 'deep_space'];
-  const allChoreos = ['chase_and_catch', 'sky_flight_crisis', 'crowd_contagion', 'counter_overflow_boom', 'projectile_impact', 'dialogue_interaction', 'workstation_action', 'hero_showcase'];
-  for (let i = 1; i < escenasEnriquecidas.length; i++) {
-    if (escenasEnriquecidas[i].world_theme === escenasEnriquecidas[i - 1].world_theme) {
-      escenasEnriquecidas[i].world_theme = allWorlds[(idx = i * 3 + hash) % allWorlds.length];
-    }
-    if (escenasEnriquecidas[i].choreography === escenasEnriquecidas[i - 1].choreography) {
-      escenasEnriquecidas[i].choreography = allChoreos[(i * 5 + hash) % allChoreos.length];
-    }
-  }
+  // Deduplicar sprites y mundos para garantizar variedad total
+  const escenasUnicas = enforceUniqueScenesAndSprites(payload.escenas || [], hash);
+  console.log('🎨 Descargando Sprites ilustrados a color (cero repeticiones)...');
+  const spriteCache = await preloadAllSceneSprites(escenasUnicas);
+  const subtitleChunks = buildSubtitleChunks(escenasUnicas, payload.alignment, duracionExactaVideo);
 
-  console.log('🎨 Descargando y rasterizando Sprites universales desde Iconify...');
-  const spriteCache = await preloadAllSceneSprites(escenasEnriquecidas);
-  const subtitleChunks = buildSubtitleChunks(escenasEnriquecidas, payload.alignment, duracionExactaVideo);
-
-  // Mezcla de Audio con bg_music2.mp3 + SFX Chiptune
+  // Mezcla de Audio
   try {
     let hasSfx = false;
-    try { hasSfx = buildChiptuneSfxTrack(escenasEnriquecidas, duracionExactaVideo, hash); } catch (e) {}
+    try { hasSfx = buildChiptuneSfxTrack(escenasUnicas, duracionExactaVideo, hash); } catch (e) {}
 
     let bgMusicPath = path.resolve(__dirname, '../bg_music2.mp3');
     if (!fs.existsSync(bgMusicPath)) bgMusicPath = path.resolve('bg_music2.mp3');
@@ -603,7 +620,6 @@ async function main() {
         position: absolute; inset: 0;
         width: 720px; height: 1280px;
         overflow: hidden;
-        will-change: transform;
       }
       #pixel-canvas {
         position: absolute; inset: 0;
@@ -613,14 +629,14 @@ async function main() {
       }
       .crt-scanlines {
         position: absolute; inset: 0;
-        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.18) 50%);
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.16) 50%);
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
       .arcade-hud {
         position: absolute; top: 32px; left: 26px; right: 26px;
         display: flex; justify-content: space-between; align-items: center;
-        background: rgba(8, 10, 22, 0.90);
+        background: rgba(8, 10, 22, 0.92);
         border: 4px solid #00f2fe;
         padding: 13px 18px;
         box-shadow: 0 8px 0 #000000;
@@ -658,7 +674,7 @@ async function main() {
   <body>
     <div class="progress-bar" id="pbar"></div>
     <div class="arcade-hud">
-      <div class="hud-tag">${(payload.subrama || 'PIXEL DOCS 8-BIT').slice(0, 24)}</div>
+      <div class="hud-tag">${(payload.subrama || 'HISTORIA 8-BIT').slice(0, 24)}</div>
       <div class="hud-score" id="hud-frame">ESC:01</div>
     </div>
 
@@ -672,21 +688,19 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasEnriquecidas)};
+      const escenas = ${JSON.stringify(escenasUnicas)};
       const subtitleChunks = ${JSON.stringify(subtitleChunks)};
       const rawSpriteCache = ${JSON.stringify(spriteCache)};
       const totalFrames = ${totalFrames};
 
-      // CUADRÍCULA DE ALTA DEFINICIÓN RETRO: 60x106 bloques (Cada bloque = 12x12 px -> 720x1272)
-      const COLS = 60;
-      const ROWS = 106;
-      const CELL = 12;
-      const GROUND_Y = 70;
+      // REJILLA HD 90x160 (Cada celda = 8x8 px -> 720x1280 exactos, nitidez 16-Bit/8-Bit)
+      const COLS = 90;
+      const ROWS = 160;
+      const CELL = 8;
+      const GROUND_Y = 104;
 
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
-      const viewportWrapper = document.getElementById('viewport-wrapper');
-
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#101420'));
       const rasterizedSprites = {};
 
@@ -699,27 +713,41 @@ async function main() {
       }
 
       function drawRect(x, y, w, h, color) {
-        for (let r = 0; r < h; r++) {
-          for (let c = 0; c < w; c++) setCell(x + c, y + r, color);
+        const x0 = Math.round(x), y0 = Math.round(y);
+        const rw = Math.round(w), rh = Math.round(h);
+        for (let r = 0; r < rh; r++) {
+          for (let c = 0; c < rw; c++) setCell(x0 + c, y0 + r, color);
         }
       }
 
       function drawCircle(cx, cy, radius, color) {
-        for (let r = -radius; r <= radius; r++) {
-          for (let c = -radius; c <= radius; c++) {
-            if (c * c + r * r <= radius * radius) setCell(cx + c, cy + r, color);
+        const rInt = Math.round(radius);
+        for (let r = -rInt; r <= rInt; r++) {
+          for (let c = -rInt; c <= rInt; c++) {
+            if (c * c + r * r <= rInt * rInt) setCell(cx + c, cy + r, color);
           }
         }
       }
 
-      function drawLine(x0, y0, x1, y1, color) {
+      function drawRing(cx, cy, radius, thickness, color) {
+        const rOut = Math.round(radius);
+        const rIn = Math.max(0, rOut - thickness);
+        for (let r = -rOut; r <= rOut; r++) {
+          for (let c = -rOut; c <= rOut; c++) {
+            const d2 = c * c + r * r;
+            if (d2 <= rOut * rOut && d2 >= rIn * rIn) setCell(cx + c, cy + r, color);
+          }
+        }
+      }
+
+      function drawLine(x0, y0, x1, y1, thickness, color) {
         let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
         let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
         let err = dx + dy;
         let cx = Math.round(x0), cy = Math.round(y0);
         const ex = Math.round(x1), ey = Math.round(y1);
-        for (let i = 0; i < 120; i++) {
-          setCell(cx, cy, color);
+        for (let i = 0; i < 200; i++) {
+          drawRect(cx - Math.floor(thickness / 2), cy - Math.floor(thickness / 2), thickness, thickness, color);
           if (cx === ex && cy === ey) break;
           let e2 = 2 * err;
           if (e2 >= dy) { err += dy; cx += sx; }
@@ -728,11 +756,10 @@ async function main() {
       }
 
       // ======================================================================
-      // AUTO-PIXELADOR: CONVIERTE CUALQUIER SVG DE ICONIFY EN UNA MATRIZ 20x20
-      // CON BORDE NEGRO RETRO (#05050A) Y CUANTIZACIÓN DE COLOR 8-BIT
+      // RASTERIZADOR DE ALTA DEFINICIÓN (30x30 CELDAS) + RELLENO SÓLIDO
       // ======================================================================
       async function rasterizeAllSprites() {
-        const SIZE = 20;
+        const SIZE = 30;
         const offCanvas = document.createElement('canvas');
         offCanvas.width = SIZE;
         offCanvas.height = SIZE;
@@ -745,8 +772,8 @@ async function main() {
               svgText = svgText
                 .replace(/stroke="currentColor"/gi, 'stroke="#00f5d4"')
                 .replace(/fill="currentColor"/gi, 'fill="#ffd166"');
-              if (!/stroke=/i.test(svgText)) {
-                svgText = svgText.replace(/<svg/i, '<svg fill="#00f5d4" stroke="#ffffff"');
+              if (!/fill=/i.test(svgText)) {
+                svgText = svgText.replace(/<svg/i, '<svg fill="#ffd166" stroke="#00f5d4"');
               }
             }
             const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
@@ -758,443 +785,442 @@ async function main() {
               img.src = url;
             });
             offCtx.clearRect(0, 0, SIZE, SIZE);
-            offCtx.drawImage(img, 1, 1, SIZE - 2, SIZE - 2);
+            offCtx.drawImage(img, 2, 2, SIZE - 4, SIZE - 4);
             URL.revokeObjectURL(url);
 
             const imgData = offCtx.getImageData(0, 0, SIZE, SIZE).data;
             const mat = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
-            let activePixels = 0;
 
             for (let r = 0; r < SIZE; r++) {
               for (let c = 0; c < SIZE; c++) {
                 const idx = (r * SIZE + c) * 4;
                 const a = imgData[idx + 3];
-                if (a > 75) {
-                  // Cuantizar canal RGB a saltos de 32 para estética 8-bit pura
-                  const qr = Math.min(255, Math.round(imgData[idx] / 32) * 32);
-                  const qg = Math.min(255, Math.round(imgData[idx + 1] / 32) * 32);
-                  const qb = Math.min(255, Math.round(imgData[idx + 2] / 32) * 32);
+                if (a > 70) {
+                  const qr = Math.min(255, Math.round(imgData[idx] / 24) * 24);
+                  const qg = Math.min(255, Math.round(imgData[idx + 1] / 24) * 24);
+                  const qb = Math.min(255, Math.round(imgData[idx + 2] / 24) * 24);
                   const hex = '#' + [qr, qg, qb].map(v => v.toString(16).padStart(2, '0')).join('');
                   mat[r][c] = (hex === '#000000') ? '#1e293b' : hex;
-                  activePixels++;
                 }
               }
             }
 
-            // Añadir silueta/borde negro 8-bit alrededor de los píxeles activos
-            if (activePixels > 12) {
-              const outlined = mat.map(row => [...row]);
-              for (let r = 1; r < SIZE - 1; r++) {
-                for (let c = 1; c < SIZE - 1; c++) {
-                  if (!mat[r][c]) {
-                    if (mat[r - 1][c] || mat[r + 1][c] || mat[r][c - 1] || mat[r][c + 1]) {
-                      outlined[r][c] = '#05050a';
-                    }
+            // Cerrar cualquier hueco interior de 1 píxel (Morphological Closing) y añadir borde negro sólido
+            const closed = mat.map(row => [...row]);
+            for (let r = 1; r < SIZE - 1; r++) {
+              for (let c = 1; c < SIZE - 1; c++) {
+                if (!mat[r][c]) {
+                  const neighbors = [mat[r - 1][c], mat[r + 1][c], mat[r][c - 1], mat[r][c + 1]].filter(Boolean);
+                  if (neighbors.length >= 3) {
+                    closed[r][c] = neighbors[0];
                   }
                 }
               }
-              rasterizedSprites[key] = outlined;
             }
+
+            const outlined = closed.map(row => [...row]);
+            for (let r = 1; r < SIZE - 1; r++) {
+              for (let c = 1; c < SIZE - 1; c++) {
+                if (!closed[r][c]) {
+                  if (closed[r - 1][c] || closed[r + 1][c] || closed[r][c - 1] || closed[r][c + 1]) {
+                    outlined[r][c] = '#05050a';
+                  }
+                }
+              }
+            }
+            rasterizedSprites[key] = outlined;
           } catch (e) {}
         }
       }
 
-      // DIBUJAR SPRITE RASTERIZADO CON DEFORMACIÓN PROCEDURAL DE PATAS, REBOTE Y ESCALA
-      function drawSpriteMatrix(iconKey, centerX, centerY, animMode, localFrame, flipX, scale = 1) {
+      // MAPEO INVERSO: PINTA EL SPRITE A CUALQUIER ESCALA CON CERO PÍXELES ROTOS O FALTANTES
+      function drawSolidSprite(iconKey, centerX, centerY, scale = 1.0, flipX = false) {
         const key = String(iconKey || 'sparkles').toLowerCase().trim();
         const mat = rasterizedSprites[key] || rasterizedSprites['sparkles'];
         if (!mat) return;
 
-        const SIZE = mat.length;
-        const step = Math.floor(localFrame / 4) % 2;
+        const srcSize = mat.length;
+        const destSize = Math.max(8, Math.round(srcSize * scale));
+        const halfDest = Math.floor(destSize / 2);
 
-        // Deformación Squash & Stretch para rebotes (ej. pelotas, mascotas)
-        let stretchX = 1.0, stretchY = 1.0;
-        if (animMode === 'bounce_physics') {
-          const phase = (localFrame % 18) / 18;
-          if (phase < 0.15) { stretchX = 1.22; stretchY = 0.78; } // Aplastamiento contra el suelo
-          else if (phase < 0.5) { stretchX = 0.90; stretchY = 1.12; } // Estiramiento al subir
-        }
-
-        for (let r = 0; r < SIZE; r++) {
-          for (let c = 0; c < SIZE; c++) {
-            const col = mat[r][c];
-            if (!col) continue;
-
-            let relX = (c - SIZE / 2) * stretchX * scale;
-            let relY = (r - SIZE / 2) * stretchY * scale;
-            if (flipX) relX = -relX;
-
-            // Animación articular de patas/base (las últimas 5 filas del sprite alternan su zancada)
-            if (animMode === 'walk_cycle' && r >= SIZE - 5) {
-              const isLeftHalf = c < SIZE / 2;
-              if ((isLeftHalf && step === 0) || (!isLeftHalf && step === 1)) {
-                relX += flipX ? -2 : 2;
-                relY -= 1;
-              } else {
-                relX += flipX ? 1 : -1;
-              }
+        for (let dy = 0; dy < destSize; dy++) {
+          const srcY = Math.min(srcSize - 1, Math.floor((dy / destSize) * srcSize));
+          for (let dx = 0; dx < destSize; dx++) {
+            const rawSrcX = Math.min(srcSize - 1, Math.floor((dx / destSize) * srcSize));
+            const srcX = flipX ? (srcSize - 1 - rawSrcX) : rawSrcX;
+            const col = mat[srcY][srcX];
+            if (col) {
+              setCell(centerX - halfDest + dx, centerY - halfDest + dy, col);
             }
-
-            setCell(centerX + relX, centerY + relY, col);
           }
         }
       }
 
-      // HUMANOIDE / CRIATURA 8-BIT ARTICULADO DE APOYO PARA MULTITUDES Y ESCENAS
-      function drawArticulatedCharacter(x, y, shirtColor, state, localFrame, facingLeft) {
+      // PERSONAJE HUMANO ARTICULADO 16-BIT
+      function drawPerson(x, y, suitColor, hairColor, isWalking, localFrame, facingLeft) {
         const dir = facingLeft ? -1 : 1;
-        const step = Math.floor(localFrame / 4) % 2;
-        const put = (dx, dy, col) => setCell(x + dx * dir, y + dy, col);
-
-        if (state === 'skeleton') {
-          // Esqueleto 8-bit blanco para escenas de contagio/muerte (ej. WoW)
-          drawRect(x - 2, y - 9, 5, 4, '#f8f9fa');
-          setCell(x - 1, y - 8, '#05050a'); setCell(x + 1, y - 8, '#05050a');
-          drawRect(x - 1, y - 4, 3, 4, '#e2e8f0');
-          setCell(x - 2, y - 3, '#f8f9fa'); setCell(x + 2, y - 3, '#f8f9fa');
-          setCell(x - 1, y, '#f8f9fa'); setCell(x + 1, y, '#f8f9fa');
-          return;
-        }
+        const step = isWalking ? (Math.floor(localFrame / 5) % 2) : 0;
+        const put = (dx, dy, w, h, col) => {
+          const rx = facingLeft ? (x - dx - w + 1) : (x + dx);
+          drawRect(rx, y + dy, w, h, col);
+        };
 
         // Sombra en el suelo
-        drawRect(x - 2, y + 4, 5, 1, 'rgba(0,0,0,0.45)');
-        // Cabeza con pelo y ojos
-        drawRect(x - 2, y - 9, 5, 2, '#4a2c11');
-        drawRect(x - 2, y - 7, 5, 3, '#ffcdb2');
-        put(2, -6, '#05050a');
+        drawRect(x - 4, y + 6, 9, 2, 'rgba(0,0,0,0.45)');
+        // Pelo y Cabeza
+        put(-3, -14, 7, 3, hairColor || '#4a2c11');
+        put(-3, -11, 7, 5, '#ffcdb2');
+        put(2, -9, 2, 2, '#05050a'); // Ojo
         // Torso
-        drawRect(x - 2, y - 4, 5, 5, shirtColor || '#38bdf8');
-        // Brazos y piernas con ciclo de caminata real
-        if (step === 0) {
-          put(-3, -3, shirtColor); put(-3, -2, '#ffcdb2');
-          put(3, -4, shirtColor); put(3, -5, '#ffcdb2');
-          put(-2, 1, '#1e3a8a'); put(-3, 2, '#1e3a8a'); put(-3, 3, '#ffffff');
-          put(1, 1, '#1e3a8a'); put(2, 2, '#1e3a8a'); put(2, 3, '#ffffff');
+        put(-3, -6, 7, 7, suitColor || '#38bdf8');
+        // Brazos y Piernas (Solo caminan si isWalking === true)
+        if (!isWalking) {
+          put(-5, -5, 2, 5, suitColor); put(-5, 0, 2, 2, '#ffcdb2');
+          put(4, -5, 2, 5, suitColor); put(4, 0, 2, 2, '#ffcdb2');
+          put(-3, 1, 3, 5, '#1e293b'); put(-3, 6, 3, 2, '#ffffff');
+          put(1, 1, 3, 5, '#1e293b'); put(1, 6, 3, 2, '#ffffff');
+        } else if (step === 0) {
+          put(-5, -4, 2, 5, suitColor); put(4, -6, 2, 5, suitColor);
+          put(-4, 1, 3, 5, '#1e293b'); put(-5, 6, 3, 2, '#ffffff');
+          put(2, 1, 3, 5, '#1e293b'); put(3, 6, 3, 2, '#ffffff');
         } else {
-          put(-3, -4, shirtColor); put(-3, -5, '#ffcdb2');
-          put(3, -3, shirtColor); put(3, -2, '#ffcdb2');
-          put(-1, 1, '#1e3a8a'); put(-1, 2, '#1e3a8a'); put(-1, 3, '#ffffff');
-          put(2, 1, '#1e3a8a'); put(3, 2, '#1e3a8a'); put(3, 3, '#ffffff');
+          put(-4, -6, 2, 5, suitColor); put(4, -4, 2, 5, suitColor);
+          put(-1, 1, 3, 5, '#1e293b'); put(-1, 6, 3, 2, '#ffffff');
+          put(1, 1, 3, 5, '#1e293b'); put(1, 6, 3, 2, '#ffffff');
         }
       }
 
       // ======================================================================
-      // 10 MUNDOS PARALLAX MULTICAPA A TODO COLOR (NUNCA MÁS FONDO VACÍO)
+      // 12 MUNDOS DETALLADOS (ESTÁTICOS POR DEFECTO; SOLO SE MUEVEN EN VIAJES)
       // ======================================================================
-      function drawWorldEnvironment(esc, localFrame) {
-        const theme = esc.world_theme || 'city_street';
-        const farScroll = Math.floor(localFrame * 0.25);
-        const midScroll = Math.floor(localFrame * 0.65);
-        const floorScroll = Math.floor(localFrame * 1.1);
+      function drawWorld(esc, localFrame) {
+        const theme = esc.world_theme || 'city_night';
+        const scrollX = esc.bg_scroll ? Math.floor(localFrame * 0.9) : 0;
 
-        // 1. PARQUE NATURAL / BOSQUE SOLEADO (Perros, naturaleza, deportes, vida)
-        if (theme === 'nature_park') {
-          for (let r = 0; r < GROUND_Y; r++) {
-            drawRect(0, r, COLS, 1, r < 25 ? '#38bdf8' : (r < 48 ? '#7dd3fc' : '#bae6fd'));
-          }
-          drawCircle(48, 18, 6, '#fde047'); // Sol brillante
-          // Nubes esponjosas
-          for (let i = 0; i < 4; i++) {
-            const cx = ((i * 18 - farScroll) % 72 + 72) % 72 - 8;
-            drawRect(cx, 16 + (i % 2) * 7, 10, 3, '#ffffff');
-            drawRect(cx + 2, 14 + (i % 2) * 7, 6, 2, '#ffffff');
-          }
-          // Colinas verdes lejanas
-          for (let c = 0; c < COLS; c++) {
-            const hh = 8 + Math.round(Math.sin((c + farScroll) * 0.12) * 4);
-            drawRect(c, GROUND_Y - hh, 1, hh, '#4ade80');
-          }
-          // Árboles detallados en plano medio con Parallax
-          for (let i = -1; i <= 4; i++) {
-            const tx = ((i * 16 - midScroll) % 80 + 80) % 80 - 10;
-            drawRect(tx + 3, GROUND_Y - 14, 3, 14, '#78350f'); // Tronco
-            drawCircle(tx + 4, GROUND_Y - 17, 6, '#15803d');
-            drawCircle(tx + 3, GROUND_Y - 19, 4, '#22c55e');
-          }
-          // Césped vivo con flores y tierra
-          drawRect(0, GROUND_Y, COLS, 4, '#16a34a');
-          drawRect(0, GROUND_Y + 4, COLS, ROWS - GROUND_Y - 4, '#15803d');
-          for (let c = 0; c < COLS; c += 3) {
-            const gx = ((c - floorScroll) % COLS + COLS) % COLS;
-            setCell(gx, GROUND_Y + 1, '#86efac');
-            if (c % 9 === 0) setCell(gx, GROUND_Y - 1, '#f43f5e'); // Flores rojas
-          }
-          return;
-        }
-
-        // 2. CIELO Y NUBES EN ALTURA (Boeing 787, aviación, clima, aves)
-        if (theme === 'sky_clouds') {
-          for (let r = 0; r < ROWS; r++) {
-            const col = r < 30 ? '#0284c7' : (r < 62 ? '#38bdf8' : (r < 78 ? '#bae6fd' : '#0369a1'));
-            drawRect(0, r, COLS, 1, col);
-          }
-          // Capa de nubes lejanas y cercanas desplazándose rápido (sensación de velocidad aérea)
-          for (let i = 0; i < 6; i++) {
-            const cx = ((i * 15 - floorScroll * 2) % 90 + 90) % 90 - 15;
-            const cy = 20 + (i * 9) % 45;
-            drawRect(cx, cy, 14, 4, '#ffffff');
-            drawRect(cx + 3, cy - 2, 8, 2, '#f8fafc');
-          }
-          // Cordillera y océano allá abajo en la distancia
-          for (let c = 0; c < COLS; c++) {
-            const mh = 6 + Math.round(Math.cos((c + farScroll) * 0.18) * 4);
-            drawRect(c, GROUND_Y - mh, 1, mh, '#334155');
-          }
-          return;
-        }
-
-        // 3. MUNDO FANTASÍA / MEDIEVAL / VIDEOJUEGO RPG (World of Warcraft, historia, batallas)
-        if (theme === 'medieval_fantasy') {
-          for (let r = 0; r < GROUND_Y; r++) {
-            drawRect(0, r, COLS, 1, r < 26 ? '#1e1b4b' : (r < 50 ? '#312e81' : '#4c1d95'));
-          }
-          drawCircle(46, 18, 6, '#fef08a'); // Luna llena mágica
-          // Silueta de castillo con almenas y antorchas encendidas
-          for (let i = -1; i <= 3; i++) {
-            const bx = ((i * 22 - midScroll) % 88 + 88) % 88 - 14;
-            drawRect(bx, 26, 16, GROUND_Y - 26, '#1e293b');
-            // Almenas de la torre
-            for (let a = 0; a < 16; a += 4) drawRect(bx + a, 23, 2, 3, '#1e293b');
-            // Ventana gótica iluminada
-            drawRect(bx + 6, 34, 4, 8, '#fbbf24');
-            // Antorcha llameante
-            const flameCol = (localFrame + i) % 2 === 0 ? '#f97316' : '#fde047';
-            drawRect(bx + 2, 48, 2, 3, flameCol);
-          }
-          // Suelo empedrado medieval
+        // 1. HABITACIÓN / COCINA AÑOS 70 (Ideal para cereales, inventos caseros, vida cotidiana)
+        if (theme === 'suburban_room') {
+          drawRect(0, 0, COLS, GROUND_Y, '#fef3c7'); // Pared crema cálida
+          // Papel pintado con franjas suaves verticales estáticas
+          for (let c = 6; c < COLS; c += 12) drawRect(c, 0, 2, GROUND_Y, '#fde68a');
+          // Ventana soleada con cortinas
+          drawRect(32, 24, 26, 28, '#38bdf8');
+          drawRect(34 + (Math.floor(localFrame * 0.1) % 10), 30, 8, 3, '#ffffff'); // Nube lenta en ventana
+          drawRect(32, 24, 26, 2, '#78350f'); drawRect(32, 50, 26, 2, '#78350f');
+          drawRect(44, 24, 2, 28, '#78350f');
+          // Mesa / Encimera en la parte baja
+          drawRect(0, GROUND_Y - 4, COLS, 4, '#b45309');
           for (let r = GROUND_Y; r < ROWS; r++) {
             for (let c = 0; c < COLS; c++) {
-              grid[r][c] = ((Math.floor((c + floorScroll) / 4) + Math.floor(r / 3)) % 2 === 0) ? '#475569' : '#334155';
+              grid[r][c] = ((Math.floor(c / 6) + Math.floor(r / 4)) % 2 === 0) ? '#d97706' : '#92400e';
             }
           }
           return;
         }
 
-        // 4. CIUDAD VIVA / GRAN CAPITAL (Sociedad, tráfico, economía, historias urbanas)
-        if (theme === 'city_street') {
-          for (let r = 0; r < GROUND_Y; r++) {
-            drawRect(0, r, COLS, 1, r < 30 ? '#1d3557' : '#457b9d');
-          }
-          for (let i = -1; i <= 4; i++) {
-            const bx = ((i * 18 - midScroll) % 90 + 90) % 90 - 15;
-            const bh = 28 + (i % 3) * 8;
-            drawRect(bx, GROUND_Y - bh, 14, bh, i % 2 === 0 ? '#1e293b' : '#334155');
-            for (let wy = GROUND_Y - bh + 4; wy < GROUND_Y - 6; wy += 5) {
-              for (let wx = bx + 2; wx < bx + 12; wx += 4) {
-                drawRect(wx, wy, 2, 3, ((wx + wy) % 3 === 0) ? '#fde047' : '#38bdf8');
+        // 2. CENTRAL TELEFÓNICA / CONMUTADORES INDUSTRIALES (AT&T, 2600 Hz, redes)
+        if (theme === 'telecom_central') {
+          drawRect(0, 0, COLS, GROUND_Y, '#1e293b');
+          // Paneles estáticos de conmutación telefónica con cables y luces parpadeantes
+          for (let bx = 8; bx < COLS - 8; bx += 20) {
+            drawRect(bx, 22, 16, GROUND_Y - 22, '#334155');
+            drawRect(bx + 2, 24, 12, GROUND_Y - 26, '#0f172a');
+            for (let ry = 28; ry < GROUND_Y - 6; ry += 5) {
+              for (let rx = bx + 4; rx < bx + 12; rx += 4) {
+                const lit = ((rx + ry + Math.floor(localFrame / 6)) % 3) === 0;
+                drawRect(rx, ry, 2, 2, lit ? '#fde047' : '#0284c7');
               }
             }
           }
-          // Asfalto con líneas viales en movimiento
-          drawRect(0, GROUND_Y, COLS, 3, '#94a3b8');
-          drawRect(0, GROUND_Y + 3, COLS, ROWS - GROUND_Y - 3, '#1e293b');
-          for (let c = 0; c < COLS; c++) {
-            if ((c + floorScroll * 2) % 10 < 5) drawRect(c, GROUND_Y + 8, 1, 2, '#facc15');
+          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#0f172a');
+          drawRect(0, GROUND_Y, COLS, 2, '#64748b');
+          return;
+        }
+
+        // 3. SALA DEL MAPA MUNDIAL / CENTRO DE OPERACIONES GLOBAL
+        if (theme === 'world_map_room') {
+          drawRect(0, 0, COLS, GROUND_Y, '#091526');
+          // Cuadrícula cartográfica estática
+          for (let r = 18; r < GROUND_Y; r += 10) drawRect(0, r, COLS, 1, '#112a46');
+          for (let c = 10; c < COLS; c += 12) drawRect(c, 18, 1, GROUND_Y - 18, '#112a46');
+          // Siluetas de continentes en verde esmeralda oscuro
+          drawRect(12, 34, 18, 14, '#14532d'); drawRect(16, 48, 10, 16, '#14532d'); // América
+          drawRect(42, 30, 22, 16, '#14532d'); drawRect(46, 46, 12, 16, '#14532d'); // Eurasia/África
+          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#050b14');
+          drawRect(0, GROUND_Y, COLS, 2, '#00f5d4');
+          return;
+        }
+
+        // 4. OFICINA RETRO / DESPACHO CON VENTANALES ESTÁTICOS
+        if (theme === 'retro_office') {
+          drawRect(0, 0, COLS, GROUND_Y, '#334155');
+          [10, 50].forEach(wx => {
+            drawRect(wx, 22, 28, 36, '#38bdf8');
+            drawRect(wx + 4, 36, 8, 22, '#1e293b');
+            drawRect(wx + 15, 30, 10, 28, '#0f172a');
+            drawRect(wx, 22, 28, 2, '#e2e8f0'); drawRect(wx, 56, 28, 2, '#e2e8f0');
+          });
+          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#78350f');
+          drawRect(0, GROUND_Y, COLS, 2, '#d97706');
+          return;
+        }
+
+        // 5. CENTRO DE DATOS / SERVIDORES (ESTÁTICO, SOLO PARPADEAN LOS LEDS)
+        if (theme === 'server_datacenter') {
+          drawRect(0, 0, COLS, GROUND_Y, '#090d16');
+          for (let rx = 8; rx < COLS - 8; rx += 19) {
+            drawRect(rx, 24, 14, GROUND_Y - 24, '#1e293b');
+            drawRect(rx + 2, 26, 10, GROUND_Y - 28, '#05070c');
+            for (let ry = 30; ry < GROUND_Y - 6; ry += 6) {
+              const on = ((Math.floor(localFrame / 5) + ry + rx) % 4) < 2;
+              drawRect(rx + 4, ry, 3, 2, on ? '#10b981' : '#064e3b');
+              drawRect(rx + 8, ry, 2, 2, !on ? '#38bdf8' : '#ef4444');
+            }
+          }
+          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#0f172a');
+          drawRect(0, GROUND_Y, COLS, 2, '#00f5d4');
+          return;
+        }
+
+        // 6. PARQUE NATURAL (Se desplaza SOLO si bg_scroll === true)
+        if (theme === 'nature_park') {
+          for (let r = 0; r < GROUND_Y; r++) {
+            drawRect(0, r, COLS, 1, r < 35 ? '#38bdf8' : (r < 70 ? '#7dd3fc' : '#bae6fd'));
+          }
+          drawCircle(72, 26, 8, '#fde047');
+          for (let i = -1; i <= 4; i++) {
+            const tx = ((i * 24 - scrollX) % 110 + 110) % 110 - 15;
+            drawRect(tx + 4, GROUND_Y - 20, 4, 20, '#78350f');
+            drawCircle(tx + 6, GROUND_Y - 24, 9, '#15803d');
+            drawCircle(tx + 5, GROUND_Y - 27, 6, '#22c55e');
+          }
+          drawRect(0, GROUND_Y, COLS, 5, '#22c55e');
+          drawRect(0, GROUND_Y + 5, COLS, ROWS - GROUND_Y - 5, '#15803d');
+          return;
+        }
+
+        // 7. ESPACIO AÉREO / CIELO (Se desplazan las nubes suavemente)
+        if (theme === 'sky_airspace') {
+          for (let r = 0; r < ROWS; r++) {
+            drawRect(0, r, COLS, 1, r < 45 ? '#0284c7' : (r < 95 ? '#38bdf8' : '#0369a1'));
+          }
+          const cloudShift = Math.floor(localFrame * 0.8);
+          for (let i = 0; i < 5; i++) {
+            const cx = ((i * 22 - cloudShift) % 110 + 110) % 110 - 15;
+            const cy = 28 + (i * 13) % 55;
+            drawRect(cx, cy, 18, 5, '#ffffff');
+            drawRect(cx + 4, cy - 3, 10, 3, '#f8fafc');
           }
           return;
         }
 
-        // 5. HOSPITAL / CENTRO CIENTÍFICO DE INVESTIGACIÓN
-        if (theme === 'hospital_clinic') {
-          drawRect(0, 0, COLS, GROUND_Y, '#e0f2fe');
-          drawRect(0, 42, COLS, 3, '#38bdf8');
-          for (let i = -1; i <= 3; i++) {
-            const px = ((i * 24 - midScroll) % 72 + 72) % 72 - 12;
-            drawRect(px, 20, 14, 12, '#0f172a');
-            for (let e = 0; e < 12; e++) {
-              const py = (e === (localFrame % 12)) ? 23 : 26;
-              setCell(px + 1 + e, py, '#4ade80');
+        // 8. BÓVEDA BANCARIA / LABORATORIO / CIUDAD NOCTURNA (Estáticos salvo viaje)
+        for (let r = 0; r < GROUND_Y; r++) {
+          drawRect(0, r, COLS, 1, r < 40 ? '#0f172a' : '#1e293b');
+        }
+        // Estrellas parpadeando arriba
+        for (let s = 0; s < 16; s++) {
+          if ((Math.floor(localFrame / 8) + s) % 3 !== 0) {
+            drawRect((s * 17) % COLS, 18 + (s * 7) % 20, 1, 1, '#ffffff');
+          }
+        }
+        // Edificios estáticos (o con scrollX si es vehicle_journey)
+        for (let i = 0; i < 5; i++) {
+          const bx = ((i * 20 - scrollX) % 100 + 100) % 100 - 10;
+          const bh = 38 + (i % 3) * 12;
+          drawRect(bx, GROUND_Y - bh, 16, bh, i % 2 === 0 ? '#1e293b' : '#334155');
+          for (let wy = GROUND_Y - bh + 5; wy < GROUND_Y - 6; wy += 7) {
+            for (let wx = bx + 3; wx < bx + 13; wx += 5) {
+              drawRect(wx, wy, 3, 4, ((wx + wy) % 2 === 0) ? '#fde047' : '#38bdf8');
             }
-            drawRect(px + 17, 21, 3, 9, '#ef4444');
-            drawRect(px + 14, 24, 9, 3, '#ef4444');
-          }
-          for (let r = GROUND_Y; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-              grid[r][c] = ((Math.floor((c + floorScroll) / 4) + Math.floor(r / 3)) % 2 === 0) ? '#f1f5f9' : '#cbd5e1';
-            }
-          }
-          return;
-        }
-
-        // 6. LABORATORIO TECNOLÓGICO / SERVIDORES / FINANZAS / PLANTA INDUSTRIAL
-        drawRect(0, 0, COLS, GROUND_Y, '#0f172a');
-        // Líneas de datos en el techo
-        drawRect(0, 16, COLS, 2, '#1e293b');
-        for (let p = 0; p < 6; p++) {
-          const px = (p * 10 + localFrame * 2) % COLS;
-          drawRect(px, 16, 2, 2, '#00f5d4');
-        }
-        // Racks y pantallas holográficas en movimiento con midScroll
-        for (let i = -1; i <= 4; i++) {
-          const rx = ((i * 16 - midScroll) % 80 + 80) % 80 - 12;
-          drawRect(rx, 22, 11, GROUND_Y - 22, '#1e293b');
-          drawRect(rx + 1, 24, 9, GROUND_Y - 26, '#090d16');
-          for (let ry = 27; ry < GROUND_Y - 5; ry += 4) {
-            const on = ((localFrame + ry + i) % 8) < 4;
-            drawRect(rx + 2, ry, 3, 2, on ? '#10b981' : '#064e3b');
-            drawRect(rx + 6, ry, 2, 2, !on ? '#38bdf8' : '#ef4444');
           }
         }
-        for (let r = GROUND_Y; r < ROWS; r++) {
-          for (let c = 0; c < COLS; c++) {
-            grid[r][c] = ((c + floorScroll) % 6 === 0 || r % 4 === 0) ? '#0284c7' : '#090d16';
-          }
-        }
+        drawRect(0, GROUND_Y, COLS, 3, '#94a3b8');
+        drawRect(0, GROUND_Y + 3, COLS, ROWS - GROUND_Y - 3, '#0f172a');
       }
 
       // ======================================================================
-      // 8 COREOGRAFÍAS DINÁMICAS UNIVERSALES (ANIMAN CUALQUIER COMBINACIÓN DE OBJETOS)
+      // 10 COMPOSICIONES PROGRESIVAS (AVANZAN DE 0.0 A 1.0 SIN BUCLES REPETITIVOS)
       // ======================================================================
-      function renderSceneChoreography(esc, localFrame) {
-        const choreo = esc.choreography || 'chase_and_catch';
-        const icon1 = esc.actor_1?.icon || 'dog';
-        const icon2 = esc.actor_2?.icon || 'tennis';
-        const projIcon = esc.projectile_icon || 'sparkles';
+      function renderProgressiveStage(esc, progress, localFrame) {
+        const layout = esc.stage_layout || 'signal_transmission';
+        const icon1 = esc.actor_1?.icon || 'telephone';
+        const icon2 = esc.actor_2?.icon || 'postal-horn';
 
-        // 1. PERSECUCIÓN Y REBOTE CON FÍSICA REAL (Ej: Perro jugando con pelota, persecución, huida)
-        if (choreo === 'chase_and_catch') {
-          const cycle = localFrame % 75;
-          const runnerX = 12 + Math.floor((cycle / 75) * 32);
-          const ballX = Math.min(52, runnerX + 14 - Math.floor((cycle / 75) * 8));
-          const bounceY = GROUND_Y - 9 - Math.abs(Math.round(Math.sin(localFrame * 0.32) * 14));
+        // 1. DESCUBRIMIENTO DENTRO DE CAJA / CONTENEDOR (progress 0.0 -> 1.0)
+        // Ej: El silbato saliendo de dentro de la caja de cereales Cap'n Crunch
+        if (layout === 'unbox_discovery') {
+          // La caja/contenedor está en la parte inferior central y se abre en progress = 0.25
+          const boxY = GROUND_Y - 16;
+          drawSolidSprite(icon1, 45, boxY, 1.15, false);
 
-          // Dibujar Actor 1 corriendo con patas animadas detrás de Actor 2
-          drawSpriteMatrix(icon1, runnerX, GROUND_Y - 10, 'walk_cycle', localFrame, false, 1.15);
-          // Dibujar Actor 2 botando con física de aplastamiento y estiramiento
-          drawSpriteMatrix(icon2, ballX, bounceY, 'bounce_physics', localFrame, false, 0.95);
+          // A partir de progress = 0.20, el objeto descubierto (icon2) emerge suavemente hacia arriba
+          if (progress > 0.15) {
+            const emergeP = Math.min(1, (progress - 0.15) / 0.55);
+            const easeOut = 1 - Math.pow(1 - emergeP, 3);
+            const itemY = boxY - Math.round(easeOut * 34);
+            const itemScale = 0.5 + easeOut * 0.75;
 
-          // Partículas de polvo al correr y estrellitas cuando la alcanza
-          setCell(runnerX - 8, GROUND_Y - 2, '#ffffff');
-          setCell(runnerX - 10, GROUND_Y - 3, '#cbd5e1');
-          if (Math.abs(runnerX - ballX) < 9) {
-            for (let s = 0; s < 6; s++) {
-              const ang = (s / 6) * Math.PI * 2 + localFrame * 0.2;
-              setCell(ballX + Math.cos(ang) * 8, bounceY + Math.sin(ang) * 8, '#fde047');
+            // Halo de descubrimiento dorado detrás del objeto emergente
+            if (emergeP > 0.5) {
+              drawRing(45, itemY, Math.round(16 + Math.sin(localFrame * 0.2) * 2), 2, '#fde047');
             }
+            drawSolidSprite(icon2, 45, itemY, itemScale, false);
           }
           return;
         }
 
-        // 2. VUELO Y CRISIS AÉREA (Ej: Boeing 787 apagándose en vuelo, cohete, ave)
-        if (choreo === 'sky_flight_crisis') {
-          const isCrisis = localFrame > 28;
-          const planeX = 22 + Math.round(Math.sin(localFrame * 0.1) * 6);
-          const planeY = isCrisis
-            ? Math.min(GROUND_Y - 8, 36 + Math.floor((localFrame - 28) * 0.65))
-            : (36 + Math.round(Math.sin(localFrame * 0.22) * 3));
+        // 2. TRANSMISIÓN DE SEÑAL / ONDA ACÚSTICA DE A -> B (progress 0.0 -> 1.0)
+        // Ej: Al soplar el silbato (izquierda), una onda de 2600 Hz viaja e impacta en el teléfono/troncal (derecha)
+        if (layout === 'signal_transmission') {
+          drawSolidSprite(icon1, 20, GROUND_Y - 24, 1.05, false);
+          drawSolidSprite(icon2, 70, GROUND_Y - 24, 1.05, false);
 
-          // Estela de viento y humo detrás del avión/objeto volador
-          for (let tr = 1; tr <= 12; tr++) {
-            const trailCol = isCrisis ? (tr % 2 === 0 ? '#ef4444' : '#475569') : '#ffffff';
-            drawCircle(planeX - tr * 2, planeY + (isCrisis ? -tr : 2), isCrisis ? 2 : 1, trailCol);
+          // Onda sinusoidal acústica y anillos viajando de X=32 a X=58 según progress
+          const waveReachX = Math.round(32 + progress * 28);
+          for (let x = 32; x <= waveReachX; x++) {
+            const wy = (GROUND_Y - 24) + Math.round(Math.sin((x - localFrame * 0.6) * 0.45) * 8);
+            drawRect(x, wy, 2, 3, '#00f5d4');
           }
+          const pulseX = 32 + Math.round(progress * 26);
+          drawRing(pulseX, GROUND_Y - 24, 6, 2, '#fde047');
 
-          drawSpriteMatrix(icon1, planeX, planeY, 'fly_bank', localFrame, false, 1.35);
-
-          // El culpable/evento secundario (ej: chip, rayo, alerta) parpadeando arriba a la derecha
-          const badgeY = 28 + Math.round(Math.cos(localFrame * 0.3) * 2);
-          drawSpriteMatrix(icon2, 46, badgeY, 'pulse_float', localFrame, false, 1.0);
-          if (isCrisis) {
-            drawLine(42, badgeY, planeX + 4, planeY - 2, '#ef4444');
+          // Cuando la señal alcanza el receptor (progress > 0.75), el receptor brilla con un aura verde/amarilla
+          if (progress > 0.75) {
+            drawRing(70, GROUND_Y - 24, 18, 2, '#4ade80');
           }
           return;
         }
 
-        // 3. CONTAGIO MASIVO / TRANSFORMACIÓN DE MULTITUD (Ej: Pandemia WoW, tendencias sociales)
-        if (choreo === 'crowd_contagion') {
-          // Jefe / Fuente en la parte superior izquierda lanzando el hechizo/esporas
-          drawSpriteMatrix(icon1, 14, 34, 'pulse_float', localFrame, false, 1.25);
+        // 3. ENRUTAMIENTO EN MAPA GLOBAL (progress 0.0 -> 1.0)
+        // Ej: Desviar llamadas a través de continentes enteros hasta llegar a la Casa Blanca
+        if (layout === 'world_map_routing') {
+          const nodes = [
+            { x: 18, y: 74 },
+            { x: 38, y: 46 },
+            { x: 56, y: 70 },
+            { x: 72, y: 44 }
+          ];
 
-          // 4 Habitantes en la calle que van siendo alcanzados por las esporas y transformándose
-          const positions = [24, 34, 44, 52];
-          positions.forEach((px, idx) => {
-            const infectFrame = 12 + idx * 14;
-            const isInfected = localFrame >= infectFrame;
+          // Dibujar los nodos intermedios y trazar la línea progresivamente de nodo en nodo
+          const totalSegments = nodes.length - 1;
+          const currentFloat = progress * totalSegments;
 
-            // Proyectil/espora viajando en arco hacia cada habitante
-            if (localFrame < infectFrame && localFrame > infectFrame - 14) {
-              const p = (localFrame - (infectFrame - 14)) / 14;
-              const sx = 14 + p * (px - 14);
-              const sy = 34 + p * (GROUND_Y - 8 - 34) - Math.sin(p * Math.PI) * 12;
-              drawCircle(sx, sy, 2, '#4ade80');
-              setCell(sx, sy, '#ef4444');
+          for (let i = 0; i < totalSegments; i++) {
+            const segP = Math.max(0, Math.min(1, currentFloat - i));
+            if (segP > 0) {
+              const nx = nodes[i].x + (nodes[i + 1].x - nodes[i].x) * segP;
+              const ny = nodes[i].y + (nodes[i + 1].y - nodes[i].y) * segP;
+              drawLine(nodes[i].x, nodes[i].y, nx, ny, 2, '#ef4444');
             }
+            drawCircle(nodes[i].x, nodes[i].y, 3, '#fde047');
+          }
 
-            if (isInfected) {
-              // Se transforma en Actor 2 (ej: calavera/esqueleto/infectado)
-              drawSpriteMatrix(icon2, px, GROUND_Y - 9, 'bounce_physics', localFrame + idx * 5, false, 0.95);
-              setCell(px, GROUND_Y - 18 - (localFrame % 6), '#4ade80');
-            } else {
-              drawArticulatedCharacter(px, GROUND_Y - 4, idx % 2 === 0 ? '#38bdf8' : '#f97316', 'walk', localFrame + idx * 7, true);
+          // Icono de origen abajo a la izquierda e Icono de destino (ej. Casa Blanca) arriba a la derecha
+          drawSolidSprite(icon1, 18, 74, 0.85, false);
+          drawSolidSprite(icon2, 72, 44, 1.05, false);
+          if (progress > 0.85) {
+            drawRing(72, 44, 18, 2, '#fde047');
+          }
+          return;
+        }
+
+        // 4. CONSOLA DE CONTROL Y OVERRIDE DE SISTEMA (progress 0.0 -> 1.0)
+        // Ej: El sistema creía que la llamada había terminado, pero la conexión permanecía abierta
+        if (layout === 'system_override_console') {
+          // Gran monitor de control en la parte superior central
+          drawRect(14, 28, 62, 36, '#e2e8f0');
+          drawRect(16, 30, 58, 32, '#05070c');
+
+          // Barra de estado progresiva dentro del monitor que pasa de CERRADO a ABIERTO/OVERRIDE
+          const barW = Math.round(50 * progress);
+          const isOverride = progress > 0.55;
+          drawRect(20, 42, 50, 8, '#1e293b');
+          drawRect(20, 42, barW, 8, isOverride ? '#10b981' : '#f97316');
+
+          // Protagonista operando abajo a la izquierda y los dos iconos a los lados
+          drawPerson(18, GROUND_Y - 8, '#38bdf8', '#4a2c11', false, localFrame, false);
+          drawSolidSprite(icon1, 44, GROUND_Y - 18, 0.95, false);
+          drawSolidSprite(icon2, 70, GROUND_Y - 18, 0.95, false);
+          return;
+        }
+
+        // 5. CONFRONTACIÓN DAVID VS GOLIAT (progress 0.0 -> 1.0)
+        // Ej: La mayor empresa telefónica del mundo derrotada por un simple juguete
+        if (layout === 'versus_confrontation') {
+          const slideIn = Math.min(1, progress / 0.35);
+          const x1 = Math.round(-10 + slideIn * 34);
+          const x2 = Math.round(100 - slideIn * 34);
+
+          drawSolidSprite(icon1, x1, GROUND_Y - 22, 1.20, false);
+          drawSolidSprite(icon2, x2, GROUND_Y - 20, 1.00, false);
+
+          // Rayo de choque en el centro cuando colisionan las fuerzas
+          if (progress > 0.40) {
+            drawLine(45, 36, 42, 62, 2, '#fde047');
+            drawLine(42, 62, 48, 68, 2, '#fde047');
+            drawLine(48, 68, 44, 96, 2, '#fde047');
+          }
+          return;
+        }
+
+        // 6. TRAYECTO EN VEHÍCULO / VUELO (Aquí el fondo SÍ se desplaza)
+        if (layout === 'vehicle_journey') {
+          const vx = Math.round(20 + progress * 35);
+          const vy = (esc.world_theme === 'sky_airspace') ? 56 : (GROUND_Y - 18);
+          drawSolidSprite(icon1, vx, vy, 1.25, false);
+          drawSolidSprite(icon2, 72, 38, 0.90, false);
+          return;
+        }
+
+        // 7. PERSECUCIÓN EN MOVIMIENTO (Aquí el fondo SÍ se desplaza)
+        if (layout === 'chase_pursuit') {
+          const chaserX = Math.round(16 + progress * 34);
+          const targetX = Math.min(76, chaserX + 24 - Math.round(progress * 10));
+          const bounceY = GROUND_Y - 16 - Math.abs(Math.round(Math.sin(progress * Math.PI * 4) * 14));
+
+          drawSolidSprite(icon1, chaserX, GROUND_Y - 18, 1.10, false);
+          drawSolidSprite(icon2, targetX, bounceY, 0.95, false);
+          return;
+        }
+
+        // 8. REACCIÓN EN CADENA SECUENCIAL (progress 0.0 -> 1.0)
+        if (layout === 'chain_reaction') {
+          const thresholds = [0.15, 0.40, 0.65, 0.85];
+          thresholds.forEach((th, idx) => {
+            const px = 16 + idx * 19;
+            const activated = progress >= th;
+            drawSolidSprite(activated ? icon2 : icon1, px, GROUND_Y - 18, 0.85, false);
+            if (activated) {
+              drawRing(px, GROUND_Y - 18, 12, 1, '#fde047');
             }
           });
           return;
         }
 
-        // 4. CONTADOR DIGITAL EN VIVO + DESBORDAMIENTO (Ej: 32 bits, Día 248, Y2K, precios)
-        if (choreo === 'counter_overflow_boom') {
-          const isOverflow = localFrame > 32;
-          // Gran pantalla LED retro en el centro superior (Y=24..38)
-          drawRect(8, 23, 44, 15, '#05050a');
-          drawRect(9, 24, 42, 13, isOverflow ? '#450a0a' : '#064e3b');
-          const displayNum = isOverflow ? 'OVERFLOW' : String( Math.min(2147483647, 1999999000 + localFrame * 4812345) ).slice(0, 9);
-          drawPixelString(displayNum, 30, 28, isOverflow ? '#ef4444' : '#4ade80');
+        // 9. ESCENARIO DE DIÁLOGO / FUNDADORES (progress 0.0 -> 1.0)
+        if (layout === 'dialogue_stage') {
+          drawPerson(22, GROUND_Y - 8, '#38bdf8', '#4a2c11', false, localFrame, false);
+          drawPerson(68, GROUND_Y - 8, '#f43f5e', '#1e293b', false, localFrame, true);
 
-          // Actores debajo recibiendo la descarga cuando el contador desborda
-          drawSpriteMatrix(icon1, 18, GROUND_Y - 10, 'walk_cycle', localFrame, false, 1.15);
-          drawSpriteMatrix(icon2, 42, GROUND_Y - 10, 'bounce_physics', localFrame, true, 1.15);
-
-          if (isOverflow) {
-            drawLine(30, 38, 18, GROUND_Y - 12, '#ef4444');
-            drawLine(30, 38, 42, GROUND_Y - 12, '#fde047');
-          }
+          // Pantalla central mostrando el primer objeto en la 1ª mitad de la frase y el 2º en la 2ª mitad
+          drawRect(28, 30, 34, 34, '#ffffff');
+          drawRect(30, 32, 30, 30, '#0f172a');
+          const shownIcon = (progress < 0.5) ? icon1 : icon2;
+          drawSolidSprite(shownIcon, 45, 47, 0.95, false);
           return;
         }
 
-        // 5. IMPACTO DE PROYECTILES / BATALLA / CAUSA-EFECTO DIRECTO
-        if (choreo === 'projectile_impact') {
-          drawSpriteMatrix(icon1, 14, GROUND_Y - 10, 'walk_cycle', localFrame, false, 1.2);
-          const hit = (localFrame % 20) > 12;
-          drawSpriteMatrix(icon2, 46 + (hit ? 2 : 0), GROUND_Y - 10, 'bounce_physics', localFrame, true, 1.2);
-
-          // Proyectiles viajando de Actor 1 a Actor 2
-          const prog = (localFrame % 20) / 20;
-          const px = 20 + prog * 24;
-          const py = (GROUND_Y - 12) - Math.sin(prog * Math.PI) * 8;
-          drawSpriteMatrix(projIcon, px, py, 'pulse_float', localFrame, false, 0.65);
-          return;
+        // 10. MONUMENTO FINAL / LEGADO HISTÓRICO (progress 0.0 -> 1.0)
+        // Pedestal central con ambos iconos de legado y partículas ascendentes
+        drawRect(28, GROUND_Y - 12, 34, 12, '#475569');
+        drawRect(24, GROUND_Y - 4, 42, 4, '#94a3b8');
+        drawSolidSprite(icon1, 33, GROUND_Y - 30, 1.05, false);
+        drawSolidSprite(icon2, 57, GROUND_Y - 30, 1.05, false);
+        for (let p = 0; p < 8; p++) {
+          const px = 20 + (p * 7);
+          const py = Math.round(GROUND_Y - 16 - ((progress * 50 + p * 9) % 50));
+          drawRect(px, py, 2, 2, '#fde047');
         }
-
-        // 6. DIÁLOGO / INTERACCIÓN SOCIAL / NEGOCIACIÓN
-        if (choreo === 'dialogue_interaction') {
-          drawArticulatedCharacter(14, GROUND_Y - 4, '#38bdf8', 'walk', localFrame, false);
-          drawArticulatedCharacter(46, GROUND_Y - 4, '#f43f5e', 'walk', localFrame + 10, true);
-
-          // Bocadillo de diálogo pixel-art encima mostrando los iconos del tema
-          drawRect(18, 24, 24, 18, '#ffffff');
-          drawRect(19, 25, 22, 16, '#0f172a');
-          const activeIcon = (Math.floor(localFrame / 25) % 2 === 0) ? icon1 : icon2;
-          drawSpriteMatrix(activeIcon, 30, 33, 'bounce_physics', localFrame, false, 0.85);
-          return;
-        }
-
-        // 7. ESTACIÓN DE TRABAJO / CIENCIA / INVESTIGACIÓN EN VIVO
-        if (choreo === 'workstation_action') {
-          drawArticulatedCharacter(14, GROUND_Y - 4, '#ffffff', 'walk', localFrame, false);
-          // Monitor holográfico gigante a la derecha proyectando los dos objetos animados
-          drawRect(24, 24, 28, 26, '#00f5d4');
-          drawRect(25, 25, 26, 24, '#090d16');
-          drawSpriteMatrix(icon1, 33, 37, 'bounce_physics', localFrame, false, 0.9);
-          drawSpriteMatrix(icon2, 44, 37, 'walk_cycle', localFrame, true, 0.9);
-          return;
-        }
-
-        // 8. HERO SHOWCASE (Presentación dinámica con ambos actores en acción)
-        const x1 = 18 + Math.round(Math.sin(localFrame * 0.15) * 4);
-        const x2 = 42 - Math.round(Math.sin(localFrame * 0.15) * 4);
-        drawSpriteMatrix(icon1, x1, GROUND_Y - 11, 'walk_cycle', localFrame, false, 1.25);
-        drawSpriteMatrix(icon2, x2, GROUND_Y - 11, 'bounce_physics', localFrame, true, 1.25);
       }
 
       // FUENTE PIXEL ART 3x5 PARA RÓTULOS EN PANTALLA
@@ -1221,28 +1247,36 @@ async function main() {
         '!': ['010','010','010','000','010'], '?': ['111','001','011','000','010']
       };
 
-      function drawPixelString(str, startX, startY, color) {
+      function drawPixelString(str, centerX, startY, color) {
         const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!? ]/g, '').slice(0, 11);
         if (!clean) return;
-        const totalW = clean.length * 4 - 1;
-        let cx = Math.max(2, Math.floor(startX - totalW / 2));
-        drawRect(cx - 2, startY - 1, totalW + 4, 7, '#05050a');
+        const scale = 2; // Escala doble para la rejilla 90x160
+        const charW = 3 * scale;
+        const charH = 5 * scale;
+        const gap = 1 * scale;
+        const totalW = clean.length * (charW + gap) - gap;
+        let cx = Math.max(3, Math.floor(centerX - totalW / 2));
+
+        drawRect(cx - 3, startY - 2, totalW + 6, charH + 4, '#05050a');
         for (let i = 0; i < clean.length; i++) {
           const ch = clean[i];
           const glyph = FONT_3X5[ch];
           if (glyph) {
             for (let r = 0; r < 5; r++) {
               for (let c = 0; c < 3; c++) {
-                if (glyph[r][c] === '1') setCell(cx + c, startY + r, color);
+                if (glyph[r][c] === '1') {
+                  drawRect(cx + c * scale, startY + r * scale, scale, scale, color);
+                }
               }
             }
           }
-          cx += 4;
+          cx += charW + gap;
         }
       }
 
       function flushGridToCanvas() {
-        ctx.clearRect(0, 0, 720, 1280);
+        ctx.fillStyle = '#05050a';
+        ctx.fillRect(0, 0, 720, 1280);
         for (let r = 0; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
             ctx.fillStyle = grid[r][c];
@@ -1272,28 +1306,20 @@ async function main() {
         const esc = escenas[activeIdx] || {};
         const localT = Math.max(0, t - (esc.inicio || 0));
         const durEsc = Math.max(0.5, (esc.fin || 4) - (esc.inicio || 0));
+        const progress = Math.max(0, Math.min(1, localT / durEsc));
         const localFrame = Math.floor(localT * 30);
 
-        // Movimiento suave de cámara
-        const scale = 1.0 + (localT / durEsc) * 0.05;
-        let tx = 0, ty = 0;
-        if (esc.camera_mode === 'dramatic_shake' && localFrame > 15) {
-          tx = Math.sin(localFrame * 2.2) * 6;
-          ty = Math.cos(localFrame * 2.9) * 5;
-        }
-        viewportWrapper.style.transform = \`translate(\${tx.toFixed(1)}px, \${ty.toFixed(1)}px) scale(\${scale.toFixed(3)})\`;
+        // 1. Pintar el Mundo (Estático por defecto; solo se desplaza si es viaje/persecución)
+        drawWorld(esc, localFrame);
 
-        // 1. Pintar el Mundo Parallax Multicapa
-        drawWorldEnvironment(esc, localFrame);
+        // 2. Pintar la Composición Progresiva de la Escena (0.0 -> 1.0 sin bucles repetitivos)
+        renderProgressiveStage(esc, progress, localFrame);
 
-        // 2. Pintar la Coreografía Interactiva con los Sprites Auto-Pixelados
-        renderSceneChoreography(esc, localFrame);
+        // 3. Rótulos superiores e inferiores nítidos
+        if (esc.texto_1) drawPixelString(esc.texto_1, 45, 14, '#ffd166');
+        if (esc.texto_2) drawPixelString(esc.texto_2, 45, 110, '#00f5d4');
 
-        // 3. Rótulos superiores e inferiores
-        if (esc.texto_1) drawPixelString(esc.texto_1, 30, 11, '#ffd166');
-        if (esc.texto_2) drawPixelString(esc.texto_2, 30, 74, '#00f5d4');
-
-        // 4. Volcar la matriz 60x106 al lienzo
+        // 4. Volcar la matriz 90x160 al lienzo
         flushGridToCanvas();
 
         // 5. Subtítulos sincronizados
@@ -1341,7 +1367,7 @@ async function main() {
   await page.evaluateHandle('document.fonts.ready');
   await page.evaluate(async () => { await window.initSpritesReady; });
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Universal Auto-Pixelador v5.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Pro v6.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1354,13 +1380,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final Universal 8-Bit v5.0...');
+  console.log('🔊 Ensamblando MP4 final Pixel-Art Pro v6.0...');
   execSync(
-    `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
+    `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Universal 8-Bit v5.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Universal 8-Bit v6.0 generado con éxito!');
   process.exit(0);
 }
 
