@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 // ============================================================================
-// 1. DESCARGA DE PAYLOAD Y ALINEACIÓN FONÉTICA DE SUBTÍTULOS
+// 1. UTILIDADES DE RED, REPARACIÓN DE "Ñ" Y SUBTÍTULOS SINCRONIZADOS
 // ============================================================================
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -22,12 +22,27 @@ function downloadFile(url, dest) {
   });
 }
 
-function normalizeForMatch(str) {
-  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+function fixSpanishN(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/engann/gi, (m) => m[0] === 'E' ? 'Engañ' : 'engañ')
+    .replace(/espannol/gi, (m) => m[0] === 'E' ? 'Español' : 'español')
+    .replace(/\bespanol(es|a|as)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bengano(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\benganar(on)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bhazana(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bpequeno(s|a|as)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bmontana(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bcompania(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bdano(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bsenal(es)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bdiseno(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bsueno(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bnino(s|a|as)?\b/gi, (m) => m.replace(/n(?=o|a)/i, (n) => n === 'N' ? 'Ñ' : 'ñ'));
 }
 
 function cleanArcadeLabel(str) {
-  return String(str || '')
+  return fixSpanishN(str)
     .toUpperCase()
     .replace(/[ÁÀÄÂ]/g, 'A')
     .replace(/[ÉÈËÊ]/g, 'E')
@@ -35,6 +50,10 @@ function cleanArcadeLabel(str) {
     .replace(/[ÓÒÖÔ]/g, 'O')
     .replace(/[ÚÙÜÛ]/g, 'U')
     .trim();
+}
+
+function normalizeForMatch(str) {
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 }
 
 function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
@@ -46,7 +65,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   ]);
 
   const sceneTokensList = escenas.map(esc => {
-    const raw = (esc.subtitulo || '').trim();
+    const raw = fixSpanishN((esc.subtitulo || '').trim());
     if (!raw) return [];
     const tokens = [];
     let inBold = false;
@@ -333,12 +352,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR GENERATIVO 100% LIBRE v11.0 (ESCENA POR ESCENA, TEXTOS CRISTALINOS)
+// 3. MOTOR GENERATIVO 100% LIBRE v12.0
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v11.0 desde URL...');
+    console.log('📥 Descargando payload v12.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -376,6 +395,7 @@ async function main() {
 
   const escenas = (payload.escenas || []).map((esc, idx) => ({
     ...esc,
+    subtitulo: fixSpanishN(esc.subtitulo || ''),
     texto_1: cleanArcadeLabel(esc.texto_1 || `ACTO 0${idx + 1}`).slice(0, 15),
     texto_2: cleanArcadeLabel(esc.texto_2 || 'HISTORIA REAL').slice(0, 15)
   }));
@@ -410,7 +430,7 @@ async function main() {
   const safeEscenasJson = JSON.stringify(escenas).replace(/<\/script>/gi, '<\\/script>');
   const safeSpritesJson = JSON.stringify(customSpritesDict).replace(/<\/script>/gi, '<\\/script>');
   const safeChunksJson = JSON.stringify(subtitleChunks).replace(/<\/script>/gi, '<\\/script>');
-  const safeSubrama = cleanArcadeLabel(payload.subrama || 'HISTORIA 8-BIT').slice(0, 28);
+  const safeSubrama = cleanArcadeLabel(payload.subrama || 'HISTORIA 8-BIT').slice(0, 36);
 
   const htmlContent = `
   <!DOCTYPE html>
@@ -418,13 +438,13 @@ async function main() {
   <head>
     <meta charset="UTF-8">
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@700&family=Montserrat:wght@900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Montserrat:wght@900&display=swap');
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         width: 720px; height: 1280px;
         background: #05050a;
         overflow: hidden; position: relative;
-        font-family: 'Press Start 2P', monospace;
+        font-family: 'Press Start 2P', 'Montserrat', monospace;
         -webkit-font-smoothing: none;
       }
       #pixel-canvas {
@@ -444,11 +464,11 @@ async function main() {
         display: flex; justify-content: center; align-items: center;
         background: rgba(8, 10, 22, 0.92);
         border: 4px solid #00f2fe;
-        padding: 13px 18px;
+        padding: 13px 16px;
         box-shadow: 0 8px 0 #000000;
         z-index: 20;
       }
-      .hud-tag { color: #ffd000; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; text-align: center; }
+      .hud-tag { color: #ffd000; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; text-align: center; }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 12px;
         background: linear-gradient(90deg, #ff2a5f, #ffd000, #00f2fe);
@@ -514,8 +534,6 @@ async function main() {
       const subtitleChunks = ${safeChunksJson};
       const totalFrames = ${totalFrames};
 
-      // LIENZO DE 120x213 PÍXELES VIRTUALES (6x6 px reales continuos)
-      // ZONA VISIBLE DE ESCENA ENTRE RÓTULOS: X = 4..116, Y = 34..142 (GROUND_Y = 138)
       const COLS = 120;
       const ROWS = 213;
       const CELL = 6;
@@ -525,14 +543,9 @@ async function main() {
       const ctx = canvas.getContext('2d');
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#0f172a'));
 
-      // Cola de textos nítidos para renderizar encima de los píxeles con fuente Press Start 2P real (CERO LETRAS ROTAS)
       let crispTextQueue = [];
-      // Registro de posición X previa por actor para que SOLO muevan las piernas si realmente caminan
       let actorPrevX = {};
 
-      // ======================================================================
-      // 1. PRIMITIVAS PIXEL-ART Y PINCELES DE TEXTURA 16-BIT (CERO PRESETS FIJOS)
-      // ======================================================================
       function setPx(x, y, color) {
         const cx = Math.round(x);
         const cy = Math.round(y);
@@ -557,7 +570,6 @@ async function main() {
         }
       }
 
-      // PINCEL DE TEXTURA 16-BIT PARA CONSTRUIR CUALQUIER ESCENARIO DESDE CERO
       function drawTexturedBox(x, y, w, h, texture = 'brick', baseColor = '#475569', accentColor = '#334155', localFrame = 0) {
         const x0 = Math.round(x), y0 = Math.round(y);
         const rw = Math.min(120, Math.round(w)), rh = Math.min(115, Math.round(h));
@@ -675,6 +687,7 @@ async function main() {
         fillPolygon([[x1, y1], [x2, y2], [x3, y3]], fillColor, borderColor);
       }
 
+      // CIELO Y EXTERIORES RICOS CON SILUETA DE HORIZONTE
       function drawSky(skyTop = '#0f172a', skyMid = '#1e293b', skyBot = '#334155', groundCol = '#1e293b', horizonY = GROUND_Y) {
         const bands = [skyTop, skyMid, skyBot];
         const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
@@ -696,22 +709,23 @@ async function main() {
         }
       }
 
+      // INTERIORES ENRIQUECIDOS CON ZÓCALO SEÑORIAL, MOLDURAS Y LÁMPARAS (NUNCA VACÍOS)
       function drawRoom(wallCol = '#1e293b', stripeCol = '#0f172a', floorCol = '#334155', groundY = GROUND_Y) {
         fillRect(0, 0, COLS, groundY, wallCol);
         for (let c = 0; c < COLS; c += 10) fillRect(c, 0, 2, groundY, stripeCol);
-        fillBorderedRect(0, groundY - 3, COLS, 4, '#64748b', '#0b0c10');
+        // Zócalo inferior de madera/piedra para dar profundidad arquitectónica
+        fillBorderedRect(0, groundY - 22, COLS, 22, stripeCol, '#0b0c10');
+        fillBorderedRect(0, groundY - 24, COLS, 3, '#64748b', '#0b0c10');
+        fillBorderedRect(0, groundY - 3, COLS, 4, '#d97706', '#0b0c10');
         for (let r = groundY + 1; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
-            grid[r][c] = ((r + c) % 5 === 0) ? '#1e293b' : floorCol;
+            grid[r][c] = ((r + c) % 5 === 0) ? '#0f172a' : floorCol;
           }
         }
       }
 
-      // ======================================================================
-      // 2. RENDERIZADOR DE SPRITES CUSTOM DE 2 FOTOGRAMAS (rows_1 y rows_2)
-      // (PERMITE ANIMAR CUALQUIER ANIMAL, OBJETO, ROBOT O CRIATURA DESDE CERO)
-      // ======================================================================
-      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.25, flipX = false, localFrame = 0) {
+      // SPRITES CUSTOM 16x16 DE 2 FOTOGRAMAS CON MARCO DOSSIER SI ESTÁN EN LA PARED SUPERIOR
+      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.25, flipX = false, localFrame = 0, skipFrameBox = false) {
         const key = String(spriteName || '').toLowerCase().trim();
         const def = customSprites[key] || Object.values(customSprites)[0];
         if (!def) {
@@ -729,6 +743,11 @@ async function main() {
         const destW = Math.max(6, Math.round(w * scale));
         const x0 = Math.round(centerX - destW / 2);
         const y0 = Math.round(centerY - destH / 2);
+
+        // Si la IA coloca un sprite suelto en la mitad superior (y < 96), enmarcarlo como un monitor/cuadro retro para que no flote en el vacío
+        if (!skipFrameBox && centerY < 96 && scale >= 1.1) {
+          fillBorderedRect(x0 - 4, y0 - 4, destW + 8, destH + 8, '#090d16', '#eab308');
+        }
 
         const temp = Array.from({ length: destH + 2 }, () => Array(destW + 2).fill(null));
         for (let dy = 0; dy < destH; dy++) {
@@ -762,48 +781,40 @@ async function main() {
         }
       }
 
-      // ======================================================================
-      // 3. ACTORES VARIADOS Y EXPRESIVOS (SIN SOMBRERO FIJO NI MARCHA ESTÁTICA)
-      // ======================================================================
+      // ACTORES EXPRESIVOS ANCLADOS SIEMPRE AL SUELO FIRME (GROUND_Y = 138)
       function drawActor(x, y, opts = {}, localFrame = 0) {
         const actorId = opts.id || String(opts.suitColor || 'main');
-        const curX = Math.round(x);
+        const curX = Math.max(14, Math.min(106, Math.round(x)));
         const prevX = actorPrevX[actorId];
         actorPrevX[actorId] = curX;
 
-        // SOLO mueve las piernas si realmente se está desplazando horizontalmente
         const isActuallyWalking = (prevX !== undefined && Math.abs(curX - prevX) >= 0.4);
-        const anchorY = (y === undefined || y === null || y > GROUND_Y) ? GROUND_Y : y;
+        // Forzar anclaje al suelo firme salvo que explícitamente esté en un vehículo/balcón alto
+        const anchorY = (y === undefined || y === null || y > 95) ? GROUND_Y : y;
         const suitCol = opts.suitColor || '#2563eb';
         const skinCol = opts.skinColor || '#e6ad86';
-        const hairStyle = opts.hairStyle || 'short'; // 'short', 'glasses', 'headset', 'helmet', 'bald', 'hat'
+        const hairStyle = opts.hairStyle || 'short';
         const hairCol = opts.hairColor || '#2b1d14';
-        const pose = opts.pose || 'idle'; // 'idle', 'typing', 'panic', 'pointing', 'holding'
+        const pose = opts.pose || 'idle';
         const facingLeft = !!opts.facingLeft;
         const dir = facingLeft ? -1 : 1;
         const isTalking = opts.isTalking !== undefined ? !!opts.isTalking : true;
         const step = isActuallyWalking ? (Math.floor(localFrame / 4) % 2) : 0;
 
-        // Sombra en el suelo
         fillRect(curX - 6, anchorY, 13, 2, 'rgba(0,0,0,0.45)');
 
-        // Piernas (Firmes en el suelo si está quieto; alternando zancada solo si camina)
         const legL = isActuallyWalking ? (step === 0 ? -2 : 0) : 0;
         const legR = isActuallyWalking ? (step === 1 ? -2 : 0) : 0;
         fillBorderedRect(curX - 5, anchorY - 9 + legL, 5, 9, '#1e293b', '#0b0c10');
         fillBorderedRect(curX + 1, anchorY - 9 + legR, 5, 9, '#1e293b', '#0b0c10');
 
-        // Torso con respiración sutil
-        const breath = (!isActuallyWalking && (Math.floor(localFrame / 15) % 2 === 0)) ? 0 : 0;
-        fillBorderedRect(curX - 7, anchorY - 22 + breath, 15, 14, suitCol, '#0b0c10');
-        fillRect(curX - 1, anchorY - 20 + breath, 3, 8, opts.tieColor || '#facc15');
+        fillBorderedRect(curX - 7, anchorY - 22, 15, 14, suitCol, '#0b0c10');
+        fillRect(curX - 1, anchorY - 20, 3, 8, opts.tieColor || '#facc15');
         fillRect(curX - 6, anchorY - 10, 13, 2, '#0b0c10');
 
-        // Cabeza Expresiva
-        const headY = anchorY - 35 + breath;
+        const headY = anchorY - 35;
         fillBorderedRect(curX - 7, headY, 15, 14, skinCol, '#0b0c10');
 
-        // Variedad de Peinados y Accesorios (Adiós al bombín repetitivo)
         if (hairStyle === 'hat') {
           fillBorderedRect(curX - 9, headY - 2, 19, 3, hairCol, '#0b0c10');
           fillBorderedRect(curX - 7, headY - 6, 15, 5, hairCol, '#0b0c10');
@@ -812,12 +823,10 @@ async function main() {
         } else if (hairStyle === 'bald') {
           fillRect(curX - 5, headY + 1, 3, 1, '#ffffff');
         } else {
-          // Pelo corto moderno o despeinado
           fillRect(curX - 7, headY, 15, 4, hairCol);
           fillRect(curX - 7, headY + 4, 2, 3, hairCol);
         }
 
-        // Ojos y Gafas
         const eye1X = facingLeft ? curX - 5 : curX - 2;
         const eye2X = facingLeft ? curX + 1 : curX + 3;
         fillRect(eye1X, headY + 5, 3, 3, '#ffffff');
@@ -830,17 +839,15 @@ async function main() {
           drawRing(eye2X + 1, headY + 6, 2, 1, '#38bdf8');
         }
 
-        // Boca sincronizada o gesto de pánico
         if (pose === 'panic') {
           fillBorderedRect(curX - 2, headY + 9, 5, 4, '#991b1b', '#0b0c10');
-          fillRect(curX + 6, headY + 3 + (localFrame % 5), 2, 3, '#38bdf8'); // Gota de sudor
+          fillRect(curX + 6, headY + 3 + (localFrame % 5), 2, 3, '#38bdf8');
         } else if (isTalking && (Math.floor(localFrame / 3) % 2 === 0)) {
           fillRect(curX - 2, headY + 10, 5, 2, '#991b1b');
         } else {
           fillRect(curX - 2, headY + 10, 4, 1, '#2b1d14');
         }
 
-        // Posturas de Brazos (Tecleando, Manos a la cabeza en pánico, Señalando o Sosteniendo)
         let handX = curX + dir * 10;
         let handY = anchorY - 16;
 
@@ -861,14 +868,12 @@ async function main() {
         }
 
         if (opts.holdSprite) {
-          // Colocar el sprite a un lado de la mano sin tapar jamás la cara
-          drawCustomSprite(opts.holdSprite, handX + dir * 8, handY - 2, opts.spriteScale || 0.85, facingLeft, localFrame);
+          drawCustomSprite(opts.holdSprite, handX + dir * 8, handY - 2, opts.spriteScale || 0.85, facingLeft, localFrame, true);
         }
 
         return { handX: handX + dir * 6, handY: handY - 1, headX: curX, headY };
       }
 
-      // BUSTO EXPRESIVO EN PRIMER PLANO
       function drawBusto(cx, headY, opts = {}, localFrame = 0) {
         const s = opts.scale || 0.82;
         const suitCol = opts.suitColor || '#1e293b';
@@ -914,15 +919,12 @@ async function main() {
         }
 
         if (opts.holdSprite) {
-          drawCustomSprite(opts.holdSprite, cx + 26, bobY + 20, 1.1, false, localFrame);
+          drawCustomSprite(opts.holdSprite, cx + 26, bobY + 20, 1.1, false, localFrame, true);
         }
       }
 
-      // ======================================================================
-      // 4. TEXTOS EN PANTALLA Y MONITORES 100% NÍTIDOS (CERO BLOQUES 3x5 ROTOS)
-      // ======================================================================
       function drawScreenText(str, centerX, y, color = '#ffd166', size = 1) {
-        const clean = cleanArcadeLabel(str).slice(0, 22);
+        const clean = String(str || '').toUpperCase().trim().slice(0, 22);
         if (!clean) return;
         crispTextQueue.push({
           text: clean,
@@ -1099,13 +1101,12 @@ async function main() {
             ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
           }
         }
-        // Renderizar encima la cola de textos en pantalla con tipografía Press Start 2P 100% legible
         if (crispTextQueue.length > 0) {
           ctx.save();
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           crispTextQueue.forEach(item => {
-            ctx.font = \`\${item.fontSize}px "Press Start 2P", monospace\`;
+            ctx.font = \`\${item.fontSize}px "Press Start 2P", "Montserrat", monospace\`;
             const metrics = ctx.measureText(item.text);
             const padX = 12, padY = 8;
             const bw = metrics.width + padX * 2;
@@ -1154,15 +1155,13 @@ async function main() {
         }
 
         crispTextQueue = [];
-        drawSky('#0f172a', '#1e293b', '#334155', '#1e293b', GROUND_Y);
+        drawRoom('#1e293b', '#0f172a', '#334155', GROUND_Y);
 
-        // 1. Ejecutar el código libre de Escenario/Fondo de esta escena
         const bgFn = compiledBgRenderers[activeIdx];
         if (bgFn) {
           try { bgFn(sandboxApi, progress, localFrame); } catch (e) {}
         }
 
-        // 2. Ejecutar el código libre de Animación/Actores de esta escena
         const fgFn = compiledFgRenderers[activeIdx];
         if (fgFn) {
           try { fgFn(sandboxApi, progress, localFrame); } catch (e) {
@@ -1218,7 +1217,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Generativo 100% Libre v11.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Generativo v12.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1231,13 +1230,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v11.0...');
+  console.log('🔊 Ensamblando MP4 final v12.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Generativo 100% Libre v11.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Generativo 100% Libre v12.0 generado con éxito!');
   process.exit(0);
 }
 
