@@ -59,7 +59,7 @@ const FALLBACK_COLOR_ICONS = [
 async function resolveSvgForPixelArt(rawQuery) {
   let q = String(rawQuery || 'sparkles').trim().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9-_:\s]/g, '').trim();
+    .replace(/[^a-z0-9_:\s-]/g, '').trim();
 
   if (ES_TO_EN_MAP[q]) q = ES_TO_EN_MAP[q];
   const cleanName = q.includes(':') ? q.split(':')[1] : q.replace(/\s+/g, '-');
@@ -522,12 +522,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 5. MOTOR PRINCIPAL v7.1 (HUD CLÁSICO + ANIMACIONES CINEMÁTICAS 8-BIT)
+// 5. MOTOR PRINCIPAL v7.2 (HUD CLÁSICO + ANIMACIONES CINEMÁTICAS 8-BIT)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload Pixel-Art Studio v7.1 desde URL...');
+    console.log('📥 Descargando payload Pixel-Art Studio v7.2 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -592,6 +592,11 @@ async function main() {
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
 
+  // Serialización segura para evitar que caracteres especiales rompan el bloque <script>
+  const safeEscenasJson = JSON.stringify(escenasCinematic).replace(/<\/script>/gi, '<\\/script>');
+  const safeChunksJson = JSON.stringify(subtitleChunks).replace(/<\/script>/gi, '<\\/script>');
+  const safeSpritesJson = JSON.stringify(spriteCache).replace(/<\/script>/gi, '<\\/script>');
+
   const htmlContent = `
   <!DOCTYPE html>
   <html lang="es">
@@ -623,7 +628,6 @@ async function main() {
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
-      /* TU HUD CLÁSICO INTACTO */
       .arcade-hud {
         position: absolute; top: 32px; left: 26px; right: 26px;
         display: flex; justify-content: space-between; align-items: center;
@@ -679,16 +683,15 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasCinematic)};
-      const subtitleChunks = ${JSON.stringify(subtitleChunks)};
-      const rawSpriteCache = ${JSON.stringify(spriteCache)};
+      const escenas = ${safeEscenasJson};
+      const subtitleChunks = ${safeChunksJson};
+      const rawSpriteCache = ${safeSpritesJson};
       const totalFrames = ${totalFrames};
 
-      // RESOLUCIÓN PIXEL-ART CONTINUA: 120x213 celdas (6x6 px reales sin huecos negros intermedios)
       const COLS = 120;
       const ROWS = 213;
       const CELL = 6;
-      const GROUND_Y = 140; // Suelo calibrado encima del rótulo texto_2 y de la caja de subtítulos
+      const GROUND_Y = 140;
 
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
@@ -742,9 +745,6 @@ async function main() {
         }
       }
 
-      // ======================================================================
-      // RASTERIZADOR SÓLIDO DE SPRITES DE APOYO (30x30 SIN HUECOS)
-      // ======================================================================
       async function rasterizeAllSprites() {
         const SIZE = 30;
         const offCanvas = document.createElement('canvas');
@@ -839,9 +839,6 @@ async function main() {
         }
       }
 
-      // ======================================================================
-      // CIELOS CON DITHERING RETRO Y PALETAS DE COLOR (COMO ROSSNATOR & HAPPY HILLS)
-      // ======================================================================
       const PALETTES = {
         sunset: { sky1: '#2d1b4e', sky2: '#682c57', sky3: '#b84a54', sky4: '#f38157', ground1: '#3b2137', ground2: '#231321' },
         day:    { sky1: '#2b6cb0', sky2: '#4299e1', sky3: '#63b3ed', sky4: '#bee3f8', ground1: '#48bb78', ground2: '#2f855a' },
@@ -880,11 +877,6 @@ async function main() {
         }
       }
 
-      // ======================================================================
-      // CONSTRUCTORES ARTESANALES DE PERSONAJES Y ESCENAS (ESTILO 8BIT HEISTS)
-      // ======================================================================
-
-      // 1. RETRATO EN PRIMER PLANO ("TALKING HEAD" - Inspirado en Charles Ponzi de 8Bit Heists)
       function drawCloseUpPortrait(esc, progress, localFrame, isTalking) {
         const role = esc.character_role || 'suit_boss';
         fillRect(0, 0, COLS, ROWS, '#4a3222');
@@ -892,7 +884,6 @@ async function main() {
         fillBorderedRect(10, 42, 30, 22, '#e2e8f0', '#2b1d14');
         for (let r = 47; r < 59; r += 3) fillRect(14, r, 22, 1, '#94a3b8');
 
-        // Sprite del objeto clave en un cuadro a la derecha
         fillBorderedRect(82, 40, 28, 28, '#1e293b', '#eab308');
         drawSolidSprite(esc.actor_1?.icon, 96, 54, 0.75, false);
 
@@ -907,7 +898,6 @@ async function main() {
         else if (role === 'military') { suitCol = '#3f6212'; lapelCol = '#1a2e05'; tieCol = '#1a2e05'; hatCol = '#365314'; }
         else if (role === 'hacker') { suitCol = '#111827'; lapelCol = '#1f2937'; tieCol = '#10b981'; hatCol = null; }
 
-        // Hombros y Traje
         fillBorderedRect(cx - 34, headY + 22, 68, 42, suitCol, '#0b0c10');
         for (let r = 0; r < 20; r++) {
           const vw = Math.max(2, 11 - Math.floor(r * 0.5));
@@ -919,14 +909,12 @@ async function main() {
         fillRect(cx - 22, headY + 40, 8, 3, '#ffffff');
         fillCircle(cx - 14, headY + 34, 2, '#e63946');
 
-        // Cuello y Cabeza con sombreado lateral pixel-art
         fillBorderedRect(cx - 9, headY + 14, 18, 10, '#d49a73', '#0b0c10');
         fillBorderedRect(cx - 18, headY - 18, 36, 34, '#e6ad86', '#0b0c10');
         fillRect(cx + 10, headY - 16, 7, 32, '#d49a73');
         fillBorderedRect(cx - 21, headY - 4, 4, 10, '#d49a73', '#0b0c10');
         fillBorderedRect(cx + 17, headY - 4, 4, 10, '#d49a73', '#0b0c10');
 
-        // Pelo o Sombrero/Casco
         fillRect(cx - 18, headY - 18, 36, 7, hairCol);
         if (hatCol) {
           fillBorderedRect(cx - 28, headY - 20, 56, 5, hatCol, '#0b0c10');
@@ -955,7 +943,6 @@ async function main() {
           }
         }
 
-        // Nariz y Boca sincronizada
         fillRect(cx - 2, headY + 1, 4, 5, '#c6865e');
         const mouthOpen = isTalking && (Math.floor(localFrame / 3) % 2 === 0);
         if (mouthOpen) {
@@ -966,7 +953,6 @@ async function main() {
           fillRect(cx + 5, headY + 7, 2, 2, '#2b1d14');
         }
 
-        // Mano en primer plano sosteniendo billete / documento
         const handY = headY + 30 - Math.round(Math.sin(progress * Math.PI) * 5);
         fillBorderedRect(cx - 6, handY - 8, 34, 16, '#80ed99', '#064e3b');
         fillBorderedRect(cx - 3, handY - 5, 28, 10, '#52b788', '#1b4332');
@@ -977,7 +963,6 @@ async function main() {
         fillRect(cx, handY - 2, 1, 9, '#0b0c10');
       }
 
-      // 2. MINI-PERSONAJE PIXEL-ART EXPRESIVO
       function drawMiniPerson(x, y, suitCol, hatCol, isWalking, localFrame, facingLeft = false, speechSymbol = null) {
         const step = isWalking ? (Math.floor(localFrame / 4) % 2) : 0;
         fillRect(x - 3, y + 1, 7, 1, 'rgba(0,0,0,0.4)');
@@ -1001,7 +986,6 @@ async function main() {
         }
       }
 
-      // 3. ACUMULACIÓN DE MULTITUD (Estilo 8 Bit History & 8Bit Heists)
       function renderCrowdAccumulation(esc, progress, localFrame) {
         drawDitheredSky(esc.palette_mode, GROUND_Y);
         fillBorderedRect(62, 48, 52, GROUND_Y - 48, '#9b2226', '#0b0c10');
@@ -1025,7 +1009,6 @@ async function main() {
         }
       }
 
-      // 4. COMPARACIÓN DE ESCALA / APILAMIENTO (Estilo Everest & Báscula de 8Bit Heists)
       function renderScaleComparison(esc, progress, localFrame) {
         drawDitheredSky('night', GROUND_Y);
         for (let r = 0; r < 65; r++) {
@@ -1045,7 +1028,6 @@ async function main() {
         }
       }
 
-      // 5. MAPA Y TRAYECTORIA DE PUNTOS (Estilo Mapa Italia -> USA de 8Bit Heists)
       function renderMapTrajectory(esc, progress, localFrame) {
         fillRect(0, 0, COLS, ROWS, '#1d4ed8');
         for (let r = 0; r < ROWS; r += 6) {
@@ -1071,7 +1053,6 @@ async function main() {
         drawSolidSprite(esc.actor_2?.icon, 96, 82, 0.85, false);
       }
 
-      // 6. PLANO TÉCNICO / DOCUMENTO OFICIAL CON SELLO DE ALERTA
       function renderDocumentBlueprint(esc, progress, localFrame) {
         fillRect(0, 0, COLS, ROWS, '#2b1d14');
         fillBorderedRect(12, 44, 96, 92, '#f5ebe0', '#0b0c10');
@@ -1093,7 +1074,6 @@ async function main() {
         }
       }
 
-      // 7. RED PIRAMIDAL / COLAPSO DE SISTEMA
       function renderPyramidNetwork(esc, progress, localFrame) {
         fillRect(0, 0, COLS, ROWS, '#141622');
         const rows = [1, 2, 3, 4];
@@ -1117,7 +1097,6 @@ async function main() {
         });
       }
 
-      // 8. ESCENA LATERAL CON PAISAJE, OBJETO Y BOCADILLOS (Estilo Happy Hills y Rossnator)
       function renderSideScrollJourney(esc, progress, localFrame) {
         drawDitheredSky(esc.palette_mode, GROUND_Y);
 
@@ -1140,7 +1119,6 @@ async function main() {
         drawSolidSprite(esc.actor_1?.icon, walkX + 26, botY, 0.85, false);
       }
 
-      // 9. CLÍMAX DE FUEGO Y LLUVIA PIXEL-ART (Estilo Rossnator)
       function renderDramaticFireScene(esc, progress, localFrame) {
         drawDitheredSky('storm', GROUND_Y);
 
@@ -1168,7 +1146,6 @@ async function main() {
         drawSolidSprite(esc.actor_2?.icon, 60, 62, 0.90, false);
       }
 
-      // 10. TARJETA FINAL DE DECISIÓN ESTILO RPG
       function renderFinalChoiceCard(esc, progress, localFrame) {
         renderCrowdAccumulation(esc, 0.85, localFrame);
 
@@ -1185,7 +1162,6 @@ async function main() {
         fillRect(34, 87, 42, 4, selectSecond ? '#ffd166' : '#64748b');
       }
 
-      // FUENTE PIXEL ART 3x5 PARA RÓTULOS EN EL LIENZO (COMO EN TU v6.0)
       const FONT_3X5 = {
         'A': ['010','101','111','101','101'], 'B': ['110','101','110','101','110'],
         'C': ['111','100','100','100','111'], 'D': ['110','101','101','101','110'],
@@ -1211,7 +1187,7 @@ async function main() {
       };
 
       function drawPixelString(str, centerX, startY, color) {
-        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!?+- ]/g, '').slice(0, 12);
+        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!?+ -]/g, '').slice(0, 12);
         if (!clean) return;
         const scale = 2;
         const charW = 3 * scale;
@@ -1270,7 +1246,6 @@ async function main() {
         const progress = Math.max(0, Math.min(1, localT / durEsc));
         const localFrame = Math.floor(localT * 30);
 
-        // 1. Renderizar el Plano Cinematográfico correspondiente
         const shot = esc.shot_type || 'closeup_character';
         if (shot === 'closeup_character') {
           drawCloseUpPortrait(esc, progress, localFrame, true);
@@ -1292,10 +1267,10 @@ async function main() {
           renderSideScrollJourney(esc, progress, localFrame);
         }
 
-        // 2. Rótulos pixelados dentro del lienzo (Con contador progresivo si hay cifra en multitud/escala)
         let topText = esc.texto_1 || '';
         if ((shot === 'crowd_accumulation' || shot === 'scale_comparison') && esc.big_metric) {
-          const baseNum = parseInt(String(esc.big_metric).replace(/\D/g, ''), 10);
+          const digitsOnly = String(esc.big_metric).replace(/[^0-9]/g, '');
+          const baseNum = parseInt(digitsOnly, 10);
           if (!isNaN(baseNum) && baseNum > 10) {
             const curVal = Math.max(1, Math.round(baseNum * Math.min(1, progress * 1.15)));
             topText = String(curVal) + '+';
@@ -1305,10 +1280,8 @@ async function main() {
         if (topText) drawPixelString(topText, 60, 19, '#ffd166');
         if (esc.texto_2) drawPixelString(esc.texto_2, 60, 148, '#00f5d4');
 
-        // 3. Volcar la matriz al lienzo
         flushGridToCanvas();
 
-        // 4. Subtítulos sincronizados
         let cIdx = subtitleChunks.findIndex((c, idx) => {
           if (idx === subtitleChunks.length - 1) return t >= c.start;
           return t >= c.start && t < c.end;
@@ -1348,12 +1321,13 @@ async function main() {
 
   const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--disable-setuid-sandbox'] });
   const page = await browser.newPage();
+  page.on('pageerror', err => console.error('⚠️ Error en navegador:', err.message));
   await page.setViewport({ width: 720, height: 1280 });
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
   await page.evaluate(async () => { await window.initSpritesReady; });
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v7.1 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v7.2 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1366,13 +1340,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final Pixel-Art Studio v7.1...');
+  console.log('🔊 Ensamblando MP4 final Pixel-Art Studio v7.2...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v7.1 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v7.2 generado con éxito!');
   process.exit(0);
 }
 
