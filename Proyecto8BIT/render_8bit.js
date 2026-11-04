@@ -4,6 +4,9 @@ const https = require('https');
 const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
+// ============================================================================
+// 1. UTILIDADES DE RED Y AUTO-BUSCADOR DE SPRITES (ICONIFY COLOR + VECTOR)
+// ============================================================================
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
     https.get(url, (response) => {
@@ -19,12 +22,95 @@ function downloadFile(url, dest) {
   });
 }
 
+function fetchText(url) {
+  return new Promise((resolve) => {
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) return resolve(null);
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve(data));
+    }).on('error', () => resolve(null));
+  });
+}
+
+// Diccionario rápido de traducción Español -> Inglés por si la IA envía algún término en español
+const ES_TO_EN_MAP = {
+  'perro': 'dog', 'pelota': 'tennis', 'avion': 'airplane', 'cohete': 'rocket',
+  'virus': 'biohazard', 'calavera': 'skull', 'esqueleto': 'skull', 'mago': 'mage',
+  'espada': 'crossed-swords', 'escudo': 'shield', 'chip': 'microchip', 'reloj': 'stopwatch',
+  'ordenador': 'laptop', 'servidor': 'server', 'dinero': 'money-bag', 'moneda': 'coin',
+  'banco': 'bank', 'fuego': 'fire', 'explosion': 'collision', 'alerta': 'warning',
+  'medico': 'health-worker', 'hospital': 'hospital', 'coche': 'automobile', 'camion': 'delivery-truck',
+  'tren': 'high-speed-train', 'barco': 'ship', 'mundo': 'globe-showing-americas', 'ciencia': 'microscope',
+  'dragon': 'dragon', 'gato': 'cat', 'leon': 'lion', 'comida': 'hamburger', 'pizza': 'pizza',
+  'corazon': 'red-heart', 'cerebro': 'brain', 'robot': 'robot', 'telefono': 'mobile-phone',
+  'satelite': 'satellite', 'bomba': 'bomb', 'llave': 'key', 'candado': 'locked', 'trofeo': 'trophy'
+};
+
+async function resolveSvgForPixelArt(rawQuery) {
+  let q = String(rawQuery || 'sparkles').trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9-_:\s]/g, '').trim();
+
+  if (ES_TO_EN_MAP[q]) q = ES_TO_EN_MAP[q];
+  const cleanName = q.includes(':') ? q.split(':')[1] : q.replace(/\s+/g, '-');
+
+  // 1. Intentar primero packs a todo color (Twemoji / Noto) ideales para rasterizar a Pixel Art
+  const directPrefixes = ['twemoji', 'noto', 'fluent-emoji-flat', 'lucide', 'tabler'];
+  for (const pref of directPrefixes) {
+    const svg = await fetchText(`https://api.iconify.design/${pref}/${cleanName}.svg`);
+    if (svg && svg.includes('<svg')) {
+      return { svg, isColorPack: ['twemoji', 'noto', 'fluent-emoji-flat'].includes(pref) };
+    }
+  }
+
+  // 2. Búsqueda semántica en Iconify priorizando packs coloridos y de videojuegos
+  const searchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=twemoji,noto,fluent-emoji-flat,game-icons,lucide,tabler&limit=6`;
+  const searchRes = await fetchText(searchUrl);
+  if (searchRes) {
+    try {
+      const parsed = JSON.parse(searchRes);
+      if (Array.isArray(parsed.icons) && parsed.icons.length > 0) {
+        // Priorizar twemoji o noto si están en los resultados
+        const colorMatch = parsed.icons.find(ic => ic.startsWith('twemoji:') || ic.startsWith('noto:') || ic.startsWith('fluent-emoji-flat:'));
+        const chosen = colorMatch || parsed.icons[0];
+        const [bPref, bName] = chosen.split(':');
+        const svg = await fetchText(`https://api.iconify.design/${bPref}/${bName}.svg`);
+        if (svg && svg.includes('<svg')) {
+          return { svg, isColorPack: ['twemoji', 'noto', 'fluent-emoji-flat'].includes(bPref) };
+        }
+      }
+    } catch (e) {}
+  }
+
+  // 3. Fallback garantizado
+  const fallbackSvg = await fetchText('https://api.iconify.design/twemoji/sparkles.svg');
+  return { svg: fallbackSvg || '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="#ffd166"/></svg>', isColorPack: true };
+}
+
+async function preloadAllSceneSprites(escenas) {
+  const spriteCache = {};
+  const keysToFetch = new Set(['dog', 'tennis', 'airplane', 'microchip', 'skull', 'biohazard', 'robot', 'money-bag', 'fire', 'warning', 'sparkles']);
+
+  for (const s of (escenas || [])) {
+    if (s.actor_1?.icon) keysToFetch.add(String(s.actor_1.icon).toLowerCase().trim());
+    if (s.actor_2?.icon) keysToFetch.add(String(s.actor_2.icon).toLowerCase().trim());
+    if (s.projectile_icon) keysToFetch.add(String(s.projectile_icon).toLowerCase().trim());
+  }
+
+  for (const key of keysToFetch) {
+    if (key && !spriteCache[key]) {
+      spriteCache[key] = await resolveSvgForPixelArt(key);
+    }
+  }
+  return spriteCache;
+}
+
+// ============================================================================
+// 2. ALINEACIÓN FONÉTICA DE SUBTÍTULOS
+// ============================================================================
 function normalizeForMatch(str) {
-  return (str || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]/g, '')
-    .toLowerCase();
+  return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 }
 
 function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
@@ -150,10 +236,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     }
   }
 
-  const lastSpokenEnd = elevenWords.length > 0
-    ? elevenWords[elevenWords.length - 1].end
-    : Math.max(1, realAudioDuration - 0.35);
-
+  const lastSpokenEnd = elevenWords.length > 0 ? elevenWords[elevenWords.length - 1].end : Math.max(1, realAudioDuration - 0.35);
   const sceneWeights = sceneTokensList.map(tokens => Math.max(3, tokens.reduce((acc, tk) => acc + calcTokenWeight(tk), 0)));
   const totalScriptWeight = sceneWeights.reduce((a, b) => a + b, 0);
 
@@ -258,9 +341,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     });
   });
 
-  for (let i = 0; i < escenas.length - 1; i++) {
-    escenas[i].fin = escenas[i + 1].inicio;
-  }
+  for (let i = 0; i < escenas.length - 1; i++) escenas[i].fin = escenas[i + 1].inicio;
   if (escenas.length > 0) {
     escenas[0].inicio = 0;
     escenas[escenas.length - 1].fin = realAudioDuration;
@@ -272,7 +353,15 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   return allChunks;
 }
 
+// ============================================================================
+// 3. SINTETIZADOR CHIPTUNE 8-BIT PROCEDURAL (CORREGIDO Y AMPLIADO)
+// ============================================================================
 function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
+  const allTypes = [
+    'coin_8bit', 'laser_8bit', 'explosion_8bit', 'powerup_8bit', 'alarm_8bit',
+    'glitch_8bit', 'jump_8bit', 'error_8bit', 'typing_8bit', 'level_clear_8bit'
+  ];
+
   function get8BitRecipe(type, pitchMod) {
     const p = pitchMod.toFixed(3);
     const catalog = {
@@ -290,7 +379,6 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
     return catalog[type] || catalog.coin_8bit;
   }
 
-  const allTypes = Object.keys(get8BitRecipe(''));
   const inputs = [];
   const filterParts = [];
 
@@ -320,10 +408,106 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   return fs.existsSync('hook_sfx.wav') && fs.statSync('hook_sfx.wav').size > 1000;
 }
 
+// ============================================================================
+// 4. AUTO-SANITIZADOR SEMÁNTICO DE ESCENAS (GARANTIZA CERO ESCENAS VACÍAS)
+// ============================================================================
+function enrichScenesWithSemantics(escenas) {
+  const worldThemes = ['sky_clouds', 'city_street', 'tech_lab', 'nature_park', 'office_interior', 'medieval_fantasy', 'hospital_clinic', 'financial_floor', 'industrial_plant', 'deep_space'];
+  const choreographies = ['chase_and_catch', 'sky_flight_crisis', 'crowd_contagion', 'counter_overflow_boom', 'projectile_impact', 'dialogue_interaction', 'workstation_action', 'hero_showcase'];
+  const timeModes = ['day', 'sunset', 'night', 'cyber'];
+
+  return (escenas || []).map((esc, idx) => {
+    const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''} ${esc.narrativa_visual || ''}`.toLowerCase();
+
+    // Inferencia inteligente si la IA usó otro esquema o dejó algún campo vacío
+    let world = esc.world_theme || esc.bg_type || '';
+    let choreo = esc.choreography || esc.diorama || '';
+    let icon1 = esc.actor_1?.icon || (Array.isArray(esc.actors) && esc.actors[0]?.tipo) || '';
+    let icon2 = esc.actor_2?.icon || (Array.isArray(esc.actors) && esc.actors[1]?.tipo) || '';
+    let proj = esc.projectile_icon || '';
+
+    if (!world || !worldThemes.includes(world)) {
+      if (/avion|boeing|vuelo|aire|piloto|aeropuerto|cielo/.test(text)) world = 'sky_clouds';
+      else if (/perro|parque|pelota|bosque|montana|animal|arbol|campo/.test(text)) world = 'nature_park';
+      else if (/warcraft|jefe|hechizo|castillo|espada|juego|fantasia|heroe/.test(text)) world = 'medieval_fantasy';
+      else if (/calle|ciudad|capital|edificio|trafico|gente|habitante/.test(text)) world = 'city_street';
+      else if (/hospital|medico|paciente|clinica|pandemia|virus|enfermedad|ciencia|cientifico/.test(text)) world = 'hospital_clinic';
+      else if (/bolsa|dinero|millon|precio|banco|accion|mercado/.test(text)) world = 'financial_floor';
+      else if (/generador|motor|energia|planta|nuclear|fabrica|maquina/.test(text)) world = 'industrial_plant';
+      else if (/espacio|cohete|satelite|planeta|orbita/.test(text)) world = 'deep_space';
+      else if (/software|codigo|bit|contador|servidor|computadora|sistema|reboot|reset/.test(text)) world = 'tech_lab';
+      else world = worldThemes[idx % worldThemes.length];
+    }
+
+    if (!choreo || !choreographies.includes(choreo)) {
+      if (/avion|boeing|vuelo|cohete|apagar|aire/.test(text)) choreo = 'sky_flight_crisis';
+      else if (/contagi|pandemia|esparci|propag|infect|esqueleto|habitante|masivo/.test(text)) choreo = 'crowd_contagion';
+      else if (/contador|bit|248|dos mil millones|overflow|desbordamiento|negativo|numero/.test(text)) choreo = 'counter_overflow_boom';
+      else if (/perro|pelota|perseguir|correr|huir|escapar|cazar|huyeron/.test(text)) choreo = 'chase_and_catch';
+      else if (/lanzaba|ataque|dispar|hechizo|maldicion|cortando|rayo/.test(text)) choreo = 'projectile_impact';
+      else if (/estudio|cientifico|programador|reiniciar|servidor|consola/.test(text)) choreo = 'workstation_action';
+      else if (/hablar|comerciante|orden|ley|acuerdo/.test(text)) choreo = 'dialogue_interaction';
+      else choreo = choreographies[idx % choreographies.length];
+    }
+
+    if (!icon1) {
+      if (/avion|boeing|vuelo/.test(text)) icon1 = 'airplane';
+      else if (/perro|mascota/.test(text)) icon1 = 'dog';
+      else if (/hakkar|jefe|monstruo|dragon/.test(text)) icon1 = 'dragon';
+      else if (/jugador|guerrero|personaje|heroe/.test(text)) icon1 = 'mage';
+      else if (/cientifico|medico|estudio/.test(text)) icon1 = 'microscope';
+      else if (/servidor|blizzard|computadora/.test(text)) icon1 = 'laptop';
+      else if (/generador|energia|luz/.test(text)) icon1 = 'zap';
+      else icon1 = 'robot';
+    }
+
+    if (!icon2) {
+      if (/pelota|bola/.test(text)) icon2 = 'tennis';
+      else if (/chip|software|bit|codigo/.test(text)) icon2 = 'microchip';
+      else if (/esqueleto|muerte|caos/.test(text)) icon2 = 'skull';
+      else if (/virus|pandemia|contagio|maldicion/.test(text)) icon2 = 'biohazard';
+      else if (/reloj|tiempo|dia|segundo|meses/.test(text)) icon2 = 'stopwatch';
+      else if (/alerta|peligro|panico|fallo|error/.test(text)) icon2 = 'warning';
+      else icon2 = 'sparkles';
+    }
+
+    if (!proj) {
+      if (/virus|contagio|maldicion|hechizo/.test(text)) proj = 'biohazard';
+      else if (/energia|luz|electrica|rayo/.test(text)) proj = 'zap';
+      else if (/fuego|explosion|ataque/.test(text)) proj = 'fire';
+      else proj = 'sparkles';
+    }
+
+    return {
+      ...esc,
+      world_theme: world,
+      time_of_day: esc.time_of_day || timeModes[idx % timeModes.length],
+      weather: esc.weather || (idx % 3 === 0 ? 'sparks' : 'clear'),
+      choreography: choreo,
+      camera_mode: esc.camera_mode || (idx % 2 === 0 ? 'pan_right' : 'zoom_in'),
+      actor_1: {
+        icon: String(icon1).toLowerCase().trim(),
+        color: esc.actor_1?.color || '#00f5d4',
+        label: esc.actor_1?.label || ''
+      },
+      actor_2: {
+        icon: String(icon2).toLowerCase().trim(),
+        color: esc.actor_2?.color || '#ffd166',
+        label: esc.actor_2?.label || ''
+      },
+      projectile_icon: String(proj).toLowerCase().trim(),
+      counter_value: esc.counter_value || (/\d+/.exec(text)?.[0] || '2147483647')
+    };
+  });
+}
+
+// ============================================================================
+// 5. FUNCIÓN PRINCIPAL Y MOTOR DE RENDERIZADO 8-BIT v5.0 (60x106 BLOQUES)
+// ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload Universal 8-BIT desde URL...');
+    console.log('📥 Descargando payload Universal 8-BIT v5.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -339,13 +523,13 @@ async function main() {
 
   execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.45" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'inherit' });
 
-  let realAudioDuration = 40;
+  let realAudioDuration = 42;
   try {
     const probeOutput = execSync('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nk=1 voice_clean.wav', { encoding: 'utf8' });
     const parsed = parseFloat(probeOutput.trim());
     if (!isNaN(parsed) && parsed > 0) realAudioDuration = parsed;
   } catch (err) {
-    realAudioDuration = Number(payload.duracion_total) || 40;
+    realAudioDuration = Number(payload.duracion_total) || 42;
   }
 
   const fps = 30;
@@ -359,12 +543,28 @@ async function main() {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
 
-  const escenasOriginales = payload.escenas || [];
-  const subtitleChunks = buildSubtitleChunks(escenasOriginales, payload.alignment, duracionExactaVideo);
+  // Enriquecer y blindar todas las escenas para que ninguna quede vacía jamás
+  const escenasEnriquecidas = enrichScenesWithSemantics(payload.escenas || []);
+  // Evitar repetir el mismo mundo o coreografía en dos escenas consecutivas
+  const allWorlds = ['sky_clouds', 'city_street', 'tech_lab', 'nature_park', 'office_interior', 'medieval_fantasy', 'hospital_clinic', 'financial_floor', 'industrial_plant', 'deep_space'];
+  const allChoreos = ['chase_and_catch', 'sky_flight_crisis', 'crowd_contagion', 'counter_overflow_boom', 'projectile_impact', 'dialogue_interaction', 'workstation_action', 'hero_showcase'];
+  for (let i = 1; i < escenasEnriquecidas.length; i++) {
+    if (escenasEnriquecidas[i].world_theme === escenasEnriquecidas[i - 1].world_theme) {
+      escenasEnriquecidas[i].world_theme = allWorlds[(idx = i * 3 + hash) % allWorlds.length];
+    }
+    if (escenasEnriquecidas[i].choreography === escenasEnriquecidas[i - 1].choreography) {
+      escenasEnriquecidas[i].choreography = allChoreos[(i * 5 + hash) % allChoreos.length];
+    }
+  }
 
+  console.log('🎨 Descargando y rasterizando Sprites universales desde Iconify...');
+  const spriteCache = await preloadAllSceneSprites(escenasEnriquecidas);
+  const subtitleChunks = buildSubtitleChunks(escenasEnriquecidas, payload.alignment, duracionExactaVideo);
+
+  // Mezcla de Audio con bg_music2.mp3 + SFX Chiptune
   try {
     let hasSfx = false;
-    try { hasSfx = buildChiptuneSfxTrack(escenasOriginales, duracionExactaVideo, hash); } catch (e) {}
+    try { hasSfx = buildChiptuneSfxTrack(escenasEnriquecidas, duracionExactaVideo, hash); } catch (e) {}
 
     let bgMusicPath = path.resolve(__dirname, '../bg_music2.mp3');
     if (!fs.existsSync(bgMusicPath)) bgMusicPath = path.resolve('bg_music2.mp3');
@@ -413,7 +613,7 @@ async function main() {
       }
       .crt-scanlines {
         position: absolute; inset: 0;
-        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.20) 50%);
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.18) 50%);
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
@@ -434,7 +634,7 @@ async function main() {
         width: 0%; z-index: 30;
       }
       .subtitle-container {
-        position: absolute; bottom: 82px; left: 26px; right: 26px;
+        position: absolute; bottom: 78px; left: 26px; right: 26px;
         min-height: 155px; display: flex; justify-content: center; align-items: center;
         z-index: 25; pointer-events: none;
       }
@@ -458,7 +658,7 @@ async function main() {
   <body>
     <div class="progress-bar" id="pbar"></div>
     <div class="arcade-hud">
-      <div class="hud-tag">${(payload.subrama || 'UNIVERSAL 8-BIT').slice(0, 24)}</div>
+      <div class="hud-tag">${(payload.subrama || 'PIXEL DOCS 8-BIT').slice(0, 24)}</div>
       <div class="hud-score" id="hud-frame">ESC:01</div>
     </div>
 
@@ -472,20 +672,23 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasOriginales)};
+      const escenas = ${JSON.stringify(escenasEnriquecidas)};
       const subtitleChunks = ${JSON.stringify(subtitleChunks)};
+      const rawSpriteCache = ${JSON.stringify(spriteCache)};
       const totalFrames = ${totalFrames};
 
-      const COLS = 45;
-      const ROWS = 80;
-      const CELL = 16;
-      const GROUND_Y = 53;
+      // CUADRÍCULA DE ALTA DEFINICIÓN RETRO: 60x106 bloques (Cada bloque = 12x12 px -> 720x1272)
+      const COLS = 60;
+      const ROWS = 106;
+      const CELL = 12;
+      const GROUND_Y = 70;
 
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
       const viewportWrapper = document.getElementById('viewport-wrapper');
 
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#101420'));
+      const rasterizedSprites = {};
 
       function setCell(x, y, color) {
         const cx = Math.round(x);
@@ -497,99 +700,504 @@ async function main() {
 
       function drawRect(x, y, w, h, color) {
         for (let r = 0; r < h; r++) {
-          for (let c = 0; c < w; c++) {
-            setCell(x + c, y + r, color);
-          }
+          for (let c = 0; c < w; c++) setCell(x + c, y + r, color);
         }
       }
 
       function drawCircle(cx, cy, radius, color) {
         for (let r = -radius; r <= radius; r++) {
           for (let c = -radius; c <= radius; c++) {
-            if (c * c + r * r <= radius * radius) {
-              setCell(cx + c, cy + r, color);
-            }
+            if (c * c + r * r <= radius * radius) setCell(cx + c, cy + r, color);
           }
         }
       }
 
-      // FONDO UNIVERSAL PARAMÉTRICO GENERADO SEGÚN LOS COLORES QUE PIDA LA IA
-      function drawUniversalBackground(bg, localFrame, scrollX) {
-        const sky = bg.sky_color || '#1e293b';
-        const ground = bg.ground_color || '#334155';
-        const horizon = bg.horizon_type || 'hills';
+      function drawLine(x0, y0, x1, y1, color) {
+        let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        let err = dx + dy;
+        let cx = Math.round(x0), cy = Math.round(y0);
+        const ex = Math.round(x1), ey = Math.round(y1);
+        for (let i = 0; i < 120; i++) {
+          setCell(cx, cy, color);
+          if (cx === ex && cy === ey) break;
+          let e2 = 2 * err;
+          if (e2 >= dy) { err += dy; cx += sx; }
+          if (e2 <= dx) { err += dx; cy += sy; }
+        }
+      }
 
-        drawRect(0, 0, COLS, GROUND_Y, sky);
+      // ======================================================================
+      // AUTO-PIXELADOR: CONVIERTE CUALQUIER SVG DE ICONIFY EN UNA MATRIZ 20x20
+      // CON BORDE NEGRO RETRO (#05050A) Y CUANTIZACIÓN DE COLOR 8-BIT
+      // ======================================================================
+      async function rasterizeAllSprites() {
+        const SIZE = 20;
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = SIZE;
+        offCanvas.height = SIZE;
+        const offCtx = offCanvas.getContext('2d');
 
-        // Elementos de horizonte dinámicos
-        if (horizon === 'trees' || horizon === 'park') {
-          for (let i = -2; i <= 4; i++) {
-            const tx = ((i * 14 - Math.floor(scrollX * 0.4)) % 70 + 70) % 70 - 10;
-            drawRect(tx, GROUND_Y - 12, 6, 12, '#14532d');
-            drawRect(tx - 2, GROUND_Y - 18, 10, 8, '#166534');
+        for (const [key, item] of Object.entries(rawSpriteCache)) {
+          try {
+            let svgText = item.svg || '';
+            if (!item.isColorPack) {
+              svgText = svgText
+                .replace(/stroke="currentColor"/gi, 'stroke="#00f5d4"')
+                .replace(/fill="currentColor"/gi, 'fill="#ffd166"');
+              if (!/stroke=/i.test(svgText)) {
+                svgText = svgText.replace(/<svg/i, '<svg fill="#00f5d4" stroke="#ffffff"');
+              }
+            }
+            const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            await new Promise((res) => {
+              img.onload = res;
+              img.onerror = res;
+              img.src = url;
+            });
+            offCtx.clearRect(0, 0, SIZE, SIZE);
+            offCtx.drawImage(img, 1, 1, SIZE - 2, SIZE - 2);
+            URL.revokeObjectURL(url);
+
+            const imgData = offCtx.getImageData(0, 0, SIZE, SIZE).data;
+            const mat = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+            let activePixels = 0;
+
+            for (let r = 0; r < SIZE; r++) {
+              for (let c = 0; c < SIZE; c++) {
+                const idx = (r * SIZE + c) * 4;
+                const a = imgData[idx + 3];
+                if (a > 75) {
+                  // Cuantizar canal RGB a saltos de 32 para estética 8-bit pura
+                  const qr = Math.min(255, Math.round(imgData[idx] / 32) * 32);
+                  const qg = Math.min(255, Math.round(imgData[idx + 1] / 32) * 32);
+                  const qb = Math.min(255, Math.round(imgData[idx + 2] / 32) * 32);
+                  const hex = '#' + [qr, qg, qb].map(v => v.toString(16).padStart(2, '0')).join('');
+                  mat[r][c] = (hex === '#000000') ? '#1e293b' : hex;
+                  activePixels++;
+                }
+              }
+            }
+
+            // Añadir silueta/borde negro 8-bit alrededor de los píxeles activos
+            if (activePixels > 12) {
+              const outlined = mat.map(row => [...row]);
+              for (let r = 1; r < SIZE - 1; r++) {
+                for (let c = 1; c < SIZE - 1; c++) {
+                  if (!mat[r][c]) {
+                    if (mat[r - 1][c] || mat[r + 1][c] || mat[r][c - 1] || mat[r][c + 1]) {
+                      outlined[r][c] = '#05050a';
+                    }
+                  }
+                }
+              }
+              rasterizedSprites[key] = outlined;
+            }
+          } catch (e) {}
+        }
+      }
+
+      // DIBUJAR SPRITE RASTERIZADO CON DEFORMACIÓN PROCEDURAL DE PATAS, REBOTE Y ESCALA
+      function drawSpriteMatrix(iconKey, centerX, centerY, animMode, localFrame, flipX, scale = 1) {
+        const key = String(iconKey || 'sparkles').toLowerCase().trim();
+        const mat = rasterizedSprites[key] || rasterizedSprites['sparkles'];
+        if (!mat) return;
+
+        const SIZE = mat.length;
+        const step = Math.floor(localFrame / 4) % 2;
+
+        // Deformación Squash & Stretch para rebotes (ej. pelotas, mascotas)
+        let stretchX = 1.0, stretchY = 1.0;
+        if (animMode === 'bounce_physics') {
+          const phase = (localFrame % 18) / 18;
+          if (phase < 0.15) { stretchX = 1.22; stretchY = 0.78; } // Aplastamiento contra el suelo
+          else if (phase < 0.5) { stretchX = 0.90; stretchY = 1.12; } // Estiramiento al subir
+        }
+
+        for (let r = 0; r < SIZE; r++) {
+          for (let c = 0; c < SIZE; c++) {
+            const col = mat[r][c];
+            if (!col) continue;
+
+            let relX = (c - SIZE / 2) * stretchX * scale;
+            let relY = (r - SIZE / 2) * stretchY * scale;
+            if (flipX) relX = -relX;
+
+            // Animación articular de patas/base (las últimas 5 filas del sprite alternan su zancada)
+            if (animMode === 'walk_cycle' && r >= SIZE - 5) {
+              const isLeftHalf = c < SIZE / 2;
+              if ((isLeftHalf && step === 0) || (!isLeftHalf && step === 1)) {
+                relX += flipX ? -2 : 2;
+                relY -= 1;
+              } else {
+                relX += flipX ? 1 : -1;
+              }
+            }
+
+            setCell(centerX + relX, centerY + relY, col);
           }
-        } else if (horizon === 'city' || horizon === 'office') {
+        }
+      }
+
+      // HUMANOIDE / CRIATURA 8-BIT ARTICULADO DE APOYO PARA MULTITUDES Y ESCENAS
+      function drawArticulatedCharacter(x, y, shirtColor, state, localFrame, facingLeft) {
+        const dir = facingLeft ? -1 : 1;
+        const step = Math.floor(localFrame / 4) % 2;
+        const put = (dx, dy, col) => setCell(x + dx * dir, y + dy, col);
+
+        if (state === 'skeleton') {
+          // Esqueleto 8-bit blanco para escenas de contagio/muerte (ej. WoW)
+          drawRect(x - 2, y - 9, 5, 4, '#f8f9fa');
+          setCell(x - 1, y - 8, '#05050a'); setCell(x + 1, y - 8, '#05050a');
+          drawRect(x - 1, y - 4, 3, 4, '#e2e8f0');
+          setCell(x - 2, y - 3, '#f8f9fa'); setCell(x + 2, y - 3, '#f8f9fa');
+          setCell(x - 1, y, '#f8f9fa'); setCell(x + 1, y, '#f8f9fa');
+          return;
+        }
+
+        // Sombra en el suelo
+        drawRect(x - 2, y + 4, 5, 1, 'rgba(0,0,0,0.45)');
+        // Cabeza con pelo y ojos
+        drawRect(x - 2, y - 9, 5, 2, '#4a2c11');
+        drawRect(x - 2, y - 7, 5, 3, '#ffcdb2');
+        put(2, -6, '#05050a');
+        // Torso
+        drawRect(x - 2, y - 4, 5, 5, shirtColor || '#38bdf8');
+        // Brazos y piernas con ciclo de caminata real
+        if (step === 0) {
+          put(-3, -3, shirtColor); put(-3, -2, '#ffcdb2');
+          put(3, -4, shirtColor); put(3, -5, '#ffcdb2');
+          put(-2, 1, '#1e3a8a'); put(-3, 2, '#1e3a8a'); put(-3, 3, '#ffffff');
+          put(1, 1, '#1e3a8a'); put(2, 2, '#1e3a8a'); put(2, 3, '#ffffff');
+        } else {
+          put(-3, -4, shirtColor); put(-3, -5, '#ffcdb2');
+          put(3, -3, shirtColor); put(3, -2, '#ffcdb2');
+          put(-1, 1, '#1e3a8a'); put(-1, 2, '#1e3a8a'); put(-1, 3, '#ffffff');
+          put(2, 1, '#1e3a8a'); put(3, 2, '#1e3a8a'); put(3, 3, '#ffffff');
+        }
+      }
+
+      // ======================================================================
+      // 10 MUNDOS PARALLAX MULTICAPA A TODO COLOR (NUNCA MÁS FONDO VACÍO)
+      // ======================================================================
+      function drawWorldEnvironment(esc, localFrame) {
+        const theme = esc.world_theme || 'city_street';
+        const farScroll = Math.floor(localFrame * 0.25);
+        const midScroll = Math.floor(localFrame * 0.65);
+        const floorScroll = Math.floor(localFrame * 1.1);
+
+        // 1. PARQUE NATURAL / BOSQUE SOLEADO (Perros, naturaleza, deportes, vida)
+        if (theme === 'nature_park') {
+          for (let r = 0; r < GROUND_Y; r++) {
+            drawRect(0, r, COLS, 1, r < 25 ? '#38bdf8' : (r < 48 ? '#7dd3fc' : '#bae6fd'));
+          }
+          drawCircle(48, 18, 6, '#fde047'); // Sol brillante
+          // Nubes esponjosas
+          for (let i = 0; i < 4; i++) {
+            const cx = ((i * 18 - farScroll) % 72 + 72) % 72 - 8;
+            drawRect(cx, 16 + (i % 2) * 7, 10, 3, '#ffffff');
+            drawRect(cx + 2, 14 + (i % 2) * 7, 6, 2, '#ffffff');
+          }
+          // Colinas verdes lejanas
+          for (let c = 0; c < COLS; c++) {
+            const hh = 8 + Math.round(Math.sin((c + farScroll) * 0.12) * 4);
+            drawRect(c, GROUND_Y - hh, 1, hh, '#4ade80');
+          }
+          // Árboles detallados en plano medio con Parallax
           for (let i = -1; i <= 4; i++) {
-            const bx = ((i * 16 - Math.floor(scrollX * 0.3)) % 80 + 80) % 80 - 12;
-            drawRect(bx, 20, 10, GROUND_Y - 20, '#0f172a');
-            for (let ry = 23; ry < GROUND_Y - 3; ry += 4) {
-              setCell(bx + 2, ry, '#fde047'); setCell(bx + 6, ry, '#fde047');
-            }
+            const tx = ((i * 16 - midScroll) % 80 + 80) % 80 - 10;
+            drawRect(tx + 3, GROUND_Y - 14, 3, 14, '#78350f'); // Tronco
+            drawCircle(tx + 4, GROUND_Y - 17, 6, '#15803d');
+            drawCircle(tx + 3, GROUND_Y - 19, 4, '#22c55e');
           }
-        } else if (horizon === 'space') {
-          for (let s = 0; s < 25; s++) {
-            const sx = (s * 13 + localFrame) % COLS;
-            const sy = (s * 9) % 45;
-            setCell(sx, sy, '#ffffff');
+          // Césped vivo con flores y tierra
+          drawRect(0, GROUND_Y, COLS, 4, '#16a34a');
+          drawRect(0, GROUND_Y + 4, COLS, ROWS - GROUND_Y - 4, '#15803d');
+          for (let c = 0; c < COLS; c += 3) {
+            const gx = ((c - floorScroll) % COLS + COLS) % COLS;
+            setCell(gx, GROUND_Y + 1, '#86efac');
+            if (c % 9 === 0) setCell(gx, GROUND_Y - 1, '#f43f5e'); // Flores rojas
           }
+          return;
         }
 
-        // Suelo firme
-        drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, ground);
-        for (let c = 0; c < COLS; c++) {
-          setCell(c, GROUND_Y, '#ffffff');
+        // 2. CIELO Y NUBES EN ALTURA (Boeing 787, aviación, clima, aves)
+        if (theme === 'sky_clouds') {
+          for (let r = 0; r < ROWS; r++) {
+            const col = r < 30 ? '#0284c7' : (r < 62 ? '#38bdf8' : (r < 78 ? '#bae6fd' : '#0369a1'));
+            drawRect(0, r, COLS, 1, col);
+          }
+          // Capa de nubes lejanas y cercanas desplazándose rápido (sensación de velocidad aérea)
+          for (let i = 0; i < 6; i++) {
+            const cx = ((i * 15 - floorScroll * 2) % 90 + 90) % 90 - 15;
+            const cy = 20 + (i * 9) % 45;
+            drawRect(cx, cy, 14, 4, '#ffffff');
+            drawRect(cx + 3, cy - 2, 8, 2, '#f8fafc');
+          }
+          // Cordillera y océano allá abajo en la distancia
+          for (let c = 0; c < COLS; c++) {
+            const mh = 6 + Math.round(Math.cos((c + farScroll) * 0.18) * 4);
+            drawRect(c, GROUND_Y - mh, 1, mh, '#334155');
+          }
+          return;
+        }
+
+        // 3. MUNDO FANTASÍA / MEDIEVAL / VIDEOJUEGO RPG (World of Warcraft, historia, batallas)
+        if (theme === 'medieval_fantasy') {
+          for (let r = 0; r < GROUND_Y; r++) {
+            drawRect(0, r, COLS, 1, r < 26 ? '#1e1b4b' : (r < 50 ? '#312e81' : '#4c1d95'));
+          }
+          drawCircle(46, 18, 6, '#fef08a'); // Luna llena mágica
+          // Silueta de castillo con almenas y antorchas encendidas
+          for (let i = -1; i <= 3; i++) {
+            const bx = ((i * 22 - midScroll) % 88 + 88) % 88 - 14;
+            drawRect(bx, 26, 16, GROUND_Y - 26, '#1e293b');
+            // Almenas de la torre
+            for (let a = 0; a < 16; a += 4) drawRect(bx + a, 23, 2, 3, '#1e293b');
+            // Ventana gótica iluminada
+            drawRect(bx + 6, 34, 4, 8, '#fbbf24');
+            // Antorcha llameante
+            const flameCol = (localFrame + i) % 2 === 0 ? '#f97316' : '#fde047';
+            drawRect(bx + 2, 48, 2, 3, flameCol);
+          }
+          // Suelo empedrado medieval
+          for (let r = GROUND_Y; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              grid[r][c] = ((Math.floor((c + floorScroll) / 4) + Math.floor(r / 3)) % 2 === 0) ? '#475569' : '#334155';
+            }
+          }
+          return;
+        }
+
+        // 4. CIUDAD VIVA / GRAN CAPITAL (Sociedad, tráfico, economía, historias urbanas)
+        if (theme === 'city_street') {
+          for (let r = 0; r < GROUND_Y; r++) {
+            drawRect(0, r, COLS, 1, r < 30 ? '#1d3557' : '#457b9d');
+          }
+          for (let i = -1; i <= 4; i++) {
+            const bx = ((i * 18 - midScroll) % 90 + 90) % 90 - 15;
+            const bh = 28 + (i % 3) * 8;
+            drawRect(bx, GROUND_Y - bh, 14, bh, i % 2 === 0 ? '#1e293b' : '#334155');
+            for (let wy = GROUND_Y - bh + 4; wy < GROUND_Y - 6; wy += 5) {
+              for (let wx = bx + 2; wx < bx + 12; wx += 4) {
+                drawRect(wx, wy, 2, 3, ((wx + wy) % 3 === 0) ? '#fde047' : '#38bdf8');
+              }
+            }
+          }
+          // Asfalto con líneas viales en movimiento
+          drawRect(0, GROUND_Y, COLS, 3, '#94a3b8');
+          drawRect(0, GROUND_Y + 3, COLS, ROWS - GROUND_Y - 3, '#1e293b');
+          for (let c = 0; c < COLS; c++) {
+            if ((c + floorScroll * 2) % 10 < 5) drawRect(c, GROUND_Y + 8, 1, 2, '#facc15');
+          }
+          return;
+        }
+
+        // 5. HOSPITAL / CENTRO CIENTÍFICO DE INVESTIGACIÓN
+        if (theme === 'hospital_clinic') {
+          drawRect(0, 0, COLS, GROUND_Y, '#e0f2fe');
+          drawRect(0, 42, COLS, 3, '#38bdf8');
+          for (let i = -1; i <= 3; i++) {
+            const px = ((i * 24 - midScroll) % 72 + 72) % 72 - 12;
+            drawRect(px, 20, 14, 12, '#0f172a');
+            for (let e = 0; e < 12; e++) {
+              const py = (e === (localFrame % 12)) ? 23 : 26;
+              setCell(px + 1 + e, py, '#4ade80');
+            }
+            drawRect(px + 17, 21, 3, 9, '#ef4444');
+            drawRect(px + 14, 24, 9, 3, '#ef4444');
+          }
+          for (let r = GROUND_Y; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+              grid[r][c] = ((Math.floor((c + floorScroll) / 4) + Math.floor(r / 3)) % 2 === 0) ? '#f1f5f9' : '#cbd5e1';
+            }
+          }
+          return;
+        }
+
+        // 6. LABORATORIO TECNOLÓGICO / SERVIDORES / FINANZAS / PLANTA INDUSTRIAL
+        drawRect(0, 0, COLS, GROUND_Y, '#0f172a');
+        // Líneas de datos en el techo
+        drawRect(0, 16, COLS, 2, '#1e293b');
+        for (let p = 0; p < 6; p++) {
+          const px = (p * 10 + localFrame * 2) % COLS;
+          drawRect(px, 16, 2, 2, '#00f5d4');
+        }
+        // Racks y pantallas holográficas en movimiento con midScroll
+        for (let i = -1; i <= 4; i++) {
+          const rx = ((i * 16 - midScroll) % 80 + 80) % 80 - 12;
+          drawRect(rx, 22, 11, GROUND_Y - 22, '#1e293b');
+          drawRect(rx + 1, 24, 9, GROUND_Y - 26, '#090d16');
+          for (let ry = 27; ry < GROUND_Y - 5; ry += 4) {
+            const on = ((localFrame + ry + i) % 8) < 4;
+            drawRect(rx + 2, ry, 3, 2, on ? '#10b981' : '#064e3b');
+            drawRect(rx + 6, ry, 2, 2, !on ? '#38bdf8' : '#ef4444');
+          }
+        }
+        for (let r = GROUND_Y; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            grid[r][c] = ((c + floorScroll) % 6 === 0 || r % 4 === 0) ? '#0284c7' : '#090d16';
+          }
         }
       }
 
-      // RENDERIZADOR UNIVERSAL DE SPRITES DESDE MATRICES DINÁMICAS (DISEÑADAS POR LA IA)
-      function renderUniversalSprite(actor, localFrame) {
-        const matrix = actor.sprite_matrix;
-        if (!Array.isArray(matrix) || matrix.length === 0) return;
+      // ======================================================================
+      // 8 COREOGRAFÍAS DINÁMICAS UNIVERSALES (ANIMAN CUALQUIER COMBINACIÓN DE OBJETOS)
+      // ======================================================================
+      function renderSceneChoreography(esc, localFrame) {
+        const choreo = esc.choreography || 'chase_and_catch';
+        const icon1 = esc.actor_1?.icon || 'dog';
+        const icon2 = esc.actor_2?.icon || 'tennis';
+        const projIcon = esc.projectile_icon || 'sparkles';
 
-        const palette = actor.palette || { '1': '#ffd166', '2': '#ffffff', '3': '#ef233c', '4': '#38bdf8' };
-        const h = matrix.length;
-        const w = matrix[0].length;
+        // 1. PERSECUCIÓN Y REBOTE CON FÍSICA REAL (Ej: Perro jugando con pelota, persecución, huida)
+        if (choreo === 'chase_and_catch') {
+          const cycle = localFrame % 75;
+          const runnerX = 12 + Math.floor((cycle / 75) * 32);
+          const ballX = Math.min(52, runnerX + 14 - Math.floor((cycle / 75) * 8));
+          const bounceY = GROUND_Y - 9 - Math.abs(Math.round(Math.sin(localFrame * 0.32) * 14));
 
-        // Físicas universales de movimiento
-        let ax = Number(actor.x) || 20;
-        let ay = GROUND_Y - h;
-        const phys = actor.physics || 'idle';
+          // Dibujar Actor 1 corriendo con patas animadas detrás de Actor 2
+          drawSpriteMatrix(icon1, runnerX, GROUND_Y - 10, 'walk_cycle', localFrame, false, 1.15);
+          // Dibujar Actor 2 botando con física de aplastamiento y estiramiento
+          drawSpriteMatrix(icon2, ballX, bounceY, 'bounce_physics', localFrame, false, 0.95);
 
-        if (phys === 'walk_right' || phys === 'chase') {
-          ax = 5 + ((Number(actor.x) + Math.floor(localFrame * 0.45)) % (COLS - w - 4));
-        } else if (phys === 'bounce_gravity') {
-          const bounce = Math.abs(Math.sin(localFrame * 0.3) * 12);
-          ay = GROUND_Y - h - Math.round(bounce);
-        } else if (phys === 'float_wave') {
-          ay = (Number(actor.y) || 30) + Math.round(Math.sin(localFrame * 0.25) * 3);
-        }
-
-        // Animación de 2 frames alternos si la IA provee sprite_matrix_frame2
-        const useFrame2 = (Math.floor(localFrame / 5) % 2 === 1) && Array.isArray(actor.sprite_matrix_frame2);
-        const activeMatrix = useFrame2 ? actor.sprite_matrix_frame2 : matrix;
-
-        for (let r = 0; r < activeMatrix.length; r++) {
-          const rowStr = String(activeMatrix[r]);
-          for (let c = 0; c < rowStr.length; c++) {
-            const ch = rowStr[c];
-            if (palette[ch]) {
-              setCell(ax + c, ay + r, palette[ch]);
+          // Partículas de polvo al correr y estrellitas cuando la alcanza
+          setCell(runnerX - 8, GROUND_Y - 2, '#ffffff');
+          setCell(runnerX - 10, GROUND_Y - 3, '#cbd5e1');
+          if (Math.abs(runnerX - ballX) < 9) {
+            for (let s = 0; s < 6; s++) {
+              const ang = (s / 6) * Math.PI * 2 + localFrame * 0.2;
+              setCell(ballX + Math.cos(ang) * 8, bounceY + Math.sin(ang) * 8, '#fde047');
             }
           }
+          return;
         }
+
+        // 2. VUELO Y CRISIS AÉREA (Ej: Boeing 787 apagándose en vuelo, cohete, ave)
+        if (choreo === 'sky_flight_crisis') {
+          const isCrisis = localFrame > 28;
+          const planeX = 22 + Math.round(Math.sin(localFrame * 0.1) * 6);
+          const planeY = isCrisis
+            ? Math.min(GROUND_Y - 8, 36 + Math.floor((localFrame - 28) * 0.65))
+            : (36 + Math.round(Math.sin(localFrame * 0.22) * 3));
+
+          // Estela de viento y humo detrás del avión/objeto volador
+          for (let tr = 1; tr <= 12; tr++) {
+            const trailCol = isCrisis ? (tr % 2 === 0 ? '#ef4444' : '#475569') : '#ffffff';
+            drawCircle(planeX - tr * 2, planeY + (isCrisis ? -tr : 2), isCrisis ? 2 : 1, trailCol);
+          }
+
+          drawSpriteMatrix(icon1, planeX, planeY, 'fly_bank', localFrame, false, 1.35);
+
+          // El culpable/evento secundario (ej: chip, rayo, alerta) parpadeando arriba a la derecha
+          const badgeY = 28 + Math.round(Math.cos(localFrame * 0.3) * 2);
+          drawSpriteMatrix(icon2, 46, badgeY, 'pulse_float', localFrame, false, 1.0);
+          if (isCrisis) {
+            drawLine(42, badgeY, planeX + 4, planeY - 2, '#ef4444');
+          }
+          return;
+        }
+
+        // 3. CONTAGIO MASIVO / TRANSFORMACIÓN DE MULTITUD (Ej: Pandemia WoW, tendencias sociales)
+        if (choreo === 'crowd_contagion') {
+          // Jefe / Fuente en la parte superior izquierda lanzando el hechizo/esporas
+          drawSpriteMatrix(icon1, 14, 34, 'pulse_float', localFrame, false, 1.25);
+
+          // 4 Habitantes en la calle que van siendo alcanzados por las esporas y transformándose
+          const positions = [24, 34, 44, 52];
+          positions.forEach((px, idx) => {
+            const infectFrame = 12 + idx * 14;
+            const isInfected = localFrame >= infectFrame;
+
+            // Proyectil/espora viajando en arco hacia cada habitante
+            if (localFrame < infectFrame && localFrame > infectFrame - 14) {
+              const p = (localFrame - (infectFrame - 14)) / 14;
+              const sx = 14 + p * (px - 14);
+              const sy = 34 + p * (GROUND_Y - 8 - 34) - Math.sin(p * Math.PI) * 12;
+              drawCircle(sx, sy, 2, '#4ade80');
+              setCell(sx, sy, '#ef4444');
+            }
+
+            if (isInfected) {
+              // Se transforma en Actor 2 (ej: calavera/esqueleto/infectado)
+              drawSpriteMatrix(icon2, px, GROUND_Y - 9, 'bounce_physics', localFrame + idx * 5, false, 0.95);
+              setCell(px, GROUND_Y - 18 - (localFrame % 6), '#4ade80');
+            } else {
+              drawArticulatedCharacter(px, GROUND_Y - 4, idx % 2 === 0 ? '#38bdf8' : '#f97316', 'walk', localFrame + idx * 7, true);
+            }
+          });
+          return;
+        }
+
+        // 4. CONTADOR DIGITAL EN VIVO + DESBORDAMIENTO (Ej: 32 bits, Día 248, Y2K, precios)
+        if (choreo === 'counter_overflow_boom') {
+          const isOverflow = localFrame > 32;
+          // Gran pantalla LED retro en el centro superior (Y=24..38)
+          drawRect(8, 23, 44, 15, '#05050a');
+          drawRect(9, 24, 42, 13, isOverflow ? '#450a0a' : '#064e3b');
+          const displayNum = isOverflow ? 'OVERFLOW' : String( Math.min(2147483647, 1999999000 + localFrame * 4812345) ).slice(0, 9);
+          drawPixelString(displayNum, 30, 28, isOverflow ? '#ef4444' : '#4ade80');
+
+          // Actores debajo recibiendo la descarga cuando el contador desborda
+          drawSpriteMatrix(icon1, 18, GROUND_Y - 10, 'walk_cycle', localFrame, false, 1.15);
+          drawSpriteMatrix(icon2, 42, GROUND_Y - 10, 'bounce_physics', localFrame, true, 1.15);
+
+          if (isOverflow) {
+            drawLine(30, 38, 18, GROUND_Y - 12, '#ef4444');
+            drawLine(30, 38, 42, GROUND_Y - 12, '#fde047');
+          }
+          return;
+        }
+
+        // 5. IMPACTO DE PROYECTILES / BATALLA / CAUSA-EFECTO DIRECTO
+        if (choreo === 'projectile_impact') {
+          drawSpriteMatrix(icon1, 14, GROUND_Y - 10, 'walk_cycle', localFrame, false, 1.2);
+          const hit = (localFrame % 20) > 12;
+          drawSpriteMatrix(icon2, 46 + (hit ? 2 : 0), GROUND_Y - 10, 'bounce_physics', localFrame, true, 1.2);
+
+          // Proyectiles viajando de Actor 1 a Actor 2
+          const prog = (localFrame % 20) / 20;
+          const px = 20 + prog * 24;
+          const py = (GROUND_Y - 12) - Math.sin(prog * Math.PI) * 8;
+          drawSpriteMatrix(projIcon, px, py, 'pulse_float', localFrame, false, 0.65);
+          return;
+        }
+
+        // 6. DIÁLOGO / INTERACCIÓN SOCIAL / NEGOCIACIÓN
+        if (choreo === 'dialogue_interaction') {
+          drawArticulatedCharacter(14, GROUND_Y - 4, '#38bdf8', 'walk', localFrame, false);
+          drawArticulatedCharacter(46, GROUND_Y - 4, '#f43f5e', 'walk', localFrame + 10, true);
+
+          // Bocadillo de diálogo pixel-art encima mostrando los iconos del tema
+          drawRect(18, 24, 24, 18, '#ffffff');
+          drawRect(19, 25, 22, 16, '#0f172a');
+          const activeIcon = (Math.floor(localFrame / 25) % 2 === 0) ? icon1 : icon2;
+          drawSpriteMatrix(activeIcon, 30, 33, 'bounce_physics', localFrame, false, 0.85);
+          return;
+        }
+
+        // 7. ESTACIÓN DE TRABAJO / CIENCIA / INVESTIGACIÓN EN VIVO
+        if (choreo === 'workstation_action') {
+          drawArticulatedCharacter(14, GROUND_Y - 4, '#ffffff', 'walk', localFrame, false);
+          // Monitor holográfico gigante a la derecha proyectando los dos objetos animados
+          drawRect(24, 24, 28, 26, '#00f5d4');
+          drawRect(25, 25, 26, 24, '#090d16');
+          drawSpriteMatrix(icon1, 33, 37, 'bounce_physics', localFrame, false, 0.9);
+          drawSpriteMatrix(icon2, 44, 37, 'walk_cycle', localFrame, true, 0.9);
+          return;
+        }
+
+        // 8. HERO SHOWCASE (Presentación dinámica con ambos actores en acción)
+        const x1 = 18 + Math.round(Math.sin(localFrame * 0.15) * 4);
+        const x2 = 42 - Math.round(Math.sin(localFrame * 0.15) * 4);
+        drawSpriteMatrix(icon1, x1, GROUND_Y - 11, 'walk_cycle', localFrame, false, 1.25);
+        drawSpriteMatrix(icon2, x2, GROUND_Y - 11, 'bounce_physics', localFrame, true, 1.25);
       }
 
-      // FUENTE 3x5 PIXEL ART
+      // FUENTE PIXEL ART 3x5 PARA RÓTULOS EN PANTALLA
       const FONT_3X5 = {
         'A': ['010','101','111','101','101'], 'B': ['110','101','110','101','110'],
         'C': ['111','100','100','100','111'], 'D': ['110','101','101','101','110'],
@@ -614,11 +1222,11 @@ async function main() {
       };
 
       function drawPixelString(str, startX, startY, color) {
-        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!? ]/g, '').slice(0, 9);
+        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!? ]/g, '').slice(0, 11);
         if (!clean) return;
         const totalW = clean.length * 4 - 1;
         let cx = Math.max(2, Math.floor(startX - totalW / 2));
-        drawRect(cx - 2, startY - 1, totalW + 4, 7, '#080a14');
+        drawRect(cx - 2, startY - 1, totalW + 4, 7, '#05050a');
         for (let i = 0; i < clean.length; i++) {
           const ch = clean[i];
           const glyph = FONT_3X5[ch];
@@ -647,6 +1255,8 @@ async function main() {
       const hudFrame = document.getElementById('hud-frame');
       let lastChunkIdx = -2;
 
+      window.initSpritesReady = rasterizeAllSprites();
+
       window.setFrameData = function(frameIdx, t) {
         const linearRatio = (frameIdx + 1) / totalFrames;
         document.getElementById('pbar').style.width = Math.min(100, linearRatio * 100) + '%';
@@ -661,24 +1271,32 @@ async function main() {
 
         const esc = escenas[activeIdx] || {};
         const localT = Math.max(0, t - (esc.inicio || 0));
+        const durEsc = Math.max(0.5, (esc.fin || 4) - (esc.inicio || 0));
         const localFrame = Math.floor(localT * 30);
-        const scrollX = localFrame * 0.35;
 
-        // 1. Fondo universal paramétrico
-        drawUniversalBackground(esc.background_params || { sky_color: '#1e293b', ground_color: '#334155', horizon_type: 'hills' }, localFrame, scrollX);
+        // Movimiento suave de cámara
+        const scale = 1.0 + (localT / durEsc) * 0.05;
+        let tx = 0, ty = 0;
+        if (esc.camera_mode === 'dramatic_shake' && localFrame > 15) {
+          tx = Math.sin(localFrame * 2.2) * 6;
+          ty = Math.cos(localFrame * 2.9) * 5;
+        }
+        viewportWrapper.style.transform = \`translate(\${tx.toFixed(1)}px, \${ty.toFixed(1)}px) scale(\${scale.toFixed(3)})\`;
 
-        // 2. Renderizar los actores con sus matrices dinámicas diseñadas por la IA
-        const actors = Array.isArray(esc.actors) ? esc.actors : [];
-        actors.forEach(act => {
-          renderUniversalSprite(act, localFrame);
-        });
+        // 1. Pintar el Mundo Parallax Multicapa
+        drawWorldEnvironment(esc, localFrame);
 
-        // 3. Rótulos en pantalla
-        if (esc.texto_1) drawPixelString(esc.texto_1, 22, 8, '#ffd166');
-        if (esc.texto_2) drawPixelString(esc.texto_2, 22, 56, '#00f5d4');
+        // 2. Pintar la Coreografía Interactiva con los Sprites Auto-Pixelados
+        renderSceneChoreography(esc, localFrame);
 
+        // 3. Rótulos superiores e inferiores
+        if (esc.texto_1) drawPixelString(esc.texto_1, 30, 11, '#ffd166');
+        if (esc.texto_2) drawPixelString(esc.texto_2, 30, 74, '#00f5d4');
+
+        // 4. Volcar la matriz 60x106 al lienzo
         flushGridToCanvas();
 
+        // 5. Subtítulos sincronizados
         let cIdx = subtitleChunks.findIndex((c, idx) => {
           if (idx === subtitleChunks.length - 1) return t >= c.start;
           return t >= c.start && t < c.end;
@@ -721,8 +1339,9 @@ async function main() {
   await page.setViewport({ width: 720, height: 1280 });
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
+  await page.evaluate(async () => { await window.initSpritesReady; });
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Universal 8-Bit (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Universal Auto-Pixelador v5.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -732,10 +1351,10 @@ async function main() {
 
   await browser.close();
 
-  console.log('🔊 Ensamblando MP4 final Universal 8-Bit...');
+  console.log('🔊 Ensamblando MP4 final Universal 8-Bit v5.0...');
   execSync(`ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`, { stdio: 'inherit' });
 
-  console.log('✅ ¡Vídeo Universal 8-Bit generado con éxito!');
+  console.log('✅ ¡Vídeo Universal 8-Bit v5.0 generado con éxito!');
 }
 
 main().catch(err => {
