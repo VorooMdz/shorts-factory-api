@@ -333,12 +333,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR MULTI-AGENTE PIXEL-ART STUDIO v10.0
+// 3. MOTOR GENERATIVO 100% LIBRE v11.0 (ESCENA POR ESCENA, TEXTOS CRISTALINOS)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload Multi-Agente v10.0 desde URL...');
+    console.log('📥 Descargando payload v11.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -418,7 +418,7 @@ async function main() {
   <head>
     <meta charset="UTF-8">
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Montserrat:wght@900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@700&family=Montserrat:wght@900&display=swap');
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body {
         width: 720px; height: 1280px;
@@ -435,7 +435,7 @@ async function main() {
       }
       .crt-scanlines {
         position: absolute; inset: 0;
-        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.16) 50%);
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.14) 50%);
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
@@ -514,6 +514,8 @@ async function main() {
       const subtitleChunks = ${safeChunksJson};
       const totalFrames = ${totalFrames};
 
+      // LIENZO DE 120x213 PÍXELES VIRTUALES (6x6 px reales continuos)
+      // ZONA VISIBLE DE ESCENA ENTRE RÓTULOS: X = 4..116, Y = 34..142 (GROUND_Y = 138)
       const COLS = 120;
       const ROWS = 213;
       const CELL = 6;
@@ -521,10 +523,15 @@ async function main() {
 
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
-      let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1a1c2c'));
+      let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#0f172a'));
+
+      // Cola de textos nítidos para renderizar encima de los píxeles con fuente Press Start 2P real (CERO LETRAS ROTAS)
+      let crispTextQueue = [];
+      // Registro de posición X previa por actor para que SOLO muevan las piernas si realmente caminan
+      let actorPrevX = {};
 
       // ======================================================================
-      // 1. PRIMITIVAS PIXEL-ART CON ANTI-DESBORDAMIENTO
+      // 1. PRIMITIVAS PIXEL-ART Y PINCELES DE TEXTURA 16-BIT (CERO PRESETS FIJOS)
       // ======================================================================
       function setPx(x, y, color) {
         const cx = Math.round(x);
@@ -536,21 +543,56 @@ async function main() {
 
       function fillRect(x, y, w, h, color) {
         const x0 = Math.round(x), y0 = Math.round(y);
-        const rw = Math.round(w), rh = Math.round(h);
+        const rw = Math.min(96, Math.round(w)), rh = Math.min(90, Math.round(h));
         for (let r = 0; r < rh; r++) {
           for (let c = 0; c < rw; c++) setPx(x0 + c, y0 + r, color);
         }
       }
 
       function fillBorderedRect(x, y, w, h, fillColor, borderColor = '#0b0c10') {
-        fillRect(x, y, w, h, borderColor);
-        if (w > 2 && h > 2) {
-          fillRect(x + 1, y + 1, w - 2, h - 2, fillColor);
+        const rw = Math.min(96, Math.round(w)), rh = Math.min(86, Math.round(h));
+        fillRect(x, y, rw, rh, borderColor);
+        if (rw > 2 && rh > 2) {
+          fillRect(x + 1, y + 1, rw - 2, rh - 2, fillColor);
+        }
+      }
+
+      // PINCEL DE TEXTURA 16-BIT PARA CONSTRUIR CUALQUIER ESCENARIO DESDE CERO
+      function drawTexturedBox(x, y, w, h, texture = 'brick', baseColor = '#475569', accentColor = '#334155', localFrame = 0) {
+        const x0 = Math.round(x), y0 = Math.round(y);
+        const rw = Math.min(120, Math.round(w)), rh = Math.min(115, Math.round(h));
+        fillBorderedRect(x0, y0, rw, rh, baseColor, '#0b0c10');
+
+        for (let r = 2; r < rh - 2; r++) {
+          for (let c = 2; c < rw - 2; c++) {
+            const gx = x0 + c, gy = y0 + r;
+            if (texture === 'brick') {
+              const rowShift = (Math.floor(r / 4) % 2) * 3;
+              if (r % 4 === 0 || (c + rowShift) % 6 === 0) setPx(gx, gy, accentColor);
+            } else if (texture === 'glass_windows') {
+              if (r % 7 >= 2 && r % 7 <= 5 && c % 6 >= 2 && c % 6 <= 4) {
+                setPx(gx, gy, ((r + c) % 5 === 0) ? '#fde047' : accentColor);
+              }
+            } else if (texture === 'server_rack') {
+              if (r % 4 === 0 && c > 2 && c < rw - 3) {
+                const blink = ((Math.floor(localFrame / 5) + r + c) % 4 === 0);
+                setPx(gx, gy, blink ? '#ef4444' : accentColor);
+              }
+            } else if (texture === 'wood_stripes') {
+              if (c % 6 === 0) setPx(gx, gy, accentColor);
+            } else if (texture === 'grid_tile' || texture === 'court') {
+              if (r % 6 === 0 || c % 6 === 0) setPx(gx, gy, accentColor);
+            } else if (texture === 'water') {
+              if ((r + c + Math.floor(localFrame / 3)) % 7 === 0) setPx(gx, gy, accentColor);
+            } else if (texture === 'grass') {
+              if ((r * 3 + c) % 5 === 0) setPx(gx, gy, accentColor);
+            }
+          }
         }
       }
 
       function fillCircle(cx, cy, radius, color) {
-        const rInt = Math.round(radius);
+        const rInt = Math.min(36, Math.round(radius));
         for (let r = -rInt; r <= rInt; r++) {
           for (let c = -rInt; c <= rInt; c++) {
             if (c * c + r * r <= rInt * rInt) setPx(cx + c, cy + r, color);
@@ -559,12 +601,13 @@ async function main() {
       }
 
       function fillBorderedCircle(cx, cy, radius, fillColor, borderColor = '#0b0c10') {
-        fillCircle(cx, cy, radius, borderColor);
-        if (radius > 1) fillCircle(cx, cy, radius - 1, fillColor);
+        const rInt = Math.min(36, Math.round(radius));
+        fillCircle(cx, cy, rInt, borderColor);
+        if (rInt > 1) fillCircle(cx, cy, rInt - 1, fillColor);
       }
 
       function drawRing(cx, cy, radius, thickness = 2, color = '#fde047') {
-        const rOut = Math.round(radius);
+        const rOut = Math.min(34, Math.round(radius));
         const rIn = Math.max(0, rOut - thickness);
         for (let r = -rOut; r <= rOut; r++) {
           for (let c = -rOut; c <= rOut; c++) {
@@ -632,248 +675,6 @@ async function main() {
         fillPolygon([[x1, y1], [x2, y2], [x3, y3]], fillColor, borderColor);
       }
 
-      // ======================================================================
-      // 2. RENDERIZADOR DE SPRITES CUSTOM 16x16 DISEÑADOS POR EL AGENTE 2
-      // (CON CONTORNO NEGRO AUTOMÁTICO DE 1PX PARA ACABADO PROFESIONAL)
-      // ======================================================================
-      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.25, flipX = false) {
-        const key = String(spriteName || '').toLowerCase().trim();
-        const def = customSprites[key] || Object.values(customSprites)[0];
-        if (!def || !Array.isArray(def.rows) || def.rows.length === 0) {
-          fillBorderedCircle(centerX, centerY, Math.round(6 * scale), '#ffd166', '#0b0c10');
-          return;
-        }
-        const rows = def.rows;
-        const pal = def.palette || { '1': '#ffd166', '2': '#ffffff', '3': '#ef4444', '4': '#38bdf8', '5': '#475569' };
-        const h = rows.length;
-        const w = String(rows[0]).length;
-        const destH = Math.max(6, Math.round(h * scale));
-        const destW = Math.max(6, Math.round(w * scale));
-        const x0 = Math.round(centerX - destW / 2);
-        const y0 = Math.round(centerY - destH / 2);
-
-        // Matriz temporal escalada para añadir contorno negro automático de 1px
-        const temp = Array.from({ length: destH + 2 }, () => Array(destW + 2).fill(null));
-        for (let dy = 0; dy < destH; dy++) {
-          const srcY = Math.min(h - 1, Math.floor((dy / destH) * h));
-          const rStr = String(rows[srcY]);
-          for (let dx = 0; dx < destW; dx++) {
-            const rawX = Math.min(w - 1, Math.floor((dx / destW) * w));
-            const srcX = flipX ? (w - 1 - rawX) : rawX;
-            const ch = rStr[srcX];
-            if (ch && ch !== '.' && ch !== '0' && ch !== ' ') {
-              temp[dy + 1][dx + 1] = pal[ch] || '#ffd166';
-            }
-          }
-        }
-
-        // Pintar borde negro exterior de 1px y luego los píxeles de color
-        for (let r = 1; r <= destH; r++) {
-          for (let c = 1; c <= destW; c++) {
-            if (!temp[r][c]) {
-              if (temp[r - 1][c] || temp[r + 1][c] || temp[r][c - 1] || temp[r][c + 1]) {
-                setPx(x0 + c - 1, y0 + r - 1, '#0b0c10');
-              }
-            }
-          }
-        }
-        for (let r = 1; r <= destH; r++) {
-          for (let c = 1; c <= destW; c++) {
-            if (temp[r][c]) {
-              setPx(x0 + c - 1, y0 + r - 1, temp[r][c]);
-            }
-          }
-        }
-      }
-
-      // ======================================================================
-      // 3. CONSTRUCTORES DE ARQUITECTURA, VEGETACIÓN Y VEHÍCULOS RICOS (16-BIT)
-      // (ERRADICA LOS RECTÁNGULOS MARRONES SIN VENTANAS Y LAS CAJAS CON RUEDAS)
-      // ======================================================================
-      function drawDetailedBuilding(x, w, h, opts = {}, localFrame = 0) {
-        const wallCol = opts.wallColor || '#475569';
-        const roofCol = opts.roofColor || '#1e293b';
-        const winCol = opts.windowColor || '#fde047';
-        const topY = GROUND_Y - h;
-
-        // Fachada con textura de ladrillo/piedra y borde
-        fillBorderedRect(x, topY, w, h, wallCol, '#0b0c10');
-        for (let ry = topY + 4; ry < GROUND_Y - 4; ry += 6) {
-          fillRect(x + 2, ry, w - 4, 1, 'rgba(0,0,0,0.2)');
-        }
-        // Tejado triangular o cornisa señorial
-        if (opts.peakedRoof) {
-          fillTriangle(x - 2, topY, x + w + 2, topY, x + Math.floor(w / 2), topY - 14, roofCol, '#0b0c10');
-        } else {
-          fillBorderedRect(x - 2, topY - 4, w + 4, 5, roofCol, '#0b0c10');
-        }
-        // Cuadrícula de ventanas con marcos e iluminación interior
-        for (let wy = topY + 6; wy < GROUND_Y - 16; wy += 11) {
-          for (let wx = x + 4; wx < x + w - 7; wx += 9) {
-            const isLit = ((wx + wy) % 3 !== 0);
-            fillBorderedRect(wx, wy, 6, 7, isLit ? winCol : '#1e293b', '#0b0c10');
-          }
-        }
-        // Puerta en planta baja anclada a GROUND_Y
-        if (w >= 18) {
-          const dx = x + Math.floor(w / 2) - 4;
-          fillBorderedRect(dx, GROUND_Y - 12, 8, 12, '#2b1d14', '#0b0c10');
-        }
-      }
-
-      function drawDetailedTree(x, scale = 1.0, localFrame = 0) {
-        const trunkW = Math.max(3, Math.round(5 * scale));
-        const trunkH = Math.round(18 * scale);
-        const sway = Math.round(Math.sin(localFrame * 0.1 + x) * 1);
-        // Tronco con raíces y corteza
-        fillBorderedRect(x - Math.floor(trunkW / 2), GROUND_Y - trunkH, trunkW, trunkH, '#5c3a21', '#0b0c10');
-        // Copa multicapa con sombreado 16-bit (oscuro -> medio -> brillo superior)
-        const rMain = Math.round(11 * scale);
-        fillBorderedCircle(x + sway, GROUND_Y - trunkH - Math.round(4 * scale), rMain, '#14532d', '#0b0c10');
-        fillCircle(x - 3 + sway, GROUND_Y - trunkH - Math.round(7 * scale), Math.round(8 * scale), '#166534');
-        fillCircle(x + 4 + sway, GROUND_Y - trunkH - Math.round(6 * scale), Math.round(7 * scale), '#15803d');
-        fillCircle(x - 1 + sway, GROUND_Y - trunkH - Math.round(10 * scale), Math.round(6 * scale), '#22c55e');
-      }
-
-      function drawDetailedVehicle(x, type = 'truck', color = '#3f6212', facingLeft = false, localFrame = 0) {
-        const dir = facingLeft ? -1 : 1;
-        const bounce = localFrame % 4 < 2 ? -1 : 0;
-        const vy = GROUND_Y + bounce;
-
-        if (type === 'truck' || type === 'van') {
-          // Caja trasera detallada con lonas/nervaduras
-          const cargoX = facingLeft ? x - 4 : x - 28;
-          fillBorderedRect(cargoX, vy - 24, 30, 18, color, '#0b0c10');
-          fillRect(cargoX + 3, vy - 21, 24, 2, 'rgba(255,255,255,0.2)');
-          fillRect(cargoX + 3, vy - 14, 24, 2, 'rgba(0,0,0,0.25)');
-          // Cabina con parabrisas y faro delantero luminoso
-          const cabX = facingLeft ? x - 16 : x + 2;
-          fillBorderedRect(cabX, vy - 19, 14, 13, color, '#0b0c10');
-          const winX = facingLeft ? cabX + 2 : cabX + 6;
-          fillBorderedRect(winX, vy - 17, 6, 6, '#7dd3fc', '#0b0c10');
-          const lightX = facingLeft ? cabX - 1 : cabX + 13;
-          fillRect(lightX, vy - 11, 2, 3, '#fde047');
-          // Haz de luz de los faros
-          fillTriangle(lightX, vy - 10, lightX + dir * 18, vy - 16, lightX + dir * 18, vy - 2, 'rgba(253, 224, 71, 0.22)', null);
-          // Ruedas con llanta girando sobre GROUND_Y
-          const w1 = facingLeft ? x - 10 : x - 20;
-          const w2 = facingLeft ? x + 16 : x + 8;
-          [w1, w2].forEach(wx => {
-            fillBorderedCircle(wx, GROUND_Y - 5, 5, '#1e293b', '#0b0c10');
-            fillCircle(wx, GROUND_Y - 5, 2, '#94a3b8');
-          });
-          return;
-        }
-        // Coche deportivo / Policial / Sedán
-        fillBorderedRect(x - 18, vy - 14, 36, 9, color, '#0b0c10');
-        fillBorderedRect(x - 10, vy - 21, 20, 8, color, '#0b0c10');
-        fillBorderedRect(x - 8, vy - 19, 7, 5, '#7dd3fc', '#0b0c10');
-        fillBorderedRect(x + 1, vy - 19, 7, 5, '#7dd3fc', '#0b0c10');
-        fillBorderedCircle(x - 11, GROUND_Y - 4, 4, '#1e293b', '#0b0c10');
-        fillBorderedCircle(x + 11, GROUND_Y - 4, 4, '#1e293b', '#0b0c10');
-      }
-
-      // ======================================================================
-      // 4. PERSONAJES EXPRESIVOS ARTICULADOS 16-BIT (CON ROSTRO, OJOS, BOCA Y BRAZOS)
-      // + EFECTOS DE DISPARO/SPRAY ANCLADOS MATEMÁTICAMENTE A LA MANO
-      // ======================================================================
-      function drawActor(x, y, opts = {}, localFrame = 0) {
-        const anchorY = (y === undefined || y === null || y > GROUND_Y) ? GROUND_Y : y;
-        const suitCol = opts.suitColor || '#3b82f6';
-        const skinCol = opts.skinColor || '#e6ad86';
-        const hatCol = opts.hatColor !== undefined ? opts.hatColor : '#1e293b';
-        const facingLeft = !!opts.facingLeft;
-        const dir = facingLeft ? -1 : 1;
-        const isMoving = !!opts.isMoving;
-        const isTalking = !!opts.isTalking;
-        const expr = opts.expression || 'determined';
-        const step = isMoving ? (Math.floor(localFrame / 4) % 2) : 0;
-
-        // Sombra firme en el suelo
-        fillRect(x - 6, anchorY, 13, 2, 'rgba(0,0,0,0.45)');
-
-        // Piernas articuladas con botas
-        const legL = step === 0 ? -2 : 0;
-        const legR = step === 1 ? -2 : 0;
-        fillBorderedRect(x - 5, anchorY - 9 + legL, 5, 9, '#1e293b', '#0b0c10');
-        fillBorderedRect(x + 1, anchorY - 9 + legR, 5, 9, '#1e293b', '#0b0c10');
-
-        // Torso detallado con cinturón/corbata
-        fillBorderedRect(x - 7, anchorY - 22, 15, 14, suitCol, '#0b0c10');
-        fillRect(x - 1, anchorY - 20, 3, 8, opts.tieColor || '#ef4444');
-        fillRect(x - 6, anchorY - 10, 13, 2, '#0b0c10');
-
-        // Cabeza Expresiva 16-Bit (con ojos, pupilas, cejas y boca)
-        const headY = anchorY - 35 + (isMoving ? (step ? -1 : 0) : 0);
-        fillBorderedRect(x - 7, headY, 15, 14, skinCol, '#0b0c10');
-
-        // Sombrero / Casco / Pelo
-        if (hatCol) {
-          fillBorderedRect(x - 9, headY - 2, 19, 3, hatCol, '#0b0c10');
-          fillBorderedRect(x - 7, headY - 6, 15, 5, hatCol, '#0b0c10');
-        } else {
-          fillRect(x - 6, headY + 1, 13, 3, '#2b1d14');
-        }
-
-        // Ojos con pupilas orientadas hacia donde mira el actor
-        const eye1X = facingLeft ? x - 5 : x - 2;
-        const eye2X = facingLeft ? x + 1 : x + 3;
-        fillRect(eye1X, headY + 5, 3, 3, '#ffffff');
-        fillRect(eye2X, headY + 5, 3, 3, '#ffffff');
-        setPx(facingLeft ? eye1X : eye1X + 2, headY + 6, '#0b0c10');
-        setPx(facingLeft ? eye2X : eye2X + 2, headY + 6, '#0b0c10');
-
-        // Cejas expresivas
-        fillRect(eye1X, headY + 3, 3, 1, '#2b1d14');
-        fillRect(eye2X, headY + 3, 3, 1, '#2b1d14');
-
-        // Boca animada
-        if (isTalking && (Math.floor(localFrame / 3) % 2 === 0)) {
-          fillRect(x - 2, headY + 10, 5, 2, '#991b1b');
-        } else {
-          fillRect(x - 2, headY + 10, 4, 1, '#2b1d14');
-        }
-
-        // Brazo extendido y Mano sosteniendo un Sprite Custom si se indica 'holdSprite'
-        const handX = x + dir * 10;
-        const handY = anchorY - 16;
-        fillBorderedRect(facingLeft ? x - 10 : x + 6, anchorY - 19, 5, 5, suitCol, '#0b0c10');
-        fillRect(handX - 1, handY - 1, 3, 3, skinCol);
-
-        if (opts.holdSprite) {
-          drawCustomSprite(opts.holdSprite, handX + dir * 5, handY - 1, opts.spriteScale || 0.9, facingLeft);
-        }
-
-        return { handX: handX + dir * 6, handY: handY - 1, headX: x, headY };
-      }
-
-      // HAZ DE ACCIÓN CONECTADO MATEMÁTICAMENTE ENTRE MANO Y OBJETIVO (CERO LÍNEAS ROTAS)
-      function drawActionBeam(fromX, fromY, toX, toY, type = 'bullets', localFrame = 0) {
-        if (type === 'spray' || type === 'smoke') {
-          for (let i = 0; i < 10; i++) {
-            const t = ((i / 10) + (localFrame * 0.04)) % 1;
-            const px = fromX + (toX - fromX) * t + Math.sin(localFrame * 0.3 + i) * (t * 5);
-            const py = fromY + (toY - fromY) * t + Math.cos(localFrame * 0.2 + i) * (t * 4);
-            fillBorderedCircle(px, py, 2 + Math.floor(t * 3), '#e2e8f0', '#94a3b8');
-          }
-          return;
-        }
-        if (type === 'laser' || type === 'flashlight') {
-          drawPixelLine(fromX, fromY, toX, toY, 2, '#ef4444');
-          fillCircle(toX, toY, 3 + (localFrame % 3), '#fde047');
-          return;
-        }
-        // Ráfaga de disparos con fogonazo en el cañón y chispas en el punto exacto de impacto
-        if (localFrame % 4 < 2) {
-          fillCircle(fromX, fromY, 4, '#fde047');
-          drawPixelLine(fromX, fromY, toX, toY, 1, '#fef08a');
-          fillCircle(toX, toY, 4, '#f97316');
-        }
-      }
-
-      // ======================================================================
-      // 5. FONDOS ESCÉNICOS RICOS CONFIGURADOS POR EL AGENTE 3
-      // ======================================================================
       function drawSky(skyTop = '#0f172a', skyMid = '#1e293b', skyBot = '#334155', groundCol = '#1e293b', horizonY = GROUND_Y) {
         const bands = [skyTop, skyMid, skyBot];
         const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
@@ -895,49 +696,325 @@ async function main() {
         }
       }
 
-      function drawRoom(wallCol = '#3b2818', stripeCol = '#2b1d14', floorCol = '#78350f', groundY = GROUND_Y) {
+      function drawRoom(wallCol = '#1e293b', stripeCol = '#0f172a', floorCol = '#334155', groundY = GROUND_Y) {
         fillRect(0, 0, COLS, groundY, wallCol);
-        for (let c = 0; c < COLS; c += 12) fillRect(c, 0, 2, groundY, stripeCol);
-        fillBorderedRect(0, groundY - 3, COLS, 4, '#d97706', '#0b0c10');
+        for (let c = 0; c < COLS; c += 10) fillRect(c, 0, 2, groundY, stripeCol);
+        fillBorderedRect(0, groundY - 3, COLS, 4, '#64748b', '#0b0c10');
         for (let r = groundY + 1; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
-            grid[r][c] = ((r + c) % 5 === 0) ? '#451a03' : floorCol;
+            grid[r][c] = ((r + c) % 5 === 0) ? '#1e293b' : floorCol;
           }
         }
       }
 
-      function renderSceneBackground(bgConfig = {}, localFrame = 0) {
-        const preset = bgConfig.preset || 'city_street';
-        const skyCols = Array.isArray(bgConfig.sky_colors) && bgConfig.sky_colors.length >= 3
-          ? bgConfig.sky_colors
-          : ['#090d16', '#1e293b', '#334155'];
-        const groundCol = bgConfig.ground_color || '#1e293b';
+      // ======================================================================
+      // 2. RENDERIZADOR DE SPRITES CUSTOM DE 2 FOTOGRAMAS (rows_1 y rows_2)
+      // (PERMITE ANIMAR CUALQUIER ANIMAL, OBJETO, ROBOT O CRIATURA DESDE CERO)
+      // ======================================================================
+      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.25, flipX = false, localFrame = 0) {
+        const key = String(spriteName || '').toLowerCase().trim();
+        const def = customSprites[key] || Object.values(customSprites)[0];
+        if (!def) {
+          fillBorderedCircle(centerX, centerY, Math.round(6 * scale), '#ffd166', '#0b0c10');
+          return;
+        }
+        const useFrame2 = (Math.floor(localFrame / 6) % 2 === 1) && Array.isArray(def.rows_2) && def.rows_2.length > 0;
+        const rows = useFrame2 ? def.rows_2 : (def.rows_1 || def.rows || []);
+        if (!Array.isArray(rows) || rows.length === 0) return;
 
-        if (preset === 'interior_office' || preset === 'interior_vault' || preset === 'interior_lab') {
-          drawRoom(skyCols[0], skyCols[1], groundCol, GROUND_Y);
-          if (preset === 'interior_vault') {
-            fillBorderedCircle(60, 84, 32, '#475569', '#0b0c10');
-            fillBorderedCircle(60, 84, 24, '#94a3b8', '#0b0c10');
-            fillBorderedCircle(60, 84, 8, '#eab308', '#0b0c10');
-          } else {
-            // Ventanal o pizarra detallada en la pared
-            fillBorderedRect(14, 46, 36, 28, '#38bdf8', '#0b0c10');
-            fillRect(31, 46, 2, 28, '#0b0c10');
-            fillRect(14, 59, 36, 2, '#0b0c10');
+        const pal = def.palette || { '1': '#ffd166', '2': '#ffffff', '3': '#ef4444', '4': '#38bdf8', '5': '#475569' };
+        const h = rows.length;
+        const w = String(rows[0]).length;
+        const destH = Math.max(6, Math.round(h * scale));
+        const destW = Math.max(6, Math.round(w * scale));
+        const x0 = Math.round(centerX - destW / 2);
+        const y0 = Math.round(centerY - destH / 2);
+
+        const temp = Array.from({ length: destH + 2 }, () => Array(destW + 2).fill(null));
+        for (let dy = 0; dy < destH; dy++) {
+          const srcY = Math.min(h - 1, Math.floor((dy / destH) * h));
+          const rStr = String(rows[srcY]);
+          for (let dx = 0; dx < destW; dx++) {
+            const rawX = Math.min(w - 1, Math.floor((dx / destW) * w));
+            const srcX = flipX ? (w - 1 - rawX) : rawX;
+            const ch = rStr[srcX];
+            if (ch && ch !== '.' && ch !== '0' && ch !== ' ') {
+              temp[dy + 1][dx + 1] = pal[ch] || '#ffd166';
+            }
+          }
+        }
+
+        for (let r = 1; r <= destH; r++) {
+          for (let c = 1; c <= destW; c++) {
+            if (!temp[r][c]) {
+              if (temp[r - 1][c] || temp[r + 1][c] || temp[r][c - 1] || temp[r][c + 1]) {
+                setPx(x0 + c - 1, y0 + r - 1, '#0b0c10');
+              }
+            }
+          }
+        }
+        for (let r = 1; r <= destH; r++) {
+          for (let c = 1; c <= destW; c++) {
+            if (temp[r][c]) {
+              setPx(x0 + c - 1, y0 + r - 1, temp[r][c]);
+            }
+          }
+        }
+      }
+
+      // ======================================================================
+      // 3. ACTORES VARIADOS Y EXPRESIVOS (SIN SOMBRERO FIJO NI MARCHA ESTÁTICA)
+      // ======================================================================
+      function drawActor(x, y, opts = {}, localFrame = 0) {
+        const actorId = opts.id || String(opts.suitColor || 'main');
+        const curX = Math.round(x);
+        const prevX = actorPrevX[actorId];
+        actorPrevX[actorId] = curX;
+
+        // SOLO mueve las piernas si realmente se está desplazando horizontalmente
+        const isActuallyWalking = (prevX !== undefined && Math.abs(curX - prevX) >= 0.4);
+        const anchorY = (y === undefined || y === null || y > GROUND_Y) ? GROUND_Y : y;
+        const suitCol = opts.suitColor || '#2563eb';
+        const skinCol = opts.skinColor || '#e6ad86';
+        const hairStyle = opts.hairStyle || 'short'; // 'short', 'glasses', 'headset', 'helmet', 'bald', 'hat'
+        const hairCol = opts.hairColor || '#2b1d14';
+        const pose = opts.pose || 'idle'; // 'idle', 'typing', 'panic', 'pointing', 'holding'
+        const facingLeft = !!opts.facingLeft;
+        const dir = facingLeft ? -1 : 1;
+        const isTalking = opts.isTalking !== undefined ? !!opts.isTalking : true;
+        const step = isActuallyWalking ? (Math.floor(localFrame / 4) % 2) : 0;
+
+        // Sombra en el suelo
+        fillRect(curX - 6, anchorY, 13, 2, 'rgba(0,0,0,0.45)');
+
+        // Piernas (Firmes en el suelo si está quieto; alternando zancada solo si camina)
+        const legL = isActuallyWalking ? (step === 0 ? -2 : 0) : 0;
+        const legR = isActuallyWalking ? (step === 1 ? -2 : 0) : 0;
+        fillBorderedRect(curX - 5, anchorY - 9 + legL, 5, 9, '#1e293b', '#0b0c10');
+        fillBorderedRect(curX + 1, anchorY - 9 + legR, 5, 9, '#1e293b', '#0b0c10');
+
+        // Torso con respiración sutil
+        const breath = (!isActuallyWalking && (Math.floor(localFrame / 15) % 2 === 0)) ? 0 : 0;
+        fillBorderedRect(curX - 7, anchorY - 22 + breath, 15, 14, suitCol, '#0b0c10');
+        fillRect(curX - 1, anchorY - 20 + breath, 3, 8, opts.tieColor || '#facc15');
+        fillRect(curX - 6, anchorY - 10, 13, 2, '#0b0c10');
+
+        // Cabeza Expresiva
+        const headY = anchorY - 35 + breath;
+        fillBorderedRect(curX - 7, headY, 15, 14, skinCol, '#0b0c10');
+
+        // Variedad de Peinados y Accesorios (Adiós al bombín repetitivo)
+        if (hairStyle === 'hat') {
+          fillBorderedRect(curX - 9, headY - 2, 19, 3, hairCol, '#0b0c10');
+          fillBorderedRect(curX - 7, headY - 6, 15, 5, hairCol, '#0b0c10');
+        } else if (hairStyle === 'helmet') {
+          fillBorderedRect(curX - 8, headY - 3, 17, 6, '#eab308', '#0b0c10');
+        } else if (hairStyle === 'bald') {
+          fillRect(curX - 5, headY + 1, 3, 1, '#ffffff');
+        } else {
+          // Pelo corto moderno o despeinado
+          fillRect(curX - 7, headY, 15, 4, hairCol);
+          fillRect(curX - 7, headY + 4, 2, 3, hairCol);
+        }
+
+        // Ojos y Gafas
+        const eye1X = facingLeft ? curX - 5 : curX - 2;
+        const eye2X = facingLeft ? curX + 1 : curX + 3;
+        fillRect(eye1X, headY + 5, 3, 3, '#ffffff');
+        fillRect(eye2X, headY + 5, 3, 3, '#ffffff');
+        setPx(facingLeft ? eye1X : eye1X + 2, headY + 6, '#0b0c10');
+        setPx(facingLeft ? eye2X : eye2X + 2, headY + 6, '#0b0c10');
+
+        if (hairStyle === 'glasses') {
+          drawRing(eye1X + 1, headY + 6, 2, 1, '#38bdf8');
+          drawRing(eye2X + 1, headY + 6, 2, 1, '#38bdf8');
+        }
+
+        // Boca sincronizada o gesto de pánico
+        if (pose === 'panic') {
+          fillBorderedRect(curX - 2, headY + 9, 5, 4, '#991b1b', '#0b0c10');
+          fillRect(curX + 6, headY + 3 + (localFrame % 5), 2, 3, '#38bdf8'); // Gota de sudor
+        } else if (isTalking && (Math.floor(localFrame / 3) % 2 === 0)) {
+          fillRect(curX - 2, headY + 10, 5, 2, '#991b1b');
+        } else {
+          fillRect(curX - 2, headY + 10, 4, 1, '#2b1d14');
+        }
+
+        // Posturas de Brazos (Tecleando, Manos a la cabeza en pánico, Señalando o Sosteniendo)
+        let handX = curX + dir * 10;
+        let handY = anchorY - 16;
+
+        if (pose === 'panic') {
+          const wave = (Math.floor(localFrame / 3) % 2 === 0) ? -2 : 0;
+          fillBorderedRect(curX - 10, headY + 2 + wave, 4, 9, suitCol, '#0b0c10');
+          fillBorderedRect(curX + 7, headY + 2 - wave, 4, 9, suitCol, '#0b0c10');
+          handX = curX + dir * 9;
+          handY = headY + 2;
+        } else if (pose === 'typing') {
+          const tap = (localFrame % 4 < 2) ? -1 : 1;
+          fillBorderedRect(facingLeft ? curX - 11 : curX + 6, anchorY - 18 + tap, 6, 4, suitCol, '#0b0c10');
+          handX = curX + dir * 11;
+          handY = anchorY - 17 + tap;
+        } else {
+          fillBorderedRect(facingLeft ? curX - 10 : curX + 6, anchorY - 19, 5, 5, suitCol, '#0b0c10');
+          fillRect(handX - 1, handY - 1, 3, 3, skinCol);
+        }
+
+        if (opts.holdSprite) {
+          // Colocar el sprite a un lado de la mano sin tapar jamás la cara
+          drawCustomSprite(opts.holdSprite, handX + dir * 8, handY - 2, opts.spriteScale || 0.85, facingLeft, localFrame);
+        }
+
+        return { handX: handX + dir * 6, handY: handY - 1, headX: curX, headY };
+      }
+
+      // BUSTO EXPRESIVO EN PRIMER PLANO
+      function drawBusto(cx, headY, opts = {}, localFrame = 0) {
+        const s = opts.scale || 0.82;
+        const suitCol = opts.suitColor || '#1e293b';
+        const tieCol = opts.tieColor || '#ef4444';
+        const hatCol = opts.hatColor !== undefined ? opts.hatColor : null;
+        const hairCol = opts.hairColor || '#2b1d14';
+        const skinCol = opts.skinColor || '#e6ad86';
+        const isTalking = opts.isTalking !== undefined ? opts.isTalking : true;
+
+        const bobY = headY + Math.round(Math.sin(localFrame * 0.15) * 1);
+        const bodyW = Math.round(56 * s), bodyH = Math.round(34 * s);
+        fillBorderedRect(cx - Math.floor(bodyW / 2), bobY + Math.round(18 * s), bodyW, bodyH, suitCol, '#0b0c10');
+        fillRect(cx - Math.round(6 * s), bobY + Math.round(19 * s), Math.round(12 * s), Math.round(14 * s), '#ffffff');
+        fillRect(cx - Math.round(2 * s), bobY + Math.round(22 * s), Math.round(4 * s), Math.round(16 * s), tieCol);
+
+        const headW = Math.round(32 * s), headH = Math.round(30 * s);
+        const hx = cx - Math.floor(headW / 2), hy = bobY - Math.floor(headH / 2);
+        fillBorderedRect(cx - Math.round(7 * s), hy + headH - 2, Math.round(14 * s), Math.round(8 * s), skinCol, '#0b0c10');
+        fillBorderedRect(hx, hy, headW, headH, skinCol, '#0b0c10');
+        fillRect(hx, hy, headW, Math.round(6 * s), hairCol);
+
+        if (hatCol) {
+          fillBorderedRect(cx - Math.round(22 * s), hy - Math.round(2 * s), Math.round(44 * s), Math.round(4 * s), hatCol, '#0b0c10');
+          fillBorderedRect(cx - Math.round(15 * s), hy - Math.round(9 * s), Math.round(30 * s), Math.round(8 * s), hatCol, '#0b0c10');
+        }
+
+        const blink = (localFrame % 55 < 3);
+        if (blink) {
+          fillRect(cx - Math.round(9 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
+          fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
+        } else {
+          fillRect(cx - Math.round(9 * s), bobY - 4, Math.round(5 * s), 4, '#ffffff');
+          fillRect(cx - Math.round(7 * s), bobY - 4, Math.round(3 * s), 4, '#0b0c10');
+          fillRect(cx + Math.round(4 * s), bobY - 4, Math.round(5 * s), 4, '#ffffff');
+          fillRect(cx + Math.round(6 * s), bobY - 4, Math.round(3 * s), 4, '#0b0c10');
+        }
+
+        const mouthOpen = isTalking && (Math.floor(localFrame / 3) % 2 === 0);
+        if (mouthOpen) {
+          fillBorderedRect(cx - Math.round(5 * s), bobY + Math.round(6 * s), Math.round(10 * s), Math.round(5 * s), '#ffffff', '#0b0c10');
+        } else {
+          fillRect(cx - Math.round(5 * s), bobY + Math.round(7 * s), Math.round(10 * s), 2, '#0b0c10');
+        }
+
+        if (opts.holdSprite) {
+          drawCustomSprite(opts.holdSprite, cx + 26, bobY + 20, 1.1, false, localFrame);
+        }
+      }
+
+      // ======================================================================
+      // 4. TEXTOS EN PANTALLA Y MONITORES 100% NÍTIDOS (CERO BLOQUES 3x5 ROTOS)
+      // ======================================================================
+      function drawScreenText(str, centerX, y, color = '#ffd166', size = 1) {
+        const clean = cleanArcadeLabel(str).slice(0, 22);
+        if (!clean) return;
+        crispTextQueue.push({
+          text: clean,
+          x: Math.max(12, Math.min(108, centerX)) * CELL,
+          y: Math.max(38, Math.min(134, y)) * CELL,
+          color: color || '#ffd166',
+          fontSize: size >= 2 ? 19 : 15
+        });
+      }
+
+      function drawTerminal(x, y, w, h, titleStr, bodyStr, borderCol = '#38bdf8') {
+        const bx = Math.max(6, Math.min(80, Math.round(x)));
+        const by = Math.max(36, Math.min(95, Math.round(y)));
+        const bw = Math.min(108 - bx, Math.max(36, Math.round(w)));
+        const bh = Math.min(48, Math.max(22, Math.round(h)));
+
+        fillBorderedRect(bx, by, bw, bh, '#090d16', '#0b0c10');
+        fillBorderedRect(bx + 1, by + 1, bw - 2, 7, borderCol, '#0b0c10');
+        if (titleStr) drawScreenText(titleStr, bx + bw / 2, by + 12, '#ffd166', 1);
+        if (bodyStr) drawScreenText(bodyStr, bx + bw / 2, by + Math.floor(bh / 2) + 6, '#ffffff', 2);
+      }
+
+      function drawDetailedBuilding(x, w, h, opts = {}, localFrame = 0) {
+        const wallCol = opts.wallColor || '#475569';
+        const roofCol = opts.roofColor || '#1e293b';
+        const winCol = opts.windowColor || '#fde047';
+        const topY = Math.max(36, GROUND_Y - Math.min(88, h));
+        const realH = GROUND_Y - topY;
+
+        drawTexturedBox(x, topY, w, realH, 'brick', wallCol, 'rgba(0,0,0,0.2)', localFrame);
+        if (opts.peakedRoof) {
+          fillTriangle(x - 2, topY, x + w + 2, topY, x + Math.floor(w / 2), topY - 12, roofCol, '#0b0c10');
+        } else {
+          fillBorderedRect(x - 2, topY - 4, w + 4, 5, roofCol, '#0b0c10');
+        }
+        for (let wy = topY + 6; wy < GROUND_Y - 14; wy += 11) {
+          for (let wx = x + 4; wx < x + w - 7; wx += 9) {
+            fillBorderedRect(wx, wy, 6, 7, ((wx + wy) % 3 !== 0) ? winCol : '#1e293b', '#0b0c10');
+          }
+        }
+      }
+
+      function drawDetailedTree(x, scale = 1.0, localFrame = 0) {
+        const trunkW = Math.max(3, Math.round(5 * scale));
+        const trunkH = Math.round(18 * scale);
+        const sway = Math.round(Math.sin(localFrame * 0.1 + x) * 1);
+        fillBorderedRect(x - Math.floor(trunkW / 2), GROUND_Y - trunkH, trunkW, trunkH, '#5c3a21', '#0b0c10');
+        const rMain = Math.round(11 * scale);
+        fillBorderedCircle(x + sway, GROUND_Y - trunkH - Math.round(4 * scale), rMain, '#14532d', '#0b0c10');
+        fillCircle(x - 2 + sway, GROUND_Y - trunkH - Math.round(8 * scale), Math.round(7 * scale), '#22c55e');
+      }
+
+      function drawDetailedVehicle(x, type = 'truck', color = '#3f6212', facingLeft = false, localFrame = 0) {
+        const bounce = localFrame % 4 < 2 ? -1 : 0;
+        const vy = GROUND_Y + bounce;
+        if (type === 'truck' || type === 'van') {
+          const cargoX = facingLeft ? x - 4 : x - 28;
+          fillBorderedRect(cargoX, vy - 24, 30, 18, color, '#0b0c10');
+          const cabX = facingLeft ? x - 16 : x + 2;
+          fillBorderedRect(cabX, vy - 19, 14, 13, color, '#0b0c10');
+          fillBorderedRect(facingLeft ? cabX + 2 : cabX + 6, vy - 17, 6, 6, '#7dd3fc', '#0b0c10');
+          [facingLeft ? x - 10 : x - 20, facingLeft ? x + 16 : x + 8].forEach(wx => {
+            fillBorderedCircle(wx, GROUND_Y - 5, 5, '#1e293b', '#0b0c10');
+            fillCircle(wx, GROUND_Y - 5, 2, '#94a3b8');
+          });
+          return;
+        }
+        fillBorderedRect(x - 18, vy - 14, 36, 9, color, '#0b0c10');
+        fillBorderedRect(x - 10, vy - 21, 20, 8, color, '#0b0c10');
+        fillBorderedCircle(x - 11, GROUND_Y - 4, 4, '#1e293b', '#0b0c10');
+        fillBorderedCircle(x + 11, GROUND_Y - 4, 4, '#1e293b', '#0b0c10');
+      }
+
+      function drawActionBeam(fromX, fromY, toX, toY, type = 'bullets', localFrame = 0) {
+        if (type === 'spray' || type === 'smoke') {
+          for (let i = 0; i < 8; i++) {
+            const t = ((i / 8) + (localFrame * 0.05)) % 1;
+            const px = fromX + (toX - fromX) * t;
+            const py = fromY + (toY - fromY) * t - Math.sin(t * Math.PI) * 4;
+            fillBorderedCircle(px, py, 2, '#e2e8f0', '#94a3b8');
           }
           return;
         }
-
-        drawSky(skyCols[0], skyCols[1], skyCols[2], groundCol, GROUND_Y);
-
-        if (preset === 'forest_woods' || preset === 'nature_park') {
-          drawDetailedTree(18, 1.1, localFrame);
-          drawDetailedTree(52, 1.25, localFrame);
-          drawDetailedTree(96, 1.05, localFrame);
-        } else if (preset === 'city_street' || preset === 'military_base') {
-          drawDetailedBuilding(8, 30, 74, { wallColor: '#475569', roofColor: '#1e293b', peakedRoof: true }, localFrame);
-          drawDetailedBuilding(44, 34, 82, { wallColor: '#334155', roofColor: '#0f172a', peakedRoof: false }, localFrame);
-          drawDetailedBuilding(84, 28, 68, { wallColor: '#64748b', roofColor: '#1e293b', peakedRoof: true }, localFrame);
+        if (type === 'laser') {
+          drawPixelLine(fromX, fromY, toX, toY, 2, '#ef4444');
+          fillCircle(toX, toY, 3, '#fde047');
+          return;
+        }
+        if (localFrame % 4 < 2) {
+          fillCircle(fromX, fromY, 3, '#fde047');
+          drawPixelLine(fromX, fromY, toX, toY, 1, '#fef08a');
+          fillCircle(toX, toY, 3, '#f97316');
         }
       }
 
@@ -969,104 +1046,12 @@ async function main() {
         }
       }
 
-      function drawBusto(cx, headY, opts = {}, localFrame = 0) {
-        const s = opts.scale || 0.85;
-        const suitCol = opts.suitColor || '#334155';
-        const tieCol = opts.tieColor || '#e63946';
-        const hatCol = opts.hatColor !== undefined ? opts.hatColor : '#eab308';
-        const hairCol = opts.hairColor || '#2b1d14';
-        const skinCol = opts.skinColor || '#e6ad86';
-        const isTalking = opts.isTalking !== undefined ? opts.isTalking : true;
-
-        const bobY = headY + Math.round(Math.sin(localFrame * 0.15) * 1);
-        const bodyW = Math.round(58 * s), bodyH = Math.round(36 * s);
-        fillBorderedRect(cx - Math.floor(bodyW / 2), bobY + Math.round(18 * s), bodyW, bodyH, suitCol, '#0b0c10');
-        fillRect(cx - Math.round(6 * s), bobY + Math.round(19 * s), Math.round(12 * s), Math.round(14 * s), '#ffffff');
-        fillRect(cx - Math.round(2 * s), bobY + Math.round(22 * s), Math.round(4 * s), Math.round(16 * s), tieCol);
-
-        const headW = Math.round(32 * s), headH = Math.round(30 * s);
-        const hx = cx - Math.floor(headW / 2), hy = bobY - Math.floor(headH / 2);
-        fillBorderedRect(cx - Math.round(7 * s), hy + headH - 2, Math.round(14 * s), Math.round(8 * s), skinCol, '#0b0c10');
-        fillBorderedRect(hx, hy, headW, headH, skinCol, '#0b0c10');
-        fillRect(hx, hy, headW, Math.round(5 * s), hairCol);
-
-        if (hatCol) {
-          fillBorderedRect(cx - Math.round(24 * s), hy - Math.round(2 * s), Math.round(48 * s), Math.round(5 * s), hatCol, '#0b0c10');
-          fillBorderedRect(cx - Math.round(16 * s), hy - Math.round(10 * s), Math.round(32 * s), Math.round(9 * s), hatCol, '#0b0c10');
-        }
-
-        const blink = (localFrame % 55 < 3);
-        if (blink) {
-          fillRect(cx - Math.round(9 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
-          fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
-        } else {
-          fillRect(cx - Math.round(9 * s), bobY - Math.round(4 * s), Math.round(5 * s), Math.round(4 * s), '#ffffff');
-          fillRect(cx - Math.round(7 * s), bobY - Math.round(4 * s), Math.round(3 * s), Math.round(4 * s), '#0b0c10');
-          fillRect(cx + Math.round(4 * s), bobY - Math.round(4 * s), Math.round(5 * s), Math.round(4 * s), '#ffffff');
-          fillRect(cx + Math.round(6 * s), bobY - Math.round(4 * s), Math.round(3 * s), Math.round(4 * s), '#0b0c10');
-        }
-
-        const mouthOpen = isTalking && (Math.floor(localFrame / 3) % 2 === 0);
-        if (mouthOpen) {
-          fillBorderedRect(cx - Math.round(5 * s), bobY + Math.round(6 * s), Math.round(10 * s), Math.round(5 * s), '#ffffff', '#0b0c10');
-        } else {
-          fillRect(cx - Math.round(5 * s), bobY + Math.round(7 * s), Math.round(10 * s), 2, '#0b0c10');
-        }
-
-        if (opts.holdSprite) {
-          drawCustomSprite(opts.holdSprite, cx + 18, bobY + 26, 1.2, false);
-        }
-      }
-
-      const FONT_3X5 = {
-        'A': ['010','101','111','101','101'], 'B': ['110','101','110','101','110'],
-        'C': ['111','100','100','100','111'], 'D': ['110','101','101','101','110'],
-        'E': ['111','100','110','100','111'], 'F': ['111','100','110','100','100'],
-        'G': ['111','100','101','101','111'], 'H': ['101','101','111','101','101'],
-        'I': ['111','010','010','010','111'], 'J': ['001','001','001','101','111'],
-        'K': ['101','101','110','101','101'], 'L': ['100','100','100','100','111'],
-        'M': ['101','111','101','101','101'], 'N': ['111','101','101','101','101'],
-        'O': ['111','101','101','101','111'], 'P': ['111','101','111','100','100'],
-        'Q': ['111','101','101','111','001'], 'R': ['111','101','110','101','101'],
-        'S': ['111','100','111','001','111'], 'T': ['111','010','010','010','010'],
-        'U': ['101','101','101','101','111'], 'V': ['101','101','101','101','010'],
-        'W': ['101','101','101','111','101'], 'X': ['101','101','010','101','101'],
-        'Y': ['101','101','010','010','010'], 'Z': ['111','001','010','100','111'],
-        '0': ['111','101','101','101','111'], '1': ['010','110','010','010','111'],
-        '2': ['111','001','111','100','111'], '3': ['111','001','111','001','111'],
-        '4': ['101','101','111','001','001'], '5': ['111','100','111','001','111'],
-        '6': ['111','100','111','101','111'], '7': ['111','001','001','001','001'],
-        '8': ['111','101','111','101','111'], '9': ['111','101','111','001','111'],
-        '$': ['010','111','010','111','010'], '%': ['101','001','010','100','101'],
-        '!': ['010','010','010','000','010'], '?': ['111','001','011','000','010'],
-        '+': ['000','010','111','010','000'], '-': ['000','000','111','000','000'],
-        ':': ['000','010','000','010','000']
-      };
-
-      function drawTinyText(str, centerX, startY, color = '#ffffff', scale = 2) {
-        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!?+: -]/g, '').slice(0, 14);
-        if (!clean) return;
-        const charW = 3 * scale, gap = 1 * scale;
-        const totalW = clean.length * (charW + gap) - gap;
-        let cx = Math.max(2, Math.floor(centerX - totalW / 2));
-        for (let i = 0; i < clean.length; i++) {
-          const glyph = FONT_3X5[clean[i]];
-          if (glyph) {
-            for (let r = 0; r < 5; r++) {
-              for (let c = 0; c < 3; c++) {
-                if (glyph[r][c] === '1') fillRect(cx + c * scale, startY + r * scale, scale, scale, color);
-              }
-            }
-          }
-          cx += charW + gap;
-        }
-      }
-
       const sandboxApi = {
         COLS, ROWS, GROUND_Y,
         setPx, px: setPx,
         fillRect, rect: fillRect,
         fillBorderedRect, borderedRect: fillBorderedRect, box: fillBorderedRect,
+        drawTexturedBox, texturedBox: drawTexturedBox,
         fillCircle, circle: fillCircle,
         fillBorderedCircle, borderedCircle: fillBorderedCircle,
         drawRing, ring: drawRing,
@@ -1075,7 +1060,6 @@ async function main() {
         fillTriangle, triangle: fillTriangle,
         drawSky, sky: drawSky,
         drawRoom, room: drawRoom,
-        renderSceneBackground,
         drawStars, stars: drawStars,
         drawClouds, clouds: drawClouds,
         drawFire, fire: drawFire,
@@ -1084,30 +1068,29 @@ async function main() {
         drawDetailedTree, tree: drawDetailedTree,
         drawDetailedVehicle, vehicle: drawDetailedVehicle,
         drawActor, actor: drawActor,
-        drawHuman: (x, y, col, hat, mov, lf, fl) => drawActor(x, y, { suitColor: col, hatColor: hat, isMoving: mov, facingLeft: fl }, lf),
+        drawHuman: (x, y, col, hat, mov, lf, fl) => drawActor(x, y, { suitColor: col, hairStyle: hat ? 'hat' : 'short', isTalking: true, facingLeft: fl }, lf),
         drawActionBeam, actionBeam: drawActionBeam,
         drawBusto, busto: drawBusto,
-        drawTinyText, text: drawTinyText,
+        drawScreenText, drawTinyText: drawScreenText, text: drawScreenText,
+        drawTerminal, terminal: drawTerminal,
         sin: Math.sin, cos: Math.cos, abs: Math.abs, floor: Math.floor,
         round: Math.round, min: Math.min, max: Math.max, PI: Math.PI
       };
 
-      const compiledRenderers = escenas.map((esc, idx) => {
-        if (esc.js_code && typeof esc.js_code === 'string' && esc.js_code.trim().length > 10) {
-          try {
-            return new Function('api', 'progress', 'localFrame', \`with (api) { \${esc.js_code} }\`);
-          } catch (e) {
-            console.warn('⚠️ Error compilando escena ' + idx + ':', e.message);
-            return null;
-          }
+      const compiledBgRenderers = escenas.map((esc) => {
+        if (esc.bg_code && typeof esc.bg_code === 'string' && esc.bg_code.trim().length > 5) {
+          try { return new Function('api', 'progress', 'localFrame', \`with (api) { \${esc.bg_code} }\`); } catch (e) {}
         }
         return null;
       });
 
-      function renderFallbackScene(esc, progress, localFrame) {
-        renderSceneBackground(esc.bg_config || { preset: 'city_street' }, localFrame);
-        drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, localFrame);
-      }
+      const compiledFgRenderers = escenas.map((esc) => {
+        const code = esc.fg_code || esc.js_code || '';
+        if (code && typeof code === 'string' && code.trim().length > 5) {
+          try { return new Function('api', 'progress', 'localFrame', \`with (api) { \${code} }\`); } catch (e) {}
+        }
+        return null;
+      });
 
       function flushGridToCanvas() {
         for (let r = 0; r < ROWS; r++) {
@@ -1115,6 +1098,29 @@ async function main() {
             ctx.fillStyle = grid[r][c];
             ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
           }
+        }
+        // Renderizar encima la cola de textos en pantalla con tipografía Press Start 2P 100% legible
+        if (crispTextQueue.length > 0) {
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          crispTextQueue.forEach(item => {
+            ctx.font = \`\${item.fontSize}px "Press Start 2P", monospace\`;
+            const metrics = ctx.measureText(item.text);
+            const padX = 12, padY = 8;
+            const bw = metrics.width + padX * 2;
+            const bh = item.fontSize + padY * 2;
+            ctx.fillStyle = 'rgba(8, 10, 20, 0.90)';
+            ctx.fillRect(item.x - bw / 2, item.y - bh / 2, bw, bh);
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(item.x - bw / 2, item.y - bh / 2, bw, bh);
+            ctx.fillStyle = '#000000';
+            ctx.fillText(item.text, item.x + 3, item.y + 3);
+            ctx.fillStyle = item.color;
+            ctx.fillText(item.text, item.x, item.y);
+          });
+          ctx.restore();
         }
       }
 
@@ -1142,23 +1148,28 @@ async function main() {
 
         if (activeIdx !== lastSceneIdx) {
           lastSceneIdx = activeIdx;
+          actorPrevX = {};
           labelTop.textContent = esc.texto_1 || 'HISTORIA';
           labelBot.textContent = esc.texto_2 || 'CASO REAL';
         }
 
-        // 1. Pintar el fondo rico diseñado por el Agente Arquitecto
-        renderSceneBackground(esc.bg_config || {}, localFrame);
+        crispTextQueue = [];
+        drawSky('#0f172a', '#1e293b', '#334155', '#1e293b', GROUND_Y);
 
-        // 2. Ejecutar la coreografía programada por el Agente Animador (con Sprites 16x16 del Agente Artista)
-        const customFn = compiledRenderers[activeIdx];
-        if (customFn) {
-          try {
-            customFn(sandboxApi, progress, localFrame);
-          } catch (err) {
-            renderFallbackScene(esc, progress, localFrame);
+        // 1. Ejecutar el código libre de Escenario/Fondo de esta escena
+        const bgFn = compiledBgRenderers[activeIdx];
+        if (bgFn) {
+          try { bgFn(sandboxApi, progress, localFrame); } catch (e) {}
+        }
+
+        // 2. Ejecutar el código libre de Animación/Actores de esta escena
+        const fgFn = compiledFgRenderers[activeIdx];
+        if (fgFn) {
+          try { fgFn(sandboxApi, progress, localFrame); } catch (e) {
+            drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, localFrame);
           }
         } else {
-          renderFallbackScene(esc, progress, localFrame);
+          drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, localFrame);
         }
 
         flushGridToCanvas();
@@ -1207,7 +1218,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Multi-Agente v10.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Generativo 100% Libre v11.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1220,13 +1231,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v10.0...');
+  console.log('🔊 Ensamblando MP4 final v11.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Multi-Agente v10.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Generativo 100% Libre v11.0 generado con éxito!');
   process.exit(0);
 }
 
