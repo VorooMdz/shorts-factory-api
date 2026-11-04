@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 // ============================================================================
-// 1. UTILIDADES DE RED, ORTOGRAFÍA ESPAÑOLA ("Ñ") Y SUBTÍTULOS SINCRONIZADOS
+// 1. UTILIDADES DE RED, CORRECCIÓN DE "Ñ" Y SUBTÍTULOS SINCRONIZADOS
 // ============================================================================
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -38,8 +38,7 @@ function fixSpanishN(str) {
     .replace(/\bsenal(es)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
     .replace(/\bdiseno(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
     .replace(/\bsueno(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
-    .replace(/\bano(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
-    .replace(/\bcanaveral\b/gi, 'CAÑAVERAL');
+    .replace(/\bano(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'));
 }
 
 function cleanArcadeText(str) {
@@ -362,12 +361,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR PIXEL-ART STUDIO v14.0 ( PANTALLA LIMPIA + DIBUJOS 16-BIT RECONOCIBLES )
+// 3. MOTOR PIXEL-ART STUDIO v15.0 (LIENZO PURO SIN MOLDES PREDEFINIDOS)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v14.0 desde URL...');
+    console.log('📥 Descargando payload v15.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -403,7 +402,6 @@ async function main() {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
 
-  // CERO RECORTE DE CARACTERES (.slice eliminado): el cartel superior muestra el texto completo
   const escenas = (payload.escenas || []).map((esc, idx) => {
     const rawBeats = Array.isArray(esc.sub_escenas) && esc.sub_escenas.length > 0
       ? esc.sub_escenas
@@ -485,7 +483,6 @@ async function main() {
         background: linear-gradient(90deg, #ff2a5f, #ffd000, #00f2fe);
         width: 0%; z-index: 30;
       }
-      /* ÚNICO CARTEL SUPERIOR DE CONTEXTO (AUTO-AJUSTABLE, CERO PALABRAS CORTADAS) */
       .label-box-top {
         position: absolute; top: 42px; left: 50%; transform: translateX(-50%);
         background: rgba(8, 10, 22, 0.94);
@@ -497,7 +494,6 @@ async function main() {
         text-shadow: 3px 3px 0 #000000; z-index: 20;
         max-width: 668px; overflow: hidden; text-align: center;
       }
-      /* GLIFO "Ñ" 100% PIXEL-ART CON LA "N" NATIVA DE PRESS START 2P */
       .retro-enie {
         position: relative;
         display: inline-block;
@@ -551,7 +547,6 @@ async function main() {
       const subtitleChunks = ${safeChunksJson};
       const totalFrames = ${totalFrames};
 
-      // LIENZO AMPLIADO SIN CARTEL INFERIOR: GROUND_Y = 152 (30% más de espacio limpio para la animación)
       const COLS = 120;
       const ROWS = 213;
       const CELL = 6;
@@ -561,8 +556,6 @@ async function main() {
       const ctx = canvas.getContext('2d');
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1e293b'));
 
-      let actorPrevX = {};
-
       function toRetroHtml(str) {
         const clean = String(str || '').toUpperCase()
           .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E')
@@ -571,7 +564,6 @@ async function main() {
         return clean.replace(/Ñ/g, '<span class="retro-enie">N</span>');
       }
 
-      // Auto-ajusta el tamaño de fuente del único cartel superior para que NUNCA se corte ni una letra
       function updateTopBanner(textStr) {
         const el = document.getElementById('label-top');
         const clean = String(textStr || 'HISTORIA').trim();
@@ -608,41 +600,8 @@ async function main() {
         }
       }
 
-      function drawTexturedBox(x, y, w, h, texture = 'brick', baseColor = '#475569', accentColor = '#334155', localFrame = 0) {
-        const x0 = Math.round(x), y0 = Math.round(y);
-        const rw = Math.min(120, Math.round(w)), rh = Math.min(120, Math.round(h));
-        fillBorderedRect(x0, y0, rw, rh, baseColor, '#0b0c10');
-
-        for (let r = 2; r < rh - 2; r++) {
-          for (let c = 2; c < rw - 2; c++) {
-            const gx = x0 + c, gy = y0 + r;
-            if (texture === 'brick') {
-              const rowShift = (Math.floor(r / 4) % 2) * 3;
-              if (r % 4 === 0 || (c + rowShift) % 6 === 0) setPx(gx, gy, accentColor);
-            } else if (texture === 'glass_windows') {
-              if (r % 7 >= 2 && r % 7 <= 5 && c % 6 >= 2 && c % 6 <= 4) {
-                setPx(gx, gy, ((r + c) % 5 === 0) ? '#fde047' : accentColor);
-              }
-            } else if (texture === 'server_rack') {
-              if (r % 4 === 0 && c > 2 && c < rw - 3) {
-                const blink = ((Math.floor(localFrame / 5) + r + c) % 4 === 0);
-                setPx(gx, gy, blink ? '#ef4444' : accentColor);
-              }
-            } else if (texture === 'wood_stripes') {
-              if (c % 6 === 0) setPx(gx, gy, accentColor);
-            } else if (texture === 'grid_tile' || texture === 'court') {
-              if (r % 6 === 0 || c % 6 === 0) setPx(gx, gy, accentColor);
-            } else if (texture === 'water') {
-              if ((r + c + Math.floor(localFrame / 3)) % 7 === 0) setPx(gx, gy, accentColor);
-            } else if (texture === 'grass') {
-              if ((r * 3 + c) % 5 === 0) setPx(gx, gy, accentColor);
-            }
-          }
-        }
-      }
-
       function fillCircle(cx, cy, radius, color) {
-        const rInt = Math.min(44, Math.round(radius));
+        const rInt = Math.min(48, Math.round(radius));
         for (let r = -rInt; r <= rInt; r++) {
           for (let c = -rInt; c <= rInt; c++) {
             if (c * c + r * r <= rInt * rInt) setPx(cx + c, cy + r, color);
@@ -651,13 +610,13 @@ async function main() {
       }
 
       function fillBorderedCircle(cx, cy, radius, fillColor, borderColor = '#0b0c10') {
-        const rInt = Math.min(44, Math.round(radius));
+        const rInt = Math.min(48, Math.round(radius));
         fillCircle(cx, cy, rInt, borderColor);
         if (rInt > 1) fillCircle(cx, cy, rInt - 1, fillColor);
       }
 
       function drawRing(cx, cy, radius, thickness = 2, color = '#fde047') {
-        const rOut = Math.min(46, Math.round(radius));
+        const rOut = Math.min(48, Math.round(radius));
         const rIn = Math.max(0, rOut - thickness);
         for (let r = -rOut; r <= rOut; r++) {
           for (let c = -rOut; c <= rOut; c++) {
@@ -725,14 +684,10 @@ async function main() {
         fillPolygon([[x1, y1], [x2, y2], [x3, y3]], fillColor, borderColor);
       }
 
-      // ======================================================================
-      // 2. ESCENARIOS RICOS Y LUMINOSOS (SIN PAREDES TIPO REJA DE PRISIÓN)
-      // ======================================================================
       function drawSky(skyTop = '#1d4ed8', skyMid = '#3b82f6', skyBot = '#93c5fd', groundCol = '#334155', horizonY = GROUND_Y) {
-        const hY = GROUND_Y;
         const bands = [skyTop, skyMid, skyBot];
-        const bandH = Math.max(1, Math.ceil(hY / bands.length));
-        for (let r = 0; r < hY; r++) {
+        const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
+        for (let r = 0; r < horizonY; r++) {
           const bIdx = Math.min(bands.length - 1, Math.floor(r / bandH));
           const nextIdx = Math.min(bands.length - 1, bIdx + 1);
           const ratio = (r % bandH) / bandH;
@@ -742,30 +697,17 @@ async function main() {
             grid[r][c] = col;
           }
         }
-        // Suelo con bordillo y textura horizontal limpia (nunca rayas diagonales oscuras)
-        fillRect(0, hY, COLS, 2, '#0b0c10');
-        fillRect(0, hY + 2, COLS, 3, '#64748b');
-        fillRect(0, hY + 5, COLS, ROWS - hY - 5, groundCol);
-        for (let c = 4; c < COLS; c += 14) {
-          fillRect(c, hY + 12, 7, 2, 'rgba(255,255,255,0.22)');
-        }
+        fillRect(0, horizonY, COLS, 2, '#0b0c10');
+        fillRect(0, horizonY + 2, COLS, 3, '#64748b');
+        fillRect(0, horizonY + 5, COLS, ROWS - horizonY - 5, groundCol);
       }
 
       function drawRoom(wallCol = '#334155', panelCol = '#1e293b', floorCol = '#78350f', groundY = GROUND_Y) {
-        const gY = GROUND_Y;
-        fillRect(0, 0, COLS, gY, wallCol);
-        // Paneles de madera / molduras elegantes en lugar de barrotes verticales
-        for (let wx = 8; wx < COLS - 12; wx += 28) {
-          fillBorderedRect(wx, 34, 22, gY - 58, panelCol, 'rgba(0,0,0,0.35)');
-        }
-        // Zócalo inferior cálido de madera
-        fillBorderedRect(0, gY - 18, COLS, 18, '#451a03', '#0b0c10');
-        fillBorderedRect(0, gY - 20, COLS, 3, '#d97706', '#0b0c10');
-        // Suelo de parqué horizontal cálido
-        fillRect(0, gY, COLS, ROWS - gY, floorCol);
-        for (let r = gY + 4; r < ROWS; r += 6) {
-          fillRect(0, r, COLS, 1, 'rgba(0,0,0,0.25)');
-        }
+        fillRect(0, 0, COLS, groundY, wallCol);
+        for (let c = 0; c < COLS; c += 10) fillRect(c, 0, 2, groundY, panelCol);
+        fillBorderedRect(0, groundY - 18, COLS, 18, '#451a03', '#0b0c10');
+        fillBorderedRect(0, groundY - 20, COLS, 3, '#d97706', '#0b0c10');
+        fillRect(0, groundY, COLS, ROWS - groundY, floorCol);
       }
 
       function drawOcean(waterY = 118, waterCol = '#0284c7', foamCol = '#bae6fd', localFrame = 0) {
@@ -774,12 +716,6 @@ async function main() {
           const wy = waterY + waveH;
           fillRect(c, wy, 1, ROWS - wy, waterCol);
           setPx(c, wy, foamCol);
-          setPx(c, wy + 1, '#7dd3fc');
-          for (let r = wy + 6; r < ROWS; r += 8) {
-            if ((c + r + Math.floor(localFrame / 2)) % 11 === 0) {
-              fillRect(c, r, 3, 1, foamCol);
-            }
-          }
         }
       }
 
@@ -793,12 +729,6 @@ async function main() {
         fillBorderedCircle(cx, cy, rOuter, '#dc2626', '#0b0c10');
         fillCircle(cx, cy, rMid, '#f97316');
         fillCircle(cx, cy, rCore, (localFrame % 4 < 2) ? '#ffffff' : '#fef08a');
-
-        for (let i = 0; i < 12; i++) {
-          const ang = (i / 12) * Math.PI * 2 + localFrame * 0.08;
-          const dist = rOuter + 4 + ((localFrame + i * 3) % 14);
-          fillRect(cx + Math.cos(ang) * dist, cy + Math.sin(ang) * dist, 2, 2, i % 2 === 0 ? '#fde047' : '#f97316');
-        }
       }
 
       function drawPlanet(cx, cy, radius = 16, baseCol = '#e11d48', hasRings = false, localFrame = 0) {
@@ -806,114 +736,29 @@ async function main() {
           drawPixelLine(cx - radius - 10, cy + 4, cx + radius + 10, cy - 4, 3, '#fde047');
         }
         fillBorderedCircle(cx, cy, radius, baseCol, '#0b0c10');
-        fillCircle(cx - Math.floor(radius * 0.35), cy - Math.floor(radius * 0.25), Math.max(2, Math.floor(radius * 0.25)), 'rgba(255,255,255,0.28)');
-        fillCircle(cx + Math.floor(radius * 0.3), cy + Math.floor(radius * 0.3), Math.max(2, Math.floor(radius * 0.2)), 'rgba(0,0,0,0.28)');
       }
 
       function drawLaunchPad(x = 76) {
         const gY = GROUND_Y;
         fillBorderedRect(x - 18, gY - 8, 36, 8, '#64748b', '#0b0c10');
         fillBorderedRect(x + 10, gY - 76, 10, 68, '#dc2626', '#0b0c10');
-        for (let ry = gY - 72; ry < gY - 12; ry += 8) {
-          drawPixelLine(x + 10, ry, x + 20, ry + 6, 1, '#f8fafc');
-          drawPixelLine(x + 20, ry, x + 10, ry + 6, 1, '#f8fafc');
-        }
-        fillBorderedRect(x - 2, gY - 58, 12, 3, '#94a3b8', '#0b0c10');
-        fillBorderedRect(x - 2, gY - 38, 12, 3, '#94a3b8', '#0b0c10');
       }
 
       function drawRadar(cx, cy, radius = 22, color = '#10b981', localFrame = 0) {
         const safeY = Math.max(54, Math.min(105, cy));
         fillBorderedCircle(cx, safeY, radius, '#051911', '#0b0c10');
         drawRing(cx, safeY, radius, 2, color);
-        drawRing(cx, safeY, Math.floor(radius * 0.55), 1, color);
-        drawPixelLine(cx - radius, safeY, cx + radius, safeY, 1, '#064e3b');
-        drawPixelLine(cx, safeY - radius, cx, safeY + radius, 1, '#064e3b');
         const ang = localFrame * 0.14;
         drawPixelLine(cx, safeY, cx + Math.cos(ang) * (radius - 2), safeY + Math.sin(ang) * (radius - 2), 2, color);
-        if (localFrame % 10 < 6) {
-          fillCircle(cx + Math.floor(radius * 0.4), safeY - Math.floor(radius * 0.35), 2, '#ef4444');
-        }
       }
 
-      // ======================================================================
-      // 3. OBJETOS DE MANO Y MOBILIARIO RECONOCIBLES AL 100% (ADIÓS BORRONES)
-      // ======================================================================
-      function drawHeldProp(propType, x, y, facingLeft = false) {
-        const p = String(propType || '').toLowerCase();
-        const dir = facingLeft ? -1 : 1;
-
-        if (/rifle|arma|gun|sten|fusil|luger|pistol/.test(p)) {
-          // Pistola / Subfusil reconocible con cañón, culata y cargador
-          fillBorderedRect(x - 5, y - 3, 12, 4, '#334155', '#0b0c10');
-          fillBorderedRect(facingLeft ? x + 3 : x - 6, y, 4, 5, '#451a03', '#0b0c10');
-          fillRect(x, y + 1, 2, 4, '#1e293b');
-          return;
-        }
-        if (/medal|medalla|cruz|condecora|star/.test(p)) {
-          // Medalla militar con cinta roja/blanca y estrella dorada
-          fillBorderedRect(x - 3, y - 7, 7, 6, '#dc2626', '#0b0c10');
-          fillRect(x - 1, y - 6, 3, 4, '#ffffff');
-          fillBorderedCircle(x, y + 2, 5, '#eab308', '#0b0c10');
-          setPx(x, y + 2, '#fef08a');
-          return;
-        }
-        if (/doc|acta|carta|contrato|informe|mapa|papel|ley|orden/.test(p)) {
-          // Documento oficial con texto y sello lacrado rojo
-          fillBorderedRect(x - 6, y - 8, 13, 16, '#fef3c7', '#0b0c10');
-          fillRect(x - 3, y - 5, 7, 1, '#1e293b');
-          fillRect(x - 3, y - 2, 6, 1, '#475569');
-          fillRect(x - 3, y + 1, 7, 1, '#475569');
-          fillCircle(x + 2, y + 4, 2, '#dc2626');
-          return;
-        }
-        if (/binoc|prismat|lupa|glass/.test(p)) {
-          fillBorderedCircle(x - 2, y, 4, '#38bdf8', '#0b0c10');
-          fillBorderedCircle(x + 3, y, 4, '#38bdf8', '#0b0c10');
-          return;
-        }
-        if (/dinero|billete|money|cash|dolar|maletin|botin/.test(p)) {
-          fillBorderedRect(x - 7, y - 4, 15, 9, '#4ade80', '#064e3b');
-          fillRect(x - 1, y - 4, 3, 9, '#eab308');
-          return;
-        }
-        if (/radio|walkie|telefon|micro/.test(p)) {
-          fillBorderedRect(x - 4, y - 5, 8, 11, '#334155', '#0b0c10');
-          fillRect(x + 1, y - 10, 1, 5, '#94a3b8');
-          fillCircle(x, y - 1, 2, '#10b981');
-          return;
-        }
-      }
-
-      // SPRITES 16x16 CON GRAVEDAD AUTOMÁTICA SI SON VEHÍCULOS O PERSONAJES
       function drawCustomSprite(spriteName, centerX, centerY, scale = 1.35, flipX = false, localFrame = 0) {
         const key = String(spriteName || '').toLowerCase().trim();
-
-        // Si la IA intenta usar un sprite 16x16 para un coche/camión/tanque/avión, redirigir al constructor HD de vehículos
-        if (/coche|car|auto|jeep/.test(key)) {
-          drawDetailedVehicle(centerX, 'car', '#1e293b', flipX, localFrame);
-          return;
-        }
-        if (/camion|truck|furgon/.test(key)) {
-          drawDetailedVehicle(centerX, 'truck', '#3f6212', flipX, localFrame);
-          return;
-        }
-        if (/tanque|tank|blindad/.test(key)) {
-          drawDetailedVehicle(centerX, 'tank', '#365314', flipX, localFrame);
-          return;
-        }
-        if (/avion|plane|bomber|caza|jet/.test(key)) {
-          drawDetailedVehicle(centerX, 'plane', '#475569', flipX, localFrame, Math.min(85, centerY));
-          return;
-        }
-        // Si el sprite es una falda/kilt, no dibujarlo flotando en el aire (ya lo viste drawActor en las piernas)
-        if (/falda|kilt|tartan|uniforme/.test(key)) {
-          return;
-        }
-
         const def = customSprites[key] || Object.values(customSprites)[0];
-        if (!def) return;
-
+        if (!def) {
+          fillBorderedCircle(centerX, centerY, Math.round(6 * scale), '#ffd166', '#0b0c10');
+          return;
+        }
         const useFrame2 = (Math.floor(localFrame / 5) % 2 === 1) && Array.isArray(def.rows_2) && def.rows_2.length > 0;
         const rows = useFrame2 ? def.rows_2 : (def.rows_1 || def.rows || []);
         if (!Array.isArray(rows) || rows.length === 0) return;
@@ -921,14 +766,10 @@ async function main() {
         const pal = def.palette || { '1': '#ffd166', '2': '#ffffff', '3': '#ef4444', '4': '#38bdf8', '5': '#475569' };
         const h = rows.length;
         const w = String(rows[0]).length;
-        const clampedScale = Math.min(1.6, Math.max(0.8, scale));
-        const destH = Math.max(6, Math.round(h * clampedScale));
-        const destW = Math.max(6, Math.round(w * clampedScale));
-
-        const safeX = Math.max(16, Math.min(104, Math.round(centerX)));
-        const safeY = Math.max(46, Math.min(GROUND_Y - Math.floor(destH / 2), Math.round(centerY)));
-        const x0 = Math.round(safeX - destW / 2);
-        const y0 = Math.round(safeY - destH / 2);
+        const destH = Math.max(6, Math.round(h * scale));
+        const destW = Math.max(6, Math.round(w * scale));
+        const x0 = Math.round(centerX - destW / 2);
+        const y0 = Math.round(centerY - destH / 2);
 
         const temp = Array.from({ length: destH + 2 }, () => Array(destW + 2).fill(null));
         for (let dy = 0; dy < destH; dy++) {
@@ -959,309 +800,6 @@ async function main() {
               setPx(x0 + c - 1, y0 + r - 1, temp[r][c]);
             }
           }
-        }
-      }
-
-      // ======================================================================
-      // 4. PERSONAJES EXPRESIVOS CON VESTIMENTA REAL (INCLUYE KILT ESCOCÉS, UNIFORMES Y BOINAS)
-      // ======================================================================
-      function drawActor(x, y, opts = {}, localFrame = 0) {
-        const actorId = opts.id || String(opts.suitColor || 'main');
-        const curX = Math.max(16, Math.min(104, Math.round(x)));
-        const prevX = actorPrevX[actorId];
-        actorPrevX[actorId] = curX;
-
-        const isActuallyWalking = (prevX !== undefined && Math.abs(curX - prevX) >= 0.4);
-        const anchorY = GROUND_Y;
-        const suitCol = opts.suitColor || '#2563eb';
-        const skinCol = opts.skinColor || '#e6ad86';
-        const hairStyle = String(opts.hairStyle || 'short').toLowerCase();
-        const hairCol = opts.hairColor || '#2b1d14';
-        const bottomType = String(opts.bottomType || (String(opts.holdSprite || '').match(/kilt|falda|tartan/i) ? 'kilt' : 'pants')).toLowerCase();
-        const pose = opts.pose || 'idle';
-        const facingLeft = !!opts.facingLeft;
-        const dir = facingLeft ? -1 : 1;
-        const isTalking = opts.isTalking !== undefined ? !!opts.isTalking : true;
-        const step = isActuallyWalking ? (Math.floor(localFrame / 4) % 2) : 0;
-
-        // Sombra en el suelo
-        fillRect(curX - 7, anchorY, 15, 2, 'rgba(0,0,0,0.45)');
-
-        const legL = isActuallyWalking ? (step === 0 ? -2 : 0) : 0;
-        const legR = isActuallyWalking ? (step === 1 ? -2 : 0) : 0;
-
-        if (bottomType === 'kilt') {
-          // Piernas con calcetas blancas escocesas y botas + Falda Tartán real sobre las caderas
-          fillBorderedRect(curX - 5, anchorY - 6 + legL, 4, 6, '#e6ad86', '#0b0c10');
-          fillBorderedRect(curX + 1, anchorY - 6 + legR, 4, 6, '#e6ad86', '#0b0c10');
-          fillRect(curX - 5, anchorY - 4 + legL, 4, 3, '#f8fafc');
-          fillRect(curX + 1, anchorY - 4 + legR, 4, 3, '#f8fafc');
-          // Falda escocesa (Kilt) con cuadros tartán rojos, verdes y amarillos
-          fillBorderedRect(curX - 8, anchorY - 13, 17, 8, '#dc2626', '#0b0c10');
-          for (let kc = curX - 6; kc <= curX + 6; kc += 3) {
-            fillRect(kc, anchorY - 12, 1, 6, '#15803d');
-          }
-          fillRect(curX - 7, anchorY - 10, 15, 1, '#fde047');
-        } else {
-          // Pantalones clásicos
-          fillBorderedRect(curX - 5, anchorY - 10 + legL, 5, 10, '#1e293b', '#0b0c10');
-          fillBorderedRect(curX + 1, anchorY - 10 + legR, 5, 10, '#1e293b', '#0b0c10');
-        }
-
-        // Torso detallado
-        fillBorderedRect(curX - 7, anchorY - 24, 15, 13, suitCol, '#0b0c10');
-        fillRect(curX - 1, anchorY - 22, 3, 8, opts.tieColor || '#facc15');
-        fillRect(curX - 6, anchorY - 12, 13, 2, '#0b0c10');
-
-        // Cabeza Expresiva
-        const headY = anchorY - 37;
-        fillBorderedRect(curX - 7, headY, 15, 14, skinCol, '#0b0c10');
-
-        // Sombreros, Boinas, Gorras de Oficial y Cascos Militares reales
-        if (hairStyle === 'beret' || bottomType === 'kilt') {
-          fillBorderedRect(curX - 8, headY - 3, 16, 5, '#14532d', '#0b0c10');
-          fillRect(curX - 2, headY - 4, 3, 2, '#dc2626');
-        } else if (hairStyle === 'officer_cap' || hairStyle === 'hat') {
-          fillBorderedRect(curX - 9, headY - 2, 19, 3, '#1e293b', '#0b0c10');
-          fillBorderedRect(curX - 7, headY - 6, 15, 5, suitCol, '#0b0c10');
-          fillRect(curX - 1, headY - 4, 3, 2, '#fde047');
-        } else if (hairStyle === 'helmet') {
-          fillBorderedRect(curX - 8, headY - 3, 17, 6, '#3f6212', '#0b0c10');
-        } else if (hairStyle === 'bald') {
-          fillRect(curX - 5, headY + 1, 3, 1, '#ffffff');
-        } else {
-          fillRect(curX - 7, headY, 15, 4, hairCol);
-          fillRect(curX - 7, headY + 4, 2, 3, hairCol);
-        }
-
-        // Ojos y Cejas
-        const eye1X = facingLeft ? curX - 5 : curX - 2;
-        const eye2X = facingLeft ? curX + 1 : curX + 3;
-        fillRect(eye1X, headY + 5, 3, 3, '#ffffff');
-        fillRect(eye2X, headY + 5, 3, 3, '#ffffff');
-        setPx(facingLeft ? eye1X : eye1X + 2, headY + 6, '#0b0c10');
-        setPx(facingLeft ? eye2X : eye2X + 2, headY + 6, '#0b0c10');
-        fillRect(eye1X, headY + 3, 3, 1, '#2b1d14');
-        fillRect(eye2X, headY + 3, 3, 1, '#2b1d14');
-
-        if (hairStyle === 'glasses') {
-          drawRing(eye1X + 1, headY + 6, 2, 1, '#38bdf8');
-          drawRing(eye2X + 1, headY + 6, 2, 1, '#38bdf8');
-        }
-
-        if (pose === 'panic') {
-          fillBorderedRect(curX - 2, headY + 9, 5, 4, '#991b1b', '#0b0c10');
-          fillRect(curX + 6, headY + 3 + (localFrame % 5), 2, 3, '#38bdf8');
-        } else if (isTalking && (Math.floor(localFrame / 3) % 2 === 0)) {
-          fillRect(curX - 2, headY + 10, 5, 2, '#991b1b');
-        } else {
-          fillRect(curX - 2, headY + 10, 4, 1, '#2b1d14');
-        }
-
-        let handX = curX + dir * 10;
-        let handY = anchorY - 18;
-
-        if (pose === 'panic') {
-          const wave = (Math.floor(localFrame / 3) % 2 === 0) ? -2 : 0;
-          fillBorderedRect(curX - 10, headY + 2 + wave, 4, 9, suitCol, '#0b0c10');
-          fillBorderedRect(curX + 7, headY + 2 - wave, 4, 9, suitCol, '#0b0c10');
-        } else {
-          fillBorderedRect(facingLeft ? curX - 10 : curX + 6, anchorY - 21, 5, 5, suitCol, '#0b0c10');
-          fillRect(handX - 1, handY - 1, 3, 3, skinCol);
-        }
-
-        if (opts.holdSprite && !/kilt|falda|tartan|uniforme/i.test(opts.holdSprite)) {
-          drawHeldProp(opts.holdSprite, handX + dir * 5, handY - 1, facingLeft);
-        }
-
-        return { handX: handX + dir * 6, handY: handY - 1, headX: curX, headY };
-      }
-
-      function drawBusto(cx, headY, opts = {}, localFrame = 0) {
-        const s = opts.scale || 0.85;
-        const suitCol = opts.suitColor || '#1e293b';
-        const tieCol = opts.tieColor || '#ef4444';
-        const hatCol = opts.hatColor !== undefined ? opts.hatColor : null;
-        const hairCol = opts.hairColor || '#2b1d14';
-        const skinCol = opts.skinColor || '#e6ad86';
-        const isTalking = opts.isTalking !== undefined ? opts.isTalking : true;
-
-        const bobY = Math.max(78, Math.min(96, headY)) + Math.round(Math.sin(localFrame * 0.15) * 1);
-        const bodyW = Math.round(58 * s), bodyH = Math.round(38 * s);
-        fillBorderedRect(cx - Math.floor(bodyW / 2), bobY + Math.round(18 * s), bodyW, bodyH, suitCol, '#0b0c10');
-        fillRect(cx - Math.round(6 * s), bobY + Math.round(19 * s), Math.round(12 * s), Math.round(14 * s), '#ffffff');
-        fillRect(cx - Math.round(2 * s), bobY + Math.round(22 * s), Math.round(4 * s), Math.round(16 * s), tieCol);
-
-        const headW = Math.round(32 * s), headH = Math.round(30 * s);
-        const hx = cx - Math.floor(headW / 2), hy = bobY - Math.floor(headH / 2);
-        fillBorderedRect(cx - Math.round(7 * s), hy + headH - 2, Math.round(14 * s), Math.round(8 * s), skinCol, '#0b0c10');
-        fillBorderedRect(hx, hy, headW, headH, skinCol, '#0b0c10');
-        fillRect(hx, hy, headW, Math.round(6 * s), hairCol);
-
-        if (hatCol) {
-          fillBorderedRect(cx - Math.round(22 * s), hy - Math.round(2 * s), Math.round(44 * s), Math.round(4 * s), hatCol, '#0b0c10');
-          fillBorderedRect(cx - Math.round(15 * s), hy - Math.round(9 * s), Math.round(30 * s), Math.round(8 * s), hatCol, '#0b0c10');
-        }
-
-        const blink = (localFrame % 55 < 3);
-        if (blink) {
-          fillRect(cx - Math.round(9 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
-          fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
-        } else {
-          fillRect(cx - Math.round(9 * s), bobY - 4, Math.round(5 * s), 4, '#ffffff');
-          fillRect(cx - Math.round(7 * s), bobY - 4, Math.round(3 * s), 4, '#0b0c10');
-          fillRect(cx + Math.round(4 * s), bobY - 4, Math.round(5 * s), 4, '#ffffff');
-          fillRect(cx + Math.round(6 * s), bobY - 4, Math.round(3 * s), 4, '#0b0c10');
-        }
-
-        const mouthOpen = isTalking && (Math.floor(localFrame / 3) % 2 === 0);
-        if (mouthOpen) {
-          fillBorderedRect(cx - Math.round(5 * s), bobY + Math.round(6 * s), Math.round(10 * s), Math.round(5 * s), '#ffffff', '#0b0c10');
-        } else {
-          fillRect(cx - Math.round(5 * s), bobY + Math.round(7 * s), Math.round(10 * s), 2, '#0b0c10');
-        }
-
-        if (opts.holdSprite && !/kilt|falda|tartan/i.test(opts.holdSprite)) {
-          drawHeldProp(opts.holdSprite, cx + 22, bobY + 24, false);
-        }
-      }
-
-      // ======================================================================
-      // 5. VEHÍCULOS 16-BIT RECONOCIBLES CON CONDUCTOR, HUMO Y GRAVEDAD REAL
-      // ======================================================================
-      function drawDetailedVehicle(x, type = 'car', color = '#3f6212', facingLeft = false, localFrame = 0, flyY = 62) {
-        const cx = Math.max(18, Math.min(102, Math.round(x)));
-        const t = String(type || 'car').toLowerCase();
-        const bounce = localFrame % 4 < 2 ? -1 : 0;
-        const vy = GROUND_Y + bounce;
-
-        // Humo de escape dinámico
-        const exhaustX = facingLeft ? cx + 22 : cx - 22;
-        if (t !== 'plane' && t !== 'jet') {
-          fillCircle(exhaustX - (facingLeft ? -1 : 1) * (localFrame % 8), GROUND_Y - 7, 2 + (localFrame % 2), '#cbd5e1');
-        }
-
-        if (/plane|avion|bomber|jet/.test(t)) {
-          const ay = Math.max(44, Math.min(92, flyY)) + Math.round(Math.sin(localFrame * 0.2) * 2);
-          // Fuselaje de avión militar/bombardero con cabina, hélice/reactor y escarapela
-          fillBorderedRect(cx - 20, ay - 5, 40, 10, color || '#475569', '#0b0c10');
-          fillTriangle(cx - 20, ay - 5, cx - 26, ay - 14, cx - 12, ay - 5, color || '#475569', '#0b0c10');
-          fillBorderedRect(cx + 6, ay - 4, 9, 5, '#7dd3fc', '#0b0c10');
-          fillBorderedRect(cx - 6, ay + 1, 14, 4, '#334155', '#0b0c10'); // Ala
-          fillCircle(cx - 10, ay, 2, '#ef4444');
-          return;
-        }
-
-        if (/tank|tanque/.test(t)) {
-          fillBorderedRect(cx - 20, vy - 12, 40, 8, '#1e293b', '#0b0c10');
-          for (let wx = cx - 16; wx <= cx + 16; wx += 8) {
-            fillBorderedCircle(wx, GROUND_Y - 4, 4, '#475569', '#0b0c10');
-          }
-          fillBorderedRect(cx - 12, vy - 20, 24, 9, '#365314', '#0b0c10');
-          const barrelX = facingLeft ? cx - 28 : cx + 12;
-          fillBorderedRect(barrelX, vy - 17, 16, 4, '#1e293b', '#0b0c10');
-          return;
-        }
-
-        if (/truck|camion|van/.test(t)) {
-          const cargoX = facingLeft ? cx - 4 : cx - 28;
-          fillBorderedRect(cargoX, vy - 26, 30, 19, color || '#3f6212', '#0b0c10');
-          for (let rx = cargoX + 5; rx < cargoX + 26; rx += 7) {
-            fillRect(rx, vy - 24, 2, 15, 'rgba(0,0,0,0.25)');
-          }
-          const cabX = facingLeft ? cx - 18 : cx + 2;
-          fillBorderedRect(cabX, vy - 20, 16, 13, color || '#3f6212', '#0b0c10');
-          const winX = facingLeft ? cabX + 2 : cabX + 7;
-          fillBorderedRect(winX, vy - 18, 7, 6, '#7dd3fc', '#0b0c10');
-          fillRect(winX + 2, vy - 16, 3, 4, '#e6ad86'); // Conductor visible dentro
-          [facingLeft ? cx - 11 : cx - 20, facingLeft ? cx + 16 : cx + 9].forEach(wx => {
-            fillBorderedCircle(wx, GROUND_Y - 5, 5, '#1e293b', '#0b0c10');
-            fillCircle(wx, GROUND_Y - 5, 2, '#94a3b8');
-          });
-          return;
-        }
-
-        // Coche clásico / Sedán con guardabarros, ventanillas, conductor visible y faros
-        fillBorderedRect(cx - 20, vy - 14, 40, 8, color || '#1e3a8a', '#0b0c10');
-        fillBorderedRect(cx - 12, vy - 22, 24, 9, color || '#1e3a8a', '#0b0c10');
-        fillBorderedRect(cx - 9, vy - 20, 8, 6, '#7dd3fc', '#0b0c10');
-        fillBorderedRect(cx + 1, vy - 20, 8, 6, '#7dd3fc', '#0b0c10');
-        // Conductor dentro del coche
-        fillRect(cx + 3, vy - 18, 4, 4, '#e6ad86');
-        fillRect(facingLeft ? cx - 20 : cx + 18, vy - 12, 2, 3, '#fde047'); // Faro encendido
-        fillBorderedCircle(cx - 12, GROUND_Y - 4, 5, '#1e293b', '#0b0c10');
-        fillCircle(cx - 12, GROUND_Y - 4, 2, '#e2e8f0');
-        fillBorderedCircle(cx + 12, GROUND_Y - 4, 5, '#1e293b', '#0b0c10');
-        fillCircle(cx + 12, GROUND_Y - 4, 2, '#e2e8f0');
-      }
-
-      // Silenciar rótulos flotantes redundantes para mantener la pantalla 100% limpia de texto extra
-      function drawScreenText() {}
-
-      function drawTerminal(x, y, w, h, titleStr, bodyStr, borderCol = '#d97706') {
-        const bx = Math.max(18, Math.min(72, Math.round(x)));
-        const by = Math.max(48, Math.min(92, Math.round(y)));
-        const bw = Math.min(96 - bx, Math.max(38, Math.round(w)));
-        const bh = Math.min(44, Math.max(26, Math.round(h)));
-
-        // Pizarra táctica / Mapa de operaciones visual (sin saturar de letras)
-        fillBorderedRect(bx, by, bw, bh, '#0f172a', '#0b0c10');
-        fillBorderedRect(bx + 2, by + 2, bw - 4, bh - 4, '#064e3b', borderCol);
-        // Dibujar mapa táctico y vectores de ataque dentro del panel
-        drawPixelLine(bx + 6, by + bh - 8, bx + Math.floor(bw / 2), by + 8, 2, '#4ade80');
-        drawPixelLine(bx + Math.floor(bw / 2), by + 8, bx + bw - 8, by + bh - 10, 2, '#ef4444');
-        fillCircle(bx + Math.floor(bw / 2), by + Math.floor(bh / 2), 4, '#fde047');
-      }
-
-      function drawDetailedBuilding(x, w, h, opts = {}, localFrame = 0) {
-        const wallCol = opts.wallColor || '#475569';
-        const roofCol = opts.roofColor || '#1e293b';
-        const winCol = opts.windowColor || '#fde047';
-        const topY = Math.max(42, GROUND_Y - Math.min(92, h));
-        const realH = GROUND_Y - topY;
-
-        drawTexturedBox(x, topY, w, realH, 'brick', wallCol, 'rgba(0,0,0,0.2)', localFrame);
-        if (opts.peakedRoof) {
-          fillTriangle(x - 2, topY, x + w + 2, topY, x + Math.floor(w / 2), topY - 12, roofCol, '#0b0c10');
-        } else {
-          fillBorderedRect(x - 2, topY - 4, w + 4, 5, roofCol, '#0b0c10');
-        }
-        for (let wy = topY + 6; wy < GROUND_Y - 14; wy += 11) {
-          for (let wx = x + 4; wx < x + w - 7; wx += 9) {
-            fillBorderedRect(wx, wy, 6, 7, ((wx + wy) % 3 !== 0) ? winCol : '#1e293b', '#0b0c10');
-          }
-        }
-      }
-
-      function drawDetailedTree(x, scale = 1.0, localFrame = 0) {
-        const trunkW = Math.max(3, Math.round(5 * scale));
-        const trunkH = Math.round(18 * scale);
-        const sway = Math.round(Math.sin(localFrame * 0.1 + x) * 1);
-        fillBorderedRect(x - Math.floor(trunkW / 2), GROUND_Y - trunkH, trunkW, trunkH, '#5c3a21', '#0b0c10');
-        const rMain = Math.round(11 * scale);
-        fillBorderedCircle(x + sway, GROUND_Y - trunkH - Math.round(4 * scale), rMain, '#14532d', '#0b0c10');
-        fillCircle(x - 2 + sway, GROUND_Y - trunkH - Math.round(8 * scale), Math.round(7 * scale), '#22c55e');
-      }
-
-      function drawActionBeam(fromX, fromY, toX, toY, type = 'bullets', localFrame = 0) {
-        if (type === 'spray' || type === 'smoke') {
-          for (let i = 0; i < 8; i++) {
-            const t = ((i / 8) + (localFrame * 0.05)) % 1;
-            const px = fromX + (toX - fromX) * t;
-            const py = fromY + (toY - fromY) * t - Math.sin(t * Math.PI) * 4;
-            fillBorderedCircle(px, py, 2, '#e2e8f0', '#94a3b8');
-          }
-          return;
-        }
-        if (type === 'laser') {
-          drawPixelLine(fromX, fromY, toX, toY, 2, '#ef4444');
-          fillCircle(toX, toY, 3, '#fde047');
-          return;
-        }
-        if (localFrame % 4 < 2) {
-          fillCircle(fromX, fromY, 3, '#fde047');
-          drawPixelLine(fromX, fromY, toX, toY, 1, '#fef08a');
-          fillCircle(toX, toY, 3, '#f97316');
         }
       }
 
@@ -1298,7 +836,6 @@ async function main() {
         setPx, px: setPx,
         fillRect, rect: fillRect,
         fillBorderedRect, borderedRect: fillBorderedRect, box: fillBorderedRect,
-        drawTexturedBox, texturedBox: drawTexturedBox,
         fillCircle, circle: fillCircle,
         fillBorderedCircle, borderedCircle: fillBorderedCircle,
         drawRing, ring: drawRing,
@@ -1316,15 +853,6 @@ async function main() {
         drawClouds, clouds: drawClouds,
         drawFire, fire: drawFire,
         drawCustomSprite, customSprite: drawCustomSprite,
-        drawDetailedBuilding, building: drawDetailedBuilding,
-        drawDetailedTree, tree: drawDetailedTree,
-        drawDetailedVehicle, vehicle: drawDetailedVehicle,
-        drawActor, actor: drawActor,
-        drawHuman: (x, y, col, hat, mov, lf, fl) => drawActor(x, y, { suitColor: col, hairStyle: hat ? 'hat' : 'short', isTalking: true, facingLeft: fl }, lf),
-        drawActionBeam, actionBeam: drawActionBeam,
-        drawBusto, busto: drawBusto,
-        drawScreenText, drawTinyText: drawScreenText, text: drawScreenText,
-        drawTerminal, terminal: drawTerminal,
         sin: Math.sin, cos: Math.cos, abs: Math.abs, floor: Math.floor,
         round: Math.round, min: Math.min, max: Math.max, PI: Math.PI
       };
@@ -1384,7 +912,6 @@ async function main() {
 
         if (beatKey !== lastBeatKey) {
           lastBeatKey = beatKey;
-          actorPrevX = {};
           updateTopBanner(activeBeat.texto_1 || esc.texto_1 || 'HISTORIA');
         }
 
@@ -1395,11 +922,7 @@ async function main() {
         }
 
         if (activeBeat.fgFn) {
-          try { activeBeat.fgFn(sandboxApi, beatProgress, beatLocalFrame); } catch (e) {
-            drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, beatLocalFrame);
-          }
-        } else {
-          drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, beatLocalFrame);
+          try { activeBeat.fgFn(sandboxApi, beatProgress, beatLocalFrame); } catch (e) {}
         }
 
         flushGridToCanvas();
@@ -1448,7 +971,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v14.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v15.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1461,13 +984,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v14.0...');
+  console.log('🔊 Ensamblando MP4 final v15.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v14.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v15.0 generado con éxito!');
   process.exit(0);
 }
 
