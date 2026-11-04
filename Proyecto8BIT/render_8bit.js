@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 // ============================================================================
-// 1. DESCARGA Y RESOLUCIÓN DE SPRITES SÓLIDOS A COLOR (ICONIFY)
+// 1. DESCARGA DE PAYLOAD Y ALINEACIÓN FONÉTICA DE SUBTÍTULOS
 // ============================================================================
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -22,206 +22,6 @@ function downloadFile(url, dest) {
   });
 }
 
-function fetchText(url) {
-  return new Promise((resolve) => {
-    https.get(url, (res) => {
-      if (res.statusCode !== 200) return resolve(null);
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => resolve(data));
-    }).on('error', () => resolve(null));
-  });
-}
-
-const ES_TO_EN_MAP = {
-  'perro': 'dog', 'pelota': 'tennis', 'avion': 'airplane', 'cohete': 'rocket',
-  'virus': 'biohazard', 'calavera': 'skull', 'esqueleto': 'skull', 'mago': 'mage',
-  'espada': 'crossed-swords', 'escudo': 'shield', 'chip': 'microchip', 'reloj': 'stopwatch',
-  'ordenador': 'laptop', 'servidor': 'desktop-computer', 'dinero': 'money-bag', 'moneda': 'coin',
-  'banco': 'bank', 'fuego': 'fire', 'explosion': 'collision', 'alerta': 'warning',
-  'medico': 'health-worker', 'hospital': 'hospital', 'coche': 'automobile', 'camion': 'delivery-truck',
-  'tren': 'high-speed-train', 'barco': 'ship', 'mundo': 'globe-showing-americas', 'ciencia': 'microscope',
-  'dragon': 'dragon', 'gato': 'cat', 'leon': 'lion', 'comida': 'hamburger', 'pizza': 'pizza',
-  'corazon': 'red-heart', 'cerebro': 'brain', 'robot': 'robot', 'telefono': 'telephone',
-  'satelite': 'satellite', 'bomba': 'bomb', 'llave': 'key', 'candado': 'locked', 'trofeo': 'trophy',
-  'silbato': 'postal-horn', 'cereal': 'bowl-with-spoon', 'caja': 'package', 'casa-blanca': 'classical-building',
-  'antena': 'satellite-antenna', 'altavoz': 'loudspeaker', 'musica': 'musical-note', 'hacker': 'detective'
-};
-
-const FALLBACK_COLOR_ICONS = [
-  'telephone', 'package', 'loudspeaker', 'satellite-antenna', 'laptop',
-  'globe-showing-americas', 'classical-building', 'detective', 'trophy',
-  'rocket', 'microscope', 'money-bag', 'stopwatch', 'shield', 'key',
-  'locked', 'bomb', 'fire', 'high-voltage', 'gear', 'magnet', 'compass',
-  'crystal-ball', 'joystick', 'video-game', 'battery', 'light-bulb', 'crown'
-];
-
-async function resolveSvgForPixelArt(rawQuery) {
-  let q = String(rawQuery || 'sparkles').trim().toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9_:\s-]/g, '').trim();
-
-  if (ES_TO_EN_MAP[q]) q = ES_TO_EN_MAP[q];
-  const cleanName = q.includes(':') ? q.split(':')[1] : q.replace(/\s+/g, '-');
-
-  const colorPrefixes = ['fluent-emoji-flat', 'twemoji', 'noto', 'flat-color-icons'];
-  for (const pref of colorPrefixes) {
-    const svg = await fetchText(`https://api.iconify.design/${pref}/${cleanName}.svg`);
-    if (svg && svg.includes('<svg')) {
-      return { svg, isColorPack: true };
-    }
-  }
-
-  const colorSearchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=fluent-emoji-flat,twemoji,noto,flat-color-icons&limit=5`;
-  const colorRes = await fetchText(colorSearchUrl);
-  if (colorRes) {
-    try {
-      const parsed = JSON.parse(colorRes);
-      if (Array.isArray(parsed.icons) && parsed.icons.length > 0) {
-        const [bPref, bName] = parsed.icons[0].split(':');
-        const svg = await fetchText(`https://api.iconify.design/${bPref}/${bName}.svg`);
-        if (svg && svg.includes('<svg')) {
-          return { svg, isColorPack: true };
-        }
-      }
-    } catch (e) {}
-  }
-
-  const gameSearchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=game-icons&limit=3`;
-  const gameRes = await fetchText(gameSearchUrl);
-  if (gameRes) {
-    try {
-      const parsed = JSON.parse(gameRes);
-      if (Array.isArray(parsed.icons) && parsed.icons.length > 0) {
-        const [bPref, bName] = parsed.icons[0].split(':');
-        const svg = await fetchText(`https://api.iconify.design/${bPref}/${bName}.svg`);
-        if (svg && svg.includes('<svg')) {
-          return { svg, isColorPack: false };
-        }
-      }
-    } catch (e) {}
-  }
-
-  const fallbackSvg = await fetchText('https://api.iconify.design/twemoji/sparkles.svg');
-  return { svg: fallbackSvg || '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ffd166"/></svg>', isColorPack: true };
-}
-
-// ============================================================================
-// 2. ENRIQUECEDOR CINEMATOGRÁFICO Y DEDUPLICADOR ESTRICTO DE SPRITES
-// ============================================================================
-function prepareCinematicScenes(escenas, hash) {
-  const allShotTypes = [
-    'closeup_character',
-    'side_scroll_journey',
-    'document_blueprint',
-    'map_trajectory',
-    'crowd_accumulation',
-    'scale_comparison',
-    'pyramid_network',
-    'dramatic_fire_scene',
-    'final_choice_card'
-  ];
-
-  const charRoles = ['suit_boss', 'scientist', 'engineer', 'military', 'hacker', 'explorer'];
-  const palettes = ['sunset', 'day', 'night', 'sepia', 'cyber', 'storm'];
-
-  const usedIcons = new Set();
-  let fallbackCursor = 0;
-
-  function getUniqueIcon(requestedIcon) {
-    let key = String(requestedIcon || '').toLowerCase().trim();
-    if (ES_TO_EN_MAP[key]) key = ES_TO_EN_MAP[key];
-    if (!key || usedIcons.has(key)) {
-      while (fallbackCursor < FALLBACK_COLOR_ICONS.length * 2) {
-        const cand = FALLBACK_COLOR_ICONS[(fallbackCursor + hash) % FALLBACK_COLOR_ICONS.length];
-        fallbackCursor++;
-        if (!usedIcons.has(cand)) {
-          key = cand;
-          break;
-        }
-      }
-    }
-    usedIcons.add(key);
-    return key;
-  }
-
-  let prevShot = '';
-
-  return (escenas || []).map((esc, idx) => {
-    const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''} ${esc.narrativa_visual || ''}`.toLowerCase();
-    let shot = String(esc.shot_type || esc.stage_layout || '').toLowerCase().trim();
-
-    if (idx === escenas.length - 1) {
-      shot = 'final_choice_card';
-    } else if (!allShotTypes.includes(shot) || shot === prevShot) {
-      if (idx === 0) shot = 'closeup_character';
-      else if (/mapa|ruta|orbita|pais|italia|marte|continente|distancia|viaje/.test(text)) shot = 'map_trajectory';
-      else if (/millon|dolar|euro|altura|veces|escala|peso|kilo|compar|248|300|1500/.test(text)) shot = 'scale_comparison';
-      else if (/multitud|fila|cola|cientos|miles|personas|soldados|jugadores|habitantes/.test(text)) shot = 'crowd_accumulation';
-      else if (/codigo|documento|cupon|informe|contrato|ley|auditoria|secreto|error/.test(text)) shot = 'document_blueprint';
-      else if (/red|sistema|piramide|banco|servidores|colaps|cascada|nodos/.test(text)) shot = 'pyramid_network';
-      else if (/fuego|explosion|desintegr|quem|incendio|destru|catastrofe|pánico|panico/.test(text)) shot = 'dramatic_fire_scene';
-      else if (/camin|corri|despeg|vuelo|avion|cohete|sonda|perro|cueva/.test(text)) shot = 'side_scroll_journey';
-      else shot = allShotTypes[(idx * 2 + hash) % (allShotTypes.length - 1)];
-
-      if (shot === prevShot) {
-        shot = allShotTypes.find(s => s !== prevShot && s !== 'final_choice_card') || 'closeup_character';
-      }
-    }
-    prevShot = shot;
-
-    let role = esc.character_role || '';
-    if (!charRoles.includes(role)) {
-      if (/militar|marine|soldado|guerra|general|policia/.test(text)) role = 'military';
-      else if (/cientifico|nasa|medico|laboratorio|estudio|física/.test(text)) role = 'scientist';
-      else if (/ingeniero|constructor|motor|maquina|obrero/.test(text)) role = 'engineer';
-      else if (/hacker|programador|software|codigo|juego/.test(text)) role = 'hacker';
-      else if (/explorador|selva|isla|cueva|montaña/.test(text)) role = 'explorer';
-      else role = 'suit_boss';
-    }
-
-    const rawIcon1 = esc.actor_1?.icon || 'rocket';
-    const rawIcon2 = esc.actor_2?.icon || 'globe-showing-americas';
-    const uniqueIcon1 = getUniqueIcon(rawIcon1);
-    const uniqueIcon2 = getUniqueIcon(rawIcon2);
-
-    const numMatch = (esc.subtitulo || '').match(/\d+(?:[.,]\d+)?/);
-    const bigNumber = esc.big_metric || (numMatch ? numMatch[0] : '');
-
-    return {
-      ...esc,
-      shot_type: shot,
-      character_role: role,
-      palette_mode: esc.palette_mode || palettes[(idx + hash) % palettes.length],
-      actor_1: { icon: uniqueIcon1 },
-      actor_2: { icon: uniqueIcon2 },
-      big_metric: String(bigNumber).toUpperCase().slice(0, 10),
-      texto_1: (esc.texto_1 || esc.big_metric || `ACTO 0${idx + 1}`).toUpperCase().slice(0, 11),
-      texto_2: (esc.texto_2 || 'HISTORIA').toUpperCase().slice(0, 11)
-    };
-  });
-}
-
-async function preloadAllSceneSprites(escenas) {
-  const spriteCache = {};
-  const keysToFetch = new Set(['sparkles']);
-
-  for (const s of (escenas || [])) {
-    if (s.actor_1?.icon) keysToFetch.add(s.actor_1.icon);
-    if (s.actor_2?.icon) keysToFetch.add(s.actor_2.icon);
-  }
-
-  for (const key of keysToFetch) {
-    if (key && !spriteCache[key]) {
-      spriteCache[key] = await resolveSvgForPixelArt(key);
-    }
-  }
-  return spriteCache;
-}
-
-// ============================================================================
-// 3. ALINEACIÓN FONÉTICA DE SUBTÍTULOS
-// ============================================================================
 function normalizeForMatch(str) {
   return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 }
@@ -467,7 +267,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 }
 
 // ============================================================================
-// 4. SINTETIZADOR CHIPTUNE 8-BIT PROCEDURAL
+// 2. SINTETIZADOR CHIPTUNE 8-BIT PROCEDURAL
 // ============================================================================
 function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   const allTypes = [
@@ -522,12 +322,115 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 5. MOTOR PRINCIPAL v7.2 (HUD CLÁSICO + ANIMACIONES CINEMÁTICAS 8-BIT)
+// 3. MOTOR DE DIRECCIÓN ARTÍSTICA CONTEXTUAL v8.0 (ESTILO ESTAFADOR EN TODAS)
+// ============================================================================
+function prepareStudioScenes(escenas, hash) {
+  const allShots = [
+    'protagonist_closeup',
+    'two_characters_deal',
+    'landmark_monument',
+    'document_forgery_desk',
+    'cash_heist_tally',
+    'night_train_escape',
+    'press_headline',
+    'final_rpg_decision'
+  ];
+
+  const expressions = ['smirk_wink', 'greedy_dollar', 'scheming_evil', 'shock_sweat', 'ashamed_red', 'proud_confident'];
+  const props = ['cash_bundle', 'secret_contract', 'iron_ingot', 'magnifying_glass', 'pocket_watch', 'microchip', 'key_master', 'trophy_cup'];
+  const roles = ['con_artist', 'merchant_rich', 'scientist', 'engineer', 'military', 'hacker'];
+
+  let prevShot = '';
+
+  return (escenas || []).map((esc, idx) => {
+    const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''} ${esc.narrativa_visual || ''}`.toLowerCase();
+    let shot = String(esc.shot_type || '').toLowerCase().trim();
+
+    // Asignación semántica inteligente para que NINGUNA escena sea incoherente con lo que dice el locutor
+    if (idx === escenas.length - 1) {
+      shot = 'final_rpg_decision';
+    } else if (/torre|eiffel|demoler|hierro|tonelada|monumento|edificio|estructura|7\.?000/.test(text)) {
+      shot = 'landmark_monument';
+    } else if (/prensa|periodico|diario|noticia|titular|publico|escandalo/.test(text)) {
+      shot = 'press_headline';
+    } else if (/falsific|credencial|documento|carta|contrato|ello|oficial|ley|codigo/.test(text)) {
+      shot = 'document_forgery_desk';
+    } else if (/suite|hotel|reuni|cito|ofreci|soborno|negoci|comerciante|magnate|convers/.test(text)) {
+      shot = 'two_characters_deal';
+    } else if (/entreg|dolar|euro|millon|botin|70\.?000|dinero|pago|fortuna|costo/.test(text)) {
+      shot = 'cash_heist_tally';
+    } else if (/tren|viena|fuga|escap|abord|viaj|avion|vuelo|coche|barco|regres/.test(text)) {
+      shot = 'night_train_escape';
+    } else if (/verguenza|confes|estafador|lustig| Fing|burocrata|oportunidad|ambicion/.test(text)) {
+      shot = 'protagonist_closeup';
+    } else if (!allShots.includes(shot)) {
+      shot = allShots[(idx + hash) % (allShots.length - 1)];
+    }
+
+    // Evitar que dos escenas seguidas tengan el mismo plano
+    if (shot === prevShot && idx < escenas.length - 1) {
+      if (shot === 'protagonist_closeup') shot = 'two_characters_deal';
+      else if (shot === 'two_characters_deal') shot = 'protagonist_closeup';
+      else shot = 'protagonist_closeup';
+    }
+    prevShot = shot;
+
+    // Inferir expresión facial coherente con la frase
+    let expr = esc.expression || '';
+    if (!expressions.includes(expr)) {
+      if (/verguenza|jamás confesó|miedo|temor|ridiculo/.test(text)) expr = 'ashamed_red';
+      else if (/dolar|millon|dinero|botin|ambicion|fortuna|70\.?000/.test(text)) expr = 'greedy_dollar';
+      else if (/fallo|error|panico|catastrofe|descubri/.test(text)) expr = 'shock_sweat';
+      else if (/secreto|soborno|enga|fingi|trampa|falsific/.test(text)) expr = 'scheming_evil';
+      else expr = 'smirk_wink';
+    }
+
+    // Inferir objeto en mano coherente con la frase
+    let prop = esc.hand_prop || '';
+    if (!props.includes(prop)) {
+      if (/hierro|tonelada|metal|acero|chatarra/.test(text)) prop = 'iron_ingot';
+      else if (/credencial|contrato|documento|firma|ley/.test(text)) prop = 'secret_contract';
+      else if (/investig|auditoria|secreto|pista/.test(text)) prop = 'magnifying_glass';
+      else if (/tiempo|meses|segundo|hora|reloj/.test(text)) prop = 'pocket_watch';
+      else if (/software|codigo|chip|sistema/.test(text)) prop = 'microchip';
+      else prop = 'cash_bundle';
+    }
+
+    // Inferir rol visual del personaje
+    let role = esc.character_role || '';
+    if (!roles.includes(role)) {
+      if (/verguenza|poisson|comerciante|magnate|inversor/.test(text) && shot === 'protagonist_closeup') role = 'merchant_rich';
+      else if (/cientifico|nasa|medico/.test(text)) role = 'scientist';
+      else if (/ingeniero|obrero|motor/.test(text)) role = 'engineer';
+      else if (/militar|soldado|marine/.test(text)) role = 'military';
+      else if (/hacker|programador/.test(text)) role = 'hacker';
+      else role = 'con_artist';
+    }
+
+    const cleanT1 = String(esc.texto_1 || `ESCENA 0${idx + 1}`).toUpperCase().trim().slice(0, 14);
+    const cleanT2 = String(esc.texto_2 || 'HISTORIA REAL').toUpperCase().trim().slice(0, 14);
+
+    return {
+      ...esc,
+      shot_type: shot,
+      expression: expr,
+      hand_prop: prop,
+      character_role: role,
+      texto_1: cleanT1,
+      texto_2: cleanT2,
+      choice_a: (esc.choice_a || 'SI, CAERIA EN LA TRAMPA').toUpperCase().slice(0, 24),
+      choice_b: (esc.choice_b || 'NO, SOSPECHARIA AL INSTANTE').toUpperCase().slice(0, 24)
+    };
+  });
+}
+
+// ============================================================================
+// 4. EJECUCIÓN PRINCIPAL Y RENDERIZADOR v8.0
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload Pixel-Art Studio v7.2 desde URL...');
+    console.log('📥 Descargando payload Pixel-Art Studio v8.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -563,15 +466,13 @@ async function main() {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
 
-  const escenasCinematic = prepareCinematicScenes(payload.escenas || [], hash);
-  console.log('🎨 Descargando Sprites sólidos de apoyo...');
-  const spriteCache = await preloadAllSceneSprites(escenasCinematic);
-  const subtitleChunks = buildSubtitleChunks(escenasCinematic, payload.alignment, duracionExactaVideo);
+  const escenasStudio = prepareStudioScenes(payload.escenas || [], hash);
+  const subtitleChunks = buildSubtitleChunks(escenasStudio, payload.alignment, duracionExactaVideo);
 
   // Mezcla de Audio con bg_music2.mp3
   try {
     let hasSfx = false;
-    try { hasSfx = buildChiptuneSfxTrack(escenasCinematic, duracionExactaVideo, hash); } catch (e) {}
+    try { hasSfx = buildChiptuneSfxTrack(escenasStudio, duracionExactaVideo, hash); } catch (e) {}
 
     let bgMusicPath = path.resolve(__dirname, '../bg_music2.mp3');
     if (!fs.existsSync(bgMusicPath)) bgMusicPath = path.resolve('bg_music2.mp3');
@@ -592,10 +493,8 @@ async function main() {
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
 
-  // Serialización segura para evitar que caracteres especiales rompan el bloque <script>
-  const safeEscenasJson = JSON.stringify(escenasCinematic).replace(/<\/script>/gi, '<\\/script>');
+  const safeEscenasJson = JSON.stringify(escenasStudio).replace(/<\/script>/gi, '<\\/script>');
   const safeChunksJson = JSON.stringify(subtitleChunks).replace(/<\/script>/gi, '<\\/script>');
-  const safeSpritesJson = JSON.stringify(spriteCache).replace(/<\/script>/gi, '<\\/script>');
 
   const htmlContent = `
   <!DOCTYPE html>
@@ -610,11 +509,7 @@ async function main() {
         background: #05050a;
         overflow: hidden; position: relative;
         font-family: 'Press Start 2P', monospace;
-      }
-      #viewport-wrapper {
-        position: absolute; inset: 0;
-        width: 720px; height: 1280px;
-        overflow: hidden;
+        -webkit-font-smoothing: none;
       }
       #pixel-canvas {
         position: absolute; inset: 0;
@@ -628,6 +523,7 @@ async function main() {
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
+      /* TU HUD CLÁSICO INTACTO */
       .arcade-hud {
         position: absolute; top: 32px; left: 26px; right: 26px;
         display: flex; justify-content: space-between; align-items: center;
@@ -644,6 +540,49 @@ async function main() {
         background: linear-gradient(90deg, #ff2a5f, #ffd000, #00f2fe);
         width: 0%; z-index: 30;
       }
+
+      /* RÓTULOS PIXEL-ART NÍTIDOS CON SOPORTE TOTAL PARA Ñ Y TILDES (CERO PALABRAS ROTAS) */
+      .label-box-top {
+        position: absolute; top: 108px; left: 50%; transform: translateX(-50%);
+        background: #080a14; border: 4px solid #000000;
+        box-shadow: inset 0 0 0 2px #2b3248, 0 8px 0 rgba(0,0,0,0.75);
+        padding: 14px 26px; color: #ffd166; font-size: 28px;
+        text-transform: uppercase; white-space: nowrap; letter-spacing: 2px;
+        text-shadow: 4px 4px 0 #000000; z-index: 18;
+      }
+      .label-box-bot {
+        position: absolute; top: 882px; left: 50%; transform: translateX(-50%);
+        background: #080a14; border: 4px solid #000000;
+        box-shadow: inset 0 0 0 2px #2b3248, 0 8px 0 rgba(0,0,0,0.75);
+        padding: 14px 26px; color: #00f5d4; font-size: 28px;
+        text-transform: uppercase; white-space: nowrap; letter-spacing: 2px;
+        text-shadow: 4px 4px 0 #000000; z-index: 18;
+      }
+
+      /* CAJA DE PREGUNTA FINAL RPG CON TEXTO REAL 100% LEGIBLE */
+      .rpg-choice-modal {
+        position: absolute; top: 380px; left: 48px; right: 48px;
+        background: #0f172a; border: 6px solid #eab308;
+        outline: 6px solid #000000;
+        box-shadow: 0 14px 0 rgba(0,0,0,0.85);
+        padding: 28px 26px; z-index: 22; display: none;
+      }
+      .rpg-question-title {
+        color: #ffffff; font-size: 18px; line-height: 1.5;
+        margin-bottom: 24px; text-align: center;
+        text-shadow: 3px 3px 0 #000000;
+      }
+      .rpg-option-row {
+        font-size: 17px; padding: 12px 14px; margin-bottom: 10px;
+        color: #64748b; text-shadow: 2px 2px 0 #000000;
+        display: flex; align-items: center; gap: 14px;
+      }
+      .rpg-option-row.selected {
+        color: #ffd166; background: rgba(255, 209, 102, 0.12);
+        border: 3px solid #ffd166;
+      }
+      .rpg-cursor { color: #80ed99; font-size: 20px; }
+
       .subtitle-container {
         position: absolute; bottom: 78px; left: 26px; right: 26px;
         min-height: 155px; display: flex; justify-content: center; align-items: center;
@@ -669,13 +608,28 @@ async function main() {
   <body>
     <div class="progress-bar" id="pbar"></div>
     <div class="arcade-hud">
-      <div class="hud-tag">${(payload.subrama || 'HISTORIA 8-BIT').slice(0, 24)}</div>
+      <div class="hud-tag">${(payload.subrama || '8BIT HEISTS').slice(0, 24)}</div>
       <div class="hud-score" id="hud-frame">ESC:01</div>
     </div>
 
-    <div id="viewport-wrapper">
-      <canvas id="pixel-canvas" width="720" height="1280"></canvas>
+    <!-- RÓTULOS CON TIPOGRAFÍA ARCADE REAL (CERO PALABRAS ROTAS, SOPORTA Ñ Y TILDES) -->
+    <div class="label-box-top" id="label-top">1925</div>
+    <div class="label-box-bot" id="label-bot">HISTORIA</div>
+
+    <!-- MODAL RPG PARA LA PREGUNTA FINAL CON TEXTO LEGIBLE -->
+    <div class="rpg-choice-modal" id="rpg-modal">
+      <div class="rpg-question-title">¿QUÉ HABRÍAS HECHO TÚ EN SU LUGAR?</div>
+      <div class="rpg-option-row selected" id="rpg-opt-a">
+        <span class="rpg-cursor" id="cur-a">▶</span>
+        <span id="txt-opt-a">ACEPTAR EL TRATO</span>
+      </div>
+      <div class="rpg-option-row" id="rpg-opt-b">
+        <span class="rpg-cursor" id="cur-b" style="visibility:hidden">▶</span>
+        <span id="txt-opt-b">SOSPECHAR Y DENUNCIAR</span>
+      </div>
     </div>
+
+    <canvas id="pixel-canvas" width="720" height="1280"></canvas>
     <div class="crt-scanlines"></div>
 
     <div class="subtitle-container">
@@ -685,18 +639,16 @@ async function main() {
     <script>
       const escenas = ${safeEscenasJson};
       const subtitleChunks = ${safeChunksJson};
-      const rawSpriteCache = ${safeSpritesJson};
       const totalFrames = ${totalFrames};
 
       const COLS = 120;
       const ROWS = 213;
       const CELL = 6;
-      const GROUND_Y = 140;
+      const GROUND_Y = 142;
 
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1a1c2c'));
-      const rasterizedSprites = {};
 
       function setPx(x, y, color) {
         const cx = Math.round(x);
@@ -745,472 +697,349 @@ async function main() {
         }
       }
 
-      async function rasterizeAllSprites() {
-        const SIZE = 30;
-        const offCanvas = document.createElement('canvas');
-        offCanvas.width = SIZE;
-        offCanvas.height = SIZE;
-        const offCtx = offCanvas.getContext('2d');
+      // ======================================================================
+      // MOTOR DE OBJETOS DE MANO Y PROPS DETALLADOS (MISMO ESTILO DEL BILLETE)
+      // ======================================================================
+      function drawDetailedProp(propType, x, y) {
+        if (propType === 'secret_contract') {
+          fillBorderedRect(x - 14, y - 12, 28, 24, '#f8fafc', '#0b0c10');
+          fillRect(x - 10, y - 8, 20, 2, '#1e293b');
+          fillRect(x - 10, y - 4, 16, 2, '#64748b');
+          fillRect(x - 10, y, 18, 2, '#64748b');
+          fillCircle(x + 6, y + 5, 4, '#dc2626'); // Sello lacrado rojo
+          return;
+        }
+        if (propType === 'iron_ingot') {
+          // Viga / Lingote pesado de hierro remachado
+          fillBorderedRect(x - 16, y - 8, 32, 16, '#64748b', '#0b0c10');
+          fillRect(x - 14, y - 4, 28, 8, '#94a3b8');
+          [-10, 0, 10].forEach(rx => fillRect(x + rx, y - 2, 2, 4, '#1e293b'));
+          return;
+        }
+        if (propType === 'magnifying_glass') {
+          fillCircle(x + 4, y - 4, 9, '#0b0c10');
+          fillCircle(x + 4, y - 4, 7, '#38bdf8');
+          fillRect(x + 1, y - 7, 3, 3, '#ffffff');
+          drawPixelLine(x - 2, y + 2, x - 10, y + 10, 3, '#d97706');
+          return;
+        }
+        if (propType === 'pocket_watch') {
+          fillCircle(x, y, 10, '#eab308');
+          fillCircle(x, y, 7, '#ffffff');
+          fillRect(x, y - 5, 2, 5, '#0b0c10');
+          fillRect(x, y, 4, 2, '#dc2626');
+          return;
+        }
+        // Por defecto: Fajo de billetes verdes (el favorito del usuario)
+        fillBorderedRect(x - 16, y - 8, 34, 16, '#80ed99', '#064e3b');
+        fillBorderedRect(x - 13, y - 5, 28, 10, '#52b788', '#1b4332');
+        fillRect(x - 2, y - 8, 5, 16, '#eab308'); // Cinta dorada del fajo
+        fillCircle(x + 6, y, 3, '#1b4332');
+      }
 
-        for (const [key, item] of Object.entries(rawSpriteCache)) {
-          try {
-            let svgText = item.svg || '';
-            if (!item.isColorPack) {
-              svgText = svgText
-                .replace(/stroke="currentColor"/gi, 'stroke="#00f5d4"')
-                .replace(/fill="currentColor"/gi, 'fill="#ffd166"');
-              if (!/fill=/i.test(svgText)) {
-                svgText = svgText.replace(/<svg/i, '<svg fill="#ffd166" stroke="#00f5d4"');
-              }
-            }
-            const blob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const img = new Image();
-            await new Promise((res) => {
-              img.onload = res;
-              img.onerror = res;
-              img.src = url;
-            });
-            offCtx.clearRect(0, 0, SIZE, SIZE);
-            offCtx.drawImage(img, 2, 2, SIZE - 4, SIZE - 4);
-            URL.revokeObjectURL(url);
+      // ======================================================================
+      // CONSTRUCTOR UNIVERSAL DE PERSONAJES EXPRESIVOS DE MEDIO CUERPO
+      // (LA MISMA CALIDAD Y CONSISTENCIA DEL ESTAFADOR PARA TODOS LOS PLANOS)
+      // ======================================================================
+      function drawExpressiveCharacter(cx, headY, role, expression, isTalking, localFrame, scale = 1.0, facingLeft = false) {
+        let suitCol = '#334155', lapelCol = '#1e293b', tieCol = '#e63946', shirtCol = '#ffffff';
+        let hatCol = '#eab308', hatBand = '#991b1b', hairCol = '#2b1d14';
 
-            const imgData = offCtx.getImageData(0, 0, SIZE, SIZE).data;
-            const mat = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+        if (role === 'merchant_rich') { suitCol = '#1e3a8a'; lapelCol = '#172554'; tieCol = '#eab308'; hatCol = '#1e293b'; hatBand = '#eab308'; hairCol = '#475569'; }
+        else if (role === 'scientist') { suitCol = '#f8fafc'; lapelCol = '#cbd5e1'; tieCol = '#0284c7'; hatCol = null; hairCol = '#64748b'; }
+        else if (role === 'engineer') { suitCol = '#ea580c'; lapelCol = '#9a3412'; tieCol = '#facc15'; hatCol = '#facc15'; }
+        else if (role === 'military') { suitCol = '#3f6212'; lapelCol = '#1a2e05'; tieCol = '#1a2e05'; hatCol = '#365314'; }
+        else if (role === 'hacker') { suitCol = '#111827'; lapelCol = '#1f2937'; tieCol = '#10b981'; hatCol = null; }
 
-            for (let r = 0; r < SIZE; r++) {
-              for (let c = 0; c < SIZE; c++) {
-                const idx = (r * SIZE + c) * 4;
-                const a = imgData[idx + 3];
-                if (a > 70) {
-                  const qr = Math.min(255, Math.round(imgData[idx] / 24) * 24);
-                  const qg = Math.min(255, Math.round(imgData[idx + 1] / 24) * 24);
-                  const qb = Math.min(255, Math.round(imgData[idx + 2] / 24) * 24);
-                  const hex = '#' + [qr, qg, qb].map(v => v.toString(16).padStart(2, '0')).join('');
-                  mat[r][c] = (hex === '#000000') ? '#1e293b' : hex;
-                }
-              }
-            }
+        const s = scale;
+        const bobY = headY + Math.round(Math.sin(localFrame * 0.15) * 1);
 
-            const closed = mat.map(row => [...row]);
-            for (let r = 1; r < SIZE - 1; r++) {
-              for (let c = 1; c < SIZE - 1; c++) {
-                if (!mat[r][c]) {
-                  const neighbors = [mat[r - 1][c], mat[r + 1][c], mat[r][c - 1], mat[r][c + 1]].filter(Boolean);
-                  if (neighbors.length >= 3) closed[r][c] = neighbors[0];
-                }
-              }
-            }
+        // Torso y Traje con solapas y corbata
+        const bodyW = Math.round(64 * s);
+        const bodyH = Math.round(42 * s);
+        fillBorderedRect(cx - Math.floor(bodyW / 2), bobY + Math.round(20 * s), bodyW, bodyH, suitCol, '#0b0c10');
 
-            const outlined = closed.map(row => [...row]);
-            for (let r = 1; r < SIZE - 1; r++) {
-              for (let c = 1; c < SIZE - 1; c++) {
-                if (!closed[r][c]) {
-                  if (closed[r - 1][c] || closed[r + 1][c] || closed[r][c - 1] || closed[r][c + 1]) {
-                    outlined[r][c] = '#05050a';
-                  }
-                }
-              }
-            }
-            rasterizedSprites[key] = outlined;
-          } catch (e) {}
+        for (let r = 0; r < Math.round(18 * s); r++) {
+          const vw = Math.max(2, Math.round(10 * s) - Math.floor(r * 0.5));
+          fillRect(cx - vw, bobY + Math.round(21 * s) + r, vw * 2, 1, shirtCol);
+        }
+        fillRect(cx - Math.round(3 * s), bobY + Math.round(26 * s), Math.round(6 * s), Math.round(18 * s), tieCol);
+        fillRect(cx - Math.round(20 * s), bobY + Math.round(36 * s), Math.round(7 * s), Math.round(3 * s), '#ffffff');
+        fillCircle(cx - Math.round(13 * s), bobY + Math.round(31 * s), Math.max(1, Math.round(2 * s)), '#e63946');
+
+        // Cuello y Cabeza con sombreado
+        const headW = Math.round(34 * s);
+        const headH = Math.round(32 * s);
+        const hx = cx - Math.floor(headW / 2);
+        const hy = bobY - Math.floor(headH / 2);
+
+        fillBorderedRect(cx - Math.round(8 * s), hy + headH - 2, Math.round(16 * s), Math.round(9 * s), '#d49a73', '#0b0c10');
+        fillBorderedRect(hx, hy, headW, headH, '#e6ad86', '#0b0c10');
+        fillRect(hx + headW - Math.round(7 * s), hy + 1, Math.round(6 * s), headH - 2, '#d49a73');
+
+        // Mejillas sonrojadas si está avergonzado (ashamed_red)
+        if (expression === 'ashamed_red') {
+          fillRect(hx + 3, bobY + 2, Math.round(6 * s), Math.round(4 * s), '#ef4444');
+          fillRect(hx + headW - Math.round(9 * s), bobY + 2, Math.round(6 * s), Math.round(4 * s), '#ef4444');
+        }
+
+        // Orejas
+        fillBorderedRect(hx - Math.round(3 * s), bobY - 3, Math.round(4 * s), Math.round(9 * s), '#d49a73', '#0b0c10');
+        fillBorderedRect(hx + headW - 1, bobY - 3, Math.round(4 * s), Math.round(9 * s), '#d49a73', '#0b0c10');
+
+        // Pelo y Sombrero
+        fillRect(hx, hy, headW, Math.round(6 * s), hairCol);
+        if (hatCol) {
+          fillBorderedRect(cx - Math.round(26 * s), hy - Math.round(2 * s), Math.round(52 * s), Math.round(5 * s), hatCol, '#0b0c10');
+          fillBorderedRect(cx - Math.round(18 * s), hy - Math.round(11 * s), Math.round(36 * s), Math.round(10 * s), hatCol, '#0b0c10');
+          fillRect(cx - Math.round(17 * s), hy - Math.round(4 * s), Math.round(34 * s), Math.round(2 * s), hatBand);
+        }
+
+        // Cejas y Ojos Expresivos
+        const isBlinking = (localFrame % 55 < 3);
+        fillRect(cx - Math.round(11 * s), bobY - Math.round(7 * s), Math.round(7 * s), 2, '#2b1d14');
+        fillRect(cx + Math.round(4 * s), bobY - Math.round(8 * s), Math.round(7 * s), 2, '#2b1d14');
+
+        if (expression === 'greedy_dollar') {
+          // Ojos de símbolo '$' dorado parpadeantes
+          fillBorderedRect(cx - Math.round(11 * s), bobY - Math.round(4 * s), Math.round(7 * s), Math.round(6 * s), '#eab308', '#0b0c10');
+          fillBorderedRect(cx + Math.round(4 * s), bobY - Math.round(4 * s), Math.round(7 * s), Math.round(6 * s), '#eab308', '#0b0c10');
+        } else if (isBlinking) {
+          fillRect(cx - Math.round(10 * s), bobY - 2, Math.round(6 * s), 2, '#2b1d14');
+          fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(6 * s), 2, '#2b1d14');
+        } else {
+          const pupilShift = facingLeft ? -1 : 1;
+          fillRect(cx - Math.round(10 * s), bobY - Math.round(4 * s), Math.round(6 * s), Math.round(4 * s), '#ffffff');
+          fillRect(cx - Math.round(8 * s) + pupilShift, bobY - Math.round(4 * s), Math.round(3 * s), Math.round(4 * s), '#2b1d14');
+
+          if (expression === 'smirk_wink' && (localFrame % 90 > 45)) {
+            fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(6 * s), 2, '#2b1d14');
+          } else {
+            fillRect(cx + Math.round(4 * s), bobY - Math.round(4 * s), Math.round(6 * s), Math.round(4 * s), '#ffffff');
+            fillRect(cx + Math.round(6 * s) + pupilShift, bobY - Math.round(4 * s), Math.round(3 * s), Math.round(4 * s), '#2b1d14');
+          }
+        }
+
+        // Gota de sudor azul si está en shock o avergonzado
+        if (expression === 'shock_sweat' || expression === 'ashamed_red') {
+          const dropY = hy + 4 + (Math.floor(localFrame * 0.3) % 8);
+          fillRect(hx + headW - 4, dropY, 3, 5, '#38bdf8');
+        }
+
+        // Nariz y Boca
+        fillRect(cx - 2, bobY + 1, Math.round(4 * s), Math.round(4 * s), '#c6865e');
+        const mouthOpen = isTalking && (Math.floor(localFrame / 3) % 2 === 0);
+        if (mouthOpen) {
+          fillBorderedRect(cx - Math.round(6 * s), bobY + Math.round(7 * s), Math.round(12 * s), Math.round(5 * s), '#ffffff', '#2b1d14');
+          fillRect(cx - Math.round(4 * s), bobY + Math.round(9 * s), Math.round(8 * s), 2, '#991b1b');
+        } else {
+          fillRect(cx - Math.round(5 * s), bobY + Math.round(8 * s), Math.round(10 * s), 2, '#2b1d14');
         }
       }
 
-      function drawSolidSprite(iconKey, centerX, centerY, scale = 1.0, flipX = false) {
-        const key = String(iconKey || 'sparkles').toLowerCase().trim();
-        const mat = rasterizedSprites[key] || rasterizedSprites['sparkles'];
-        if (!mat) return;
+      // ======================================================================
+      // LAS 8 ESCENAS DE ESTUDIO (TODAS CON LA CONSISTENCIA DEL ESTAFADOR)
+      // ======================================================================
 
-        const srcSize = mat.length;
-        const destSize = Math.max(8, Math.round(srcSize * scale));
-        const halfDest = Math.floor(destSize / 2);
-
-        for (let dy = 0; dy < destSize; dy++) {
-          const srcY = Math.min(srcSize - 1, Math.floor((dy / destSize) * srcSize));
-          for (let dx = 0; dx < destSize; dx++) {
-            const rawSrcX = Math.min(srcSize - 1, Math.floor((dx / destSize) * srcSize));
-            const srcX = flipX ? (srcSize - 1 - rawSrcX) : rawSrcX;
-            const col = mat[srcY][srcX];
-            if (col) {
-              setPx(centerX - halfDest + dx, centerY - halfDest + dy, col);
-            }
-          }
-        }
-      }
-
-      const PALETTES = {
-        sunset: { sky1: '#2d1b4e', sky2: '#682c57', sky3: '#b84a54', sky4: '#f38157', ground1: '#3b2137', ground2: '#231321' },
-        day:    { sky1: '#2b6cb0', sky2: '#4299e1', sky3: '#63b3ed', sky4: '#bee3f8', ground1: '#48bb78', ground2: '#2f855a' },
-        night:  { sky1: '#090d16', sky2: '#111a2e', sky3: '#1a2642', sky4: '#24345a', ground1: '#2d3748', ground2: '#1a202c' },
-        sepia:  { sky1: '#5c4033', sky2: '#8b5a2b', sky3: '#cd853f', sky4: '#f4a460', ground1: '#4a3525', ground2: '#332419' },
-        cyber:  { sky1: '#0f1026', sky2: '#1b1e44', sky3: '#292d66', sky4: '#3b418c', ground1: '#1e293b', ground2: '#0f172a' },
-        storm:  { sky1: '#111827', sky2: '#1f2937', sky3: '#374151', sky4: '#4b5563', ground1: '#1f2937', ground2: '#111827' }
-      };
-
-      function drawDitheredSky(palKey, maxRow = GROUND_Y) {
-        const p = PALETTES[palKey] || PALETTES.sunset;
-        const bands = [p.sky1, p.sky2, p.sky3, p.sky4];
-        const bandH = Math.ceil(maxRow / bands.length);
-
-        for (let r = 0; r < maxRow; r++) {
-          const bIdx = Math.min(bands.length - 1, Math.floor(r / bandH));
-          const nextIdx = Math.min(bands.length - 1, bIdx + 1);
-          const localR = r % bandH;
-          const ratio = localR / bandH;
-
-          for (let c = 0; c < COLS; c++) {
-            let col = bands[bIdx];
-            if (ratio > 0.72 && ((r + c) % 2 === 0)) {
-              col = bands[nextIdx];
-            } else if (ratio > 0.86 && ((r % 2 === 0) || (c % 2 === 0))) {
-              col = bands[nextIdx];
-            }
-            grid[r][c] = col;
-          }
-        }
-        fillRect(0, maxRow, COLS, 3, '#0b0c10');
-        for (let r = maxRow + 3; r < ROWS; r++) {
-          for (let c = 0; c < COLS; c++) {
-            grid[r][c] = ((r + c) % 7 === 0) ? p.ground1 : p.ground2;
-          }
-        }
-      }
-
-      function drawCloseUpPortrait(esc, progress, localFrame, isTalking) {
-        const role = esc.character_role || 'suit_boss';
+      // 1. PRIMER PLANO DEL PROTAGONISTA CON OBJETO CONTEXTUAL EN MANO
+      function renderProtagonistCloseup(esc, progress, localFrame) {
         fillRect(0, 0, COLS, ROWS, '#4a3222');
         for (let c = 0; c < COLS; c += 12) fillRect(c, 0, 1, ROWS, '#362317');
         fillBorderedRect(10, 42, 30, 22, '#e2e8f0', '#2b1d14');
         for (let r = 47; r < 59; r += 3) fillRect(14, r, 22, 1, '#94a3b8');
 
-        fillBorderedRect(82, 40, 28, 28, '#1e293b', '#eab308');
-        drawSolidSprite(esc.actor_1?.icon, 96, 54, 0.75, false);
+        // Cuadro derecho en pared
+        fillBorderedRect(82, 40, 28, 24, '#1e293b', '#eab308');
+        fillRect(86, 45, 20, 14, '#38bdf8');
 
-        const cx = 56;
-        const headY = 82 + Math.round(Math.sin(localFrame * 0.15) * 1);
+        drawExpressiveCharacter(58, 84, esc.character_role, esc.expression, true, localFrame, 1.0, false);
 
-        let suitCol = '#334155', lapelCol = '#1e293b', tieCol = '#e63946', shirtCol = '#ffffff';
-        let hatCol = '#eab308', hatBand = '#991b1b', hairCol = '#2b1d14';
-
-        if (role === 'scientist') { suitCol = '#f8fafc'; lapelCol = '#cbd5e1'; tieCol = '#0284c7'; hatCol = null; hairCol = '#64748b'; }
-        else if (role === 'engineer') { suitCol = '#ea580c'; lapelCol = '#9a3412'; tieCol = '#facc15'; hatCol = '#facc15'; }
-        else if (role === 'military') { suitCol = '#3f6212'; lapelCol = '#1a2e05'; tieCol = '#1a2e05'; hatCol = '#365314'; }
-        else if (role === 'hacker') { suitCol = '#111827'; lapelCol = '#1f2937'; tieCol = '#10b981'; hatCol = null; }
-
-        fillBorderedRect(cx - 34, headY + 22, 68, 42, suitCol, '#0b0c10');
-        for (let r = 0; r < 20; r++) {
-          const vw = Math.max(2, 11 - Math.floor(r * 0.5));
-          fillRect(cx - vw, headY + 23 + r, vw * 2, 1, shirtCol);
-        }
-        fillRect(cx - 3, headY + 28, 6, 20, tieCol);
-        drawPixelLine(cx - 14, headY + 23, cx - 2, headY + 42, 2, lapelCol);
-        drawPixelLine(cx + 14, headY + 23, cx + 2, headY + 42, 2, lapelCol);
-        fillRect(cx - 22, headY + 40, 8, 3, '#ffffff');
-        fillCircle(cx - 14, headY + 34, 2, '#e63946');
-
-        fillBorderedRect(cx - 9, headY + 14, 18, 10, '#d49a73', '#0b0c10');
-        fillBorderedRect(cx - 18, headY - 18, 36, 34, '#e6ad86', '#0b0c10');
-        fillRect(cx + 10, headY - 16, 7, 32, '#d49a73');
-        fillBorderedRect(cx - 21, headY - 4, 4, 10, '#d49a73', '#0b0c10');
-        fillBorderedRect(cx + 17, headY - 4, 4, 10, '#d49a73', '#0b0c10');
-
-        fillRect(cx - 18, headY - 18, 36, 7, hairCol);
-        if (hatCol) {
-          fillBorderedRect(cx - 28, headY - 20, 56, 5, hatCol, '#0b0c10');
-          fillBorderedRect(cx - 19, headY - 29, 38, 10, hatCol, '#0b0c10');
-          fillRect(cx - 18, headY - 22, 36, 2, hatBand);
-        }
-
-        const isWinking = (progress > 0.60 && progress < 0.85);
-        const isBlinking = (localFrame % 55 < 3);
-        fillRect(cx - 12, headY - 8, 8, 2, '#2b1d14');
-        fillRect(cx + 4, headY - 9, 8, 2, '#2b1d14');
-
-        if (isBlinking) {
-          fillRect(cx - 11, headY - 3, 7, 2, '#2b1d14');
-          fillRect(cx + 4, headY - 3, 7, 2, '#2b1d14');
-        } else {
-          fillRect(cx - 11, headY - 4, 7, 4, '#ffffff');
-          fillRect(cx - 9, headY - 4, 4, 4, '#2b1d14');
-          setPx(cx - 8, headY - 3, '#ffffff');
-          if (isWinking) {
-            fillRect(cx + 4, headY - 3, 7, 2, '#2b1d14');
-          } else {
-            fillRect(cx + 4, headY - 4, 7, 4, '#ffffff');
-            fillRect(cx + 6, headY - 4, 4, 4, '#2b1d14');
-            setPx(cx + 7, headY - 3, '#ffffff');
-          }
-        }
-
-        fillRect(cx - 2, headY + 1, 4, 5, '#c6865e');
-        const mouthOpen = isTalking && (Math.floor(localFrame / 3) % 2 === 0);
-        if (mouthOpen) {
-          fillBorderedRect(cx - 7, headY + 7, 14, 6, '#ffffff', '#2b1d14');
-          fillRect(cx - 5, headY + 10, 10, 2, '#991b1b');
-        } else {
-          fillRect(cx - 6, headY + 8, 12, 2, '#2b1d14');
-          fillRect(cx + 5, headY + 7, 2, 2, '#2b1d14');
-        }
-
-        const handY = headY + 30 - Math.round(Math.sin(progress * Math.PI) * 5);
-        fillBorderedRect(cx - 6, handY - 8, 34, 16, '#80ed99', '#064e3b');
-        fillBorderedRect(cx - 3, handY - 5, 28, 10, '#52b788', '#1b4332');
-        fillCircle(cx + 11, handY, 3, '#1b4332');
-        fillBorderedRect(cx - 12, handY - 2, 18, 14, '#e6ad86', '#0b0c10');
-        fillRect(cx - 8, handY - 2, 1, 9, '#0b0c10');
-        fillRect(cx - 4, handY - 2, 1, 9, '#0b0c10');
-        fillRect(cx, handY - 2, 1, 9, '#0b0c10');
+        // Mano detallada sosteniendo el objeto exacto de la escena
+        const handY = 114 - Math.round(Math.sin(progress * Math.PI) * 5);
+        drawDetailedProp(esc.hand_prop, 66, handY);
+        fillBorderedRect(46, handY - 2, 18, 14, '#e6ad86', '#0b0c10');
+        fillRect(50, handY - 2, 1, 9, '#0b0c10');
+        fillRect(54, handY - 2, 1, 9, '#0b0c10');
+        fillRect(58, handY - 2, 1, 9, '#0b0c10');
       }
 
-      function drawMiniPerson(x, y, suitCol, hatCol, isWalking, localFrame, facingLeft = false, speechSymbol = null) {
-        const step = isWalking ? (Math.floor(localFrame / 4) % 2) : 0;
-        fillRect(x - 3, y + 1, 7, 1, 'rgba(0,0,0,0.4)');
-        fillBorderedRect(x - 3, y - 5 + (step ? -1 : 0), 3, 6, '#1e293b', '#0b0c10');
-        fillBorderedRect(x, y - 5 + (step ? 0 : -1), 3, 6, '#1e293b', '#0b0c10');
-        fillBorderedRect(x - 4, y - 14, 9, 10, suitCol, '#0b0c10');
-        fillBorderedRect(x - 3, y - 21, 7, 8, '#e6ad86', '#0b0c10');
-        const eyeX = facingLeft ? (x - 2) : (x + 2);
-        setPx(eyeX, y - 18, '#0b0c10');
-        if (hatCol) {
-          fillRect(x - 4, y - 22, 9, 2, hatCol);
-          fillRect(x - 3, y - 24, 7, 2, hatCol);
-        } else {
-          fillRect(x - 3, y - 22, 7, 2, '#2b1d14');
+      // 2. NEGOCIACIÓN / REUNIÓN EN SUITE PRIVADA ENTRE DOS PERSONAJES GRANDES
+      function renderTwoCharactersDeal(esc, progress, localFrame) {
+        // Suite de lujo en el Hotel Crillon (paredes burdeos, cortinas doradas y lámpara)
+        fillRect(0, 0, COLS, ROWS, '#3b1d2e');
+        for (let c = 0; c < COLS; c += 14) fillRect(c, 0, 2, ROWS, '#2a1220');
+        // Ventanal central de la suite
+        fillBorderedRect(38, 36, 44, 46, '#1e293b', '#eab308');
+        fillRect(59, 36, 2, 46, '#eab308');
+        fillRect(38, 58, 44, 2, '#eab308');
+
+        // Personaje Izquierdo (Estafador/Líder) y Personaje Derecho (Magnate/Objetivo) con el mismo estilo
+        const leftTalks = progress < 0.55;
+        drawExpressiveCharacter(28, 86, 'con_artist', 'scheming_evil', leftTalks, localFrame, 0.78, false);
+        drawExpressiveCharacter(92, 86, 'merchant_rich', 'greedy_dollar', !leftTalks, localFrame + 9, 0.78, true);
+
+        // Mesa de caoba en primer plano donde se desliza el maletín/contrato de izquierda a derecha
+        fillBorderedRect(8, 126, 104, 18, '#78350f', '#0b0c10');
+        fillRect(10, 128, 100, 3, '#b45309');
+
+        const propX = Math.round(38 + progress * 44);
+        drawDetailedProp(esc.hand_prop, propX, 120);
+      }
+
+      // 3. LA TORRE EIFFEL / MONUMENTO DE HIERRO Y BÁSCULA DE 7.000 TONELADAS
+      function renderLandmarkMonument(esc, progress, localFrame) {
+        // Cielo de París al atardecer con dithering
+        const bands = ['#1e1b4b', '#312e81', '#6d28d9', '#f97316'];
+        for (let r = 0; r < GROUND_Y; r++) {
+          const bIdx = Math.min(3, Math.floor(r / 35));
+          fillRect(0, r, COLS, 1, bands[bIdx]);
         }
-        if (speechSymbol) {
-          fillBorderedRect(x - 5, y - 35, 11, 10, '#ffffff', '#0b0c10');
-          fillRect(x - 1, y - 25, 3, 2, '#ffffff');
-          fillRect(x, y - 33, 2, 4, '#e63946');
-          setPx(x, y - 28, '#e63946');
+        fillRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#1e293b');
+
+        // Silueta detallada de la Torre Eiffel / Monumento de Hierro en el centro-derecha (X=76)
+        const tx = 76;
+        // Base en arco de la Torre Eiffel
+        fillBorderedRect(tx - 22, GROUND_Y - 18, 12, 18, '#b45309', '#0b0c10');
+        fillBorderedRect(tx + 10, GROUND_Y - 18, 12, 18, '#b45309', '#0b0c10');
+        fillBorderedRect(tx - 20, GROUND_Y - 22, 40, 5, '#d97706', '#0b0c10');
+        // Segundo cuerpo
+        fillBorderedRect(tx - 13, GROUND_Y - 48, 26, 26, '#b45309', '#0b0c10');
+        fillBorderedRect(tx - 15, GROUND_Y - 52, 30, 4, '#d97706', '#0b0c10');
+        // Aguja superior y antena
+        fillBorderedRect(tx - 6, GROUND_Y - 86, 12, 34, '#b45309', '#0b0c10');
+        fillRect(tx - 1, GROUND_Y - 98, 2, 12, '#fde047');
+        // Entramado de vigas de hierro
+        for (let y = GROUND_Y - 82; y < GROUND_Y - 22; y += 8) {
+          fillRect(tx - 5, y, 10, 2, '#451a03');
+        }
+
+        // Nuestro protagonista en primer plano a la izquierda mostrando el lingote/acero
+        drawExpressiveCharacter(30, 92, esc.character_role, 'proud_confident', true, localFrame, 0.78, false);
+        drawDetailedProp('iron_ingot', 42, 118);
+      }
+
+      // 4. ENTREGA DEL BOTÍN ($70,000) CON FAJOS DE BILLETES APILÁNDOSE EN LA MESA
+      function renderCashHeistTally(esc, progress, localFrame) {
+        fillRect(0, 0, COLS, ROWS, '#0f172a');
+        // Bóveda dorada abierta al fondo
+        fillCircle(60, 74, 34, '#334155');
+        fillCircle(60, 74, 28, '#eab308');
+        fillCircle(60, 74, 22, '#090d16');
+
+        // Protagonista con ojos de '$' en el centro
+        drawExpressiveCharacter(34, 88, esc.character_role, 'greedy_dollar', true, localFrame, 0.82, false);
+
+        // Mesa en primer plano donde crecen 3 columnas de fajos de billetes verdes según progress
+        fillBorderedRect(8, 128, 104, 16, '#451a03', '#0b0c10');
+        const numStacks = Math.max(2, Math.floor(progress * 18));
+        for (let i = 0; i < numStacks; i++) {
+          const col = i % 3;
+          const row = Math.floor(i / 3);
+          const sx = 62 + col * 16;
+          const sy = 122 - row * 7;
+          fillBorderedRect(sx, sy, 14, 6, '#80ed99', '#064e3b');
+          fillRect(sx + 5, sy, 3, 6, '#eab308');
         }
       }
 
-      function renderCrowdAccumulation(esc, progress, localFrame) {
-        drawDitheredSky(esc.palette_mode, GROUND_Y);
-        fillBorderedRect(62, 48, 52, GROUND_Y - 48, '#9b2226', '#0b0c10');
-        for (let wy = 56; wy < GROUND_Y - 24; wy += 14) {
-          for (let wx = 68; wx < 106; wx += 12) {
-            fillBorderedRect(wx, wy, 7, 9, '#334155', '#0b0c10');
-          }
+      // 5. ESCRITORIO DE FALSIFICACIÓN DE CREDENCIALES Y SELLO OFICIAL ROJO
+      function renderDocumentForgeryDesk(esc, progress, localFrame) {
+        fillRect(0, 0, COLS, ROWS, '#362317');
+        // Pergamino / Credencial oficial sobre el escritorio
+        fillBorderedRect(18, 42, 84, 90, '#fef3c7', '#0b0c10');
+        fillBorderedRect(22, 46, 76, 82, '#fffbeb', '#d97706');
+
+        // Cabecera oficial dorada
+        fillBorderedRect(42, 52, 36, 12, '#eab308', '#0b0c10');
+
+        // Líneas de texto escribiéndose en tiempo real con una mano y pluma estilográfica
+        const lines = Math.min(5, Math.floor(progress * 6) + 1);
+        for (let i = 0; i < lines; i++) {
+          const ly = 72 + i * 9;
+          const lw = (i === lines - 1) ? Math.round((progress * 6 % 1) * 54) : 54;
+          fillRect(32, ly, Math.max(8, lw), 3, '#1e293b');
         }
-        fillBorderedRect(78, GROUND_Y - 24, 18, 24, '#0b0c10', '#d97706');
 
-        drawMiniPerson(20, GROUND_Y, '#3f6212', '#365314', false, localFrame, false);
-
-        const totalPeople = Math.max(3, Math.floor(progress * 28));
-        const colors = ['#38bdf8', '#f97316', '#eab308', '#a855f7', '#10b981', '#64748b'];
-        for (let i = 0; i < totalPeople; i++) {
-          const row = Math.floor(i / 7);
-          const col = i % 7;
-          const px = 34 + col * 9 + (row % 2) * 3;
-          const py = GROUND_Y - row * 6;
-          drawMiniPerson(px, py, colors[i % colors.length], i % 2 === 0 ? '#1e293b' : null, false, localFrame, true);
-        }
-      }
-
-      function renderScaleComparison(esc, progress, localFrame) {
-        drawDitheredSky('night', GROUND_Y);
-        for (let r = 0; r < 65; r++) {
-          const mw = Math.floor(r * 0.85);
-          const col = r < 22 ? '#ffffff' : '#475569';
-          fillRect(92 - mw, GROUND_Y - 65 + r, mw * 2, 1, col);
-        }
-        [125, 95, 65].forEach(ly => fillRect(6, ly, 14, 2, '#ffffff'));
-
-        drawMiniPerson(32, GROUND_Y, '#78350f', '#eab308', false, localFrame, false);
-        drawSolidSprite(esc.actor_1?.icon, 20, 56, 0.85, false);
-
-        const maxTowerH = 85;
-        const curH = Math.max(8, Math.round(progress * maxTowerH));
-        for (let y = GROUND_Y - curH; y < GROUND_Y; y += 4) {
-          fillBorderedRect(48, y, 14, 4, (y % 8 === 0) ? '#80ed99' : '#e2e8f0', '#0b0c10');
+        // Mano del falsificador con pluma y Sello Oficial Rojo estampándose en progress > 0.45
+        if (progress > 0.45) {
+          fillCircle(74, 110, 11, '#dc2626');
+          fillCircle(74, 110, 7, '#991b1b');
+          fillRect(71, 107, 6, 6, '#fde047');
         }
       }
 
-      function renderMapTrajectory(esc, progress, localFrame) {
-        fillRect(0, 0, COLS, ROWS, '#1d4ed8');
-        for (let r = 0; r < ROWS; r += 6) {
-          for (let c = 0; c < COLS; c += 6) {
-            setPx(c + (r % 12 === 0 ? 3 : 0), r, '#1e40af');
-          }
-        }
-        fillCircle(16, 108, 24, '#15803d');
-        fillCircle(22, 92, 16, '#16a34a');
-        fillCircle(104, 84, 24, '#b45309');
-        fillCircle(94, 100, 16, '#d97706');
-
-        const totalDots = 16;
-        const activeDots = Math.max(2, Math.floor(progress * totalDots));
-        for (let i = 0; i < activeDots; i++) {
-          const t = i / (totalDots - 1);
-          const dx = 24 + t * 72;
-          const dy = 102 - Math.sin(t * Math.PI) * 38;
-          fillBorderedRect(dx - 2, dy - 2, 4, 4, i % 2 === 0 ? '#ef4444' : '#ffffff', '#0b0c10');
+      // 6. HUIDA EN EL TREN NOCTURNO A VIENA (LOCOMOTORA EXPRESO CON VENTANAS ILUMINADAS)
+      function renderNightTrainEscape(esc, progress, localFrame) {
+        // Cielo nocturno estrellado con luna llena
+        fillRect(0, 0, COLS, GROUND_Y, '#090d16');
+        fillCircle(94, 48, 10, '#fef08a');
+        fillCircle(90, 46, 8, '#090d16'); // Luna creciente
+        for (let s = 0; s < 20; s++) {
+          setPx((s * 19) % COLS, 36 + (s * 7) % 45, '#ffffff');
         }
 
-        drawSolidSprite(esc.actor_1?.icon, 22, 105, 0.85, false);
-        drawSolidSprite(esc.actor_2?.icon, 96, 82, 0.85, false);
-      }
-
-      function renderDocumentBlueprint(esc, progress, localFrame) {
-        fillRect(0, 0, COLS, ROWS, '#2b1d14');
-        fillBorderedRect(12, 44, 96, 92, '#f5ebe0', '#0b0c10');
-        fillBorderedRect(16, 48, 88, 84, '#edede9', '#7f5539');
-
-        drawSolidSprite(esc.actor_1?.icon, 60, 90, 0.95, false);
-
-        const linesToShow = Math.floor(progress * 6) + 2;
-        for (let i = 0; i < linesToShow; i++) {
-          const ly = 56 + i * 11;
-          const lw = (i % 2 === 0) ? 64 : 48;
-          fillRect(60 - Math.floor(lw / 2), ly, lw, 3, '#334155');
+        // Vías del tren con traviesas desplazándose a toda velocidad
+        fillRect(0, GROUND_Y - 12, COLS, 24, '#1e293b');
+        fillRect(0, GROUND_Y - 10, COLS, 3, '#94a3b8');
+        const railShift = localFrame * 3;
+        for (let c = 0; c < COLS; c += 8) {
+          const rx = ((c - railShift) % COLS + COLS) % COLS;
+          fillRect(rx, GROUND_Y - 7, 4, 4, '#78350f');
         }
 
-        if (progress > 0.40) {
-          const pulse = (Math.floor(localFrame / 4) % 2 === 0) ? 1 : 0;
-          fillBorderedRect(54 - pulse, 72 - pulse, 12 + pulse * 2, 24 + pulse * 2, '#ef4444', '#0b0c10');
-          fillBorderedRect(54 - pulse, 100 - pulse, 12 + pulse * 2, 9 + pulse * 2, '#ef4444', '#0b0c10');
+        // Vagón Expreso Nocturno detallado cruzando la escena con humo blanco
+        const trainX = 14 + Math.round(progress * 18);
+        const trainY = GROUND_Y - 46;
+        // Humo de la locomotora
+        for (let p = 0; p < 5; p++) {
+          const px = trainX + 70 - ((localFrame * 2 + p * 12) % 55);
+          const py = trainY - 8 - p * 4;
+          fillCircle(px, py, 4 + (p % 3), '#cbd5e1');
         }
-      }
+        // Chasis del vagón y techo
+        fillBorderedRect(trainX, trainY, 82, 34, '#1e3a8a', '#0b0c10');
+        fillBorderedRect(trainX - 2, trainY - 4, 86, 6, '#eab308', '#0b0c10');
+        fillRect(trainX + 2, trainY + 22, 78, 3, '#eab308');
 
-      function renderPyramidNetwork(esc, progress, localFrame) {
-        fillRect(0, 0, COLS, ROWS, '#141622');
-        const rows = [1, 2, 3, 4];
-        const isCollapsing = progress > 0.72;
-        const dropOffset = isCollapsing ? Math.round(Math.pow((progress - 0.72) * 3.5, 2) * 28) : 0;
-
-        rows.forEach((count, rIdx) => {
-          const boxW = 16, boxH = 16, gap = 6;
-          const totalW = count * boxW + (count - 1) * gap;
-          const startX = Math.floor((COLS - totalW) / 2);
-          const baseY = 46 + rIdx * 21 + (isCollapsing ? dropOffset * (rIdx + 1) * 0.25 : 0);
-
-          for (let cIdx = 0; cIdx < count; cIdx++) {
-            const bx = startX + cIdx * (boxW + gap);
-            const boxCol = isCollapsing ? '#991b1b' : (rIdx === 3 ? '#065f46' : '#3b2818');
-            const borderCol = isCollapsing ? '#ef4444' : '#eab308';
-            fillBorderedRect(bx, baseY, boxW, boxH, boxCol, borderCol);
-            fillRect(bx + 5, baseY + 3, 6, 5, '#e6ad86');
-            fillRect(bx + 4, baseY + 8, 8, 6, '#1e293b');
-          }
-        });
-      }
-
-      function renderSideScrollJourney(esc, progress, localFrame) {
-        drawDitheredSky(esc.palette_mode, GROUND_Y);
-
-        for (let r = 0; r < 52; r++) {
-          const w = 10 + Math.floor(r * 0.9);
-          fillRect(75 - w, GROUND_Y - 52 + r, w * 2, 1, '#3b2137');
-        }
-        for (let i = 0; i < 6; i++) {
-          const py = GROUND_Y - 56 - ((localFrame + i * 11) % 24);
-          const px = 75 + Math.round(Math.sin(localFrame * 0.1 + i) * 6);
-          fillRect(px, py, 2, 2, '#f97316');
-        }
-
-        const walkX = Math.round(18 + progress * 48);
-        drawMiniPerson(walkX - 14, GROUND_Y, '#dc2626', null, true, localFrame, false);
-        drawMiniPerson(walkX, GROUND_Y, '#f8fafc', null, true, localFrame + 3, false, progress > 0.35 ? '!' : null);
-        drawMiniPerson(walkX + 14, GROUND_Y, '#16a34a', '#eab308', true, localFrame + 6, false);
-
-        const botY = GROUND_Y - 36 + Math.round(Math.sin(localFrame * 0.2) * 3);
-        drawSolidSprite(esc.actor_1?.icon, walkX + 26, botY, 0.85, false);
-      }
-
-      function renderDramaticFireScene(esc, progress, localFrame) {
-        drawDitheredSky('storm', GROUND_Y);
-
-        [14, 68].forEach((hx) => {
-          fillBorderedRect(hx, GROUND_Y - 32, 36, 32, '#78350f', '#0b0c10');
-          for (let r = 0; r < 14; r++) {
-            fillRect(hx - 2 + r, GROUND_Y - 32 - r, 40 - r * 2, 1, '#451a03');
-          }
-          for (let f = 0; f < 18; f++) {
-            const fx = hx + 4 + (f * 2) % 28;
-            const fh = 6 + ((localFrame + f * 5) % 12);
-            fillRect(fx, GROUND_Y - 32 - fh, 3, fh, '#dc2626');
-            fillRect(fx, GROUND_Y - 32 - Math.floor(fh * 0.65), 3, Math.floor(fh * 0.65), '#f97316');
-            fillRect(fx, GROUND_Y - 32 - Math.floor(fh * 0.35), 2, Math.floor(fh * 0.35), '#fde047');
+        // 3 Grandes ventanillas iluminadas mostrando al estafador con su sombrero dentro
+        [trainX + 8, trainX + 32, trainX + 56].forEach((wx, idx) => {
+          fillBorderedRect(wx, trainY + 6, 18, 14, '#fef08a', '#0b0c10');
+          if (idx === 1) {
+            // Silueta de Lustig con su sombrero amarillo dentro del tren
+            fillRect(wx + 4, trainY + 9, 10, 3, '#eab308');
+            fillRect(wx + 6, trainY + 12, 6, 5, '#e6ad86');
+            fillRect(wx + 5, trainY + 17, 8, 3, '#334155');
           }
         });
 
-        for (let r = 0; r < 24; r++) {
-          const rx = ((r * 19 - localFrame * 2) % COLS + COLS) % COLS;
-          const ry = (r * 13 + localFrame * 3) % GROUND_Y;
-          fillRect(rx, ry, 1, 3, '#fde047');
-        }
-
-        drawMiniPerson(52, GROUND_Y, '#31102f', '#eab308', false, localFrame, false);
-        drawSolidSprite(esc.actor_2?.icon, 60, 62, 0.90, false);
+        // Ruedas del tren girando
+        [trainX + 12, trainX + 30, trainX + 52, trainX + 70].forEach(whlX => {
+          fillCircle(whlX, GROUND_Y - 12, 6, '#0b0c10');
+          fillCircle(whlX, GROUND_Y - 12, 3, '#ef4444');
+        });
       }
 
-      function renderFinalChoiceCard(esc, progress, localFrame) {
-        renderCrowdAccumulation(esc, 0.85, localFrame);
+      // 7. PORTADA DE PRENSA / PERIÓDICO CON RETRATO Y LUPA
+      function renderPressHeadline(esc, progress, localFrame) {
+        fillRect(0, 0, COLS, ROWS, '#1e293b');
+        // Página de periódico
+        fillBorderedRect(14, 38, 92, 96, '#e2e8f0', '#0b0c10');
+        fillRect(18, 42, 84, 10, '#0f172a'); // Cabecera del diario
 
-        fillBorderedRect(14, 58, 92, 48, '#141829', '#eab308');
-        fillBorderedRect(17, 61, 86, 42, '#0f172a', '#0b0c10');
+        // Foto del protagonista dentro del periódico
+        fillBorderedRect(22, 58, 38, 42, '#94a3b8', '#0b0c10');
+        drawExpressiveCharacter(41, 78, esc.character_role, 'smirk_wink', false, localFrame, 0.45, false);
 
-        const selectSecond = (Math.floor(localFrame / 18) % 2 === 1);
-        const cursorY = selectSecond ? 86 : 72;
-        fillRect(24, cursorY, 2, 6, '#80ed99');
-        fillRect(26, cursorY + 1, 2, 4, '#80ed99');
-        fillRect(28, cursorY + 2, 2, 2, '#80ed99');
-
-        fillRect(34, 73, 52, 4, selectSecond ? '#64748b' : '#ffd166');
-        fillRect(34, 87, 42, 4, selectSecond ? '#ffd166' : '#64748b');
-      }
-
-      const FONT_3X5 = {
-        'A': ['010','101','111','101','101'], 'B': ['110','101','110','101','110'],
-        'C': ['111','100','100','100','111'], 'D': ['110','101','101','101','110'],
-        'E': ['111','100','110','100','111'], 'F': ['111','100','110','100','100'],
-        'G': ['111','100','101','101','111'], 'H': ['101','101','111','101','101'],
-        'I': ['111','010','010','010','111'], 'J': ['001','001','001','101','111'],
-        'K': ['101','101','110','101','101'], 'L': ['100','100','100','100','111'],
-        'M': ['101','111','101','101','101'], 'N': ['111','101','101','101','101'],
-        'O': ['111','101','101','101','111'], 'P': ['111','101','111','100','100'],
-        'Q': ['111','101','101','111','001'], 'R': ['111','101','110','101','101'],
-        'S': ['111','100','111','001','111'], 'T': ['111','010','010','010','010'],
-        'U': ['101','101','101','101','111'], 'V': ['101','101','101','101','010'],
-        'W': ['101','101','101','111','101'], 'X': ['101','101','010','101','101'],
-        'Y': ['101','101','010','010','010'], 'Z': ['111','001','010','100','111'],
-        '0': ['111','101','101','101','111'], '1': ['010','110','010','010','111'],
-        '2': ['111','001','111','100','111'], '3': ['111','001','111','001','111'],
-        '4': ['101','101','111','001','001'], '5': ['111','100','111','001','111'],
-        '6': ['111','100','111','101','111'], '7': ['111','001','001','001','001'],
-        '8': ['111','101','111','101','111'], '9': ['111','101','111','001','111'],
-        '$': ['010','111','010','111','010'], '%': ['101','001','010','100','101'],
-        '!': ['010','010','010','000','010'], '?': ['111','001','011','000','010'],
-        '+': ['000','010','111','010','000'], '-': ['000','000','111','000','000']
-      };
-
-      function drawPixelString(str, centerX, startY, color) {
-        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!?+ -]/g, '').slice(0, 12);
-        if (!clean) return;
-        const scale = 2;
-        const charW = 3 * scale;
-        const charH = 5 * scale;
-        const gap = 1 * scale;
-        const totalW = clean.length * (charW + gap) - gap;
-        let cx = Math.max(3, Math.floor(centerX - totalW / 2));
-
-        fillBorderedRect(cx - 4, startY - 3, totalW + 8, charH + 6, '#080a14', '#000000');
-        for (let i = 0; i < clean.length; i++) {
-          const ch = clean[i];
-          const glyph = FONT_3X5[ch];
-          if (glyph) {
-            for (let r = 0; r < 5; r++) {
-              for (let c = 0; c < 3; c++) {
-                if (glyph[r][c] === '1') {
-                  fillRect(cx + c * scale, startY + r * scale, scale, scale, color);
-                }
-              }
-            }
-          }
-          cx += charW + gap;
+        // Columnas de noticias al lado de la foto
+        for (let r = 60; r < 124; r += 7) {
+          fillRect(66, r, 32, 3, '#334155');
+          if (r > 102) fillRect(22, r, 40, 3, '#334155');
         }
+
+        // Lupa escaneando la noticia suavemente
+        const lx = Math.round(45 + Math.sin(progress * Math.PI * 2) * 20);
+        const ly = Math.round(85 + Math.cos(progress * Math.PI * 2) * 14);
+        drawDetailedProp('magnifying_glass', lx, ly);
       }
 
       function flushGridToCanvas() {
@@ -1224,9 +1053,18 @@ async function main() {
 
       const subBox = document.getElementById('sub-box');
       const hudFrame = document.getElementById('hud-frame');
-      let lastChunkIdx = -2;
+      const labelTop = document.getElementById('label-top');
+      const labelBot = document.getElementById('label-bot');
+      const rpgModal = document.getElementById('rpg-modal');
+      const rpgOptA = document.getElementById('rpg-opt-a');
+      const rpgOptB = document.getElementById('rpg-opt-b');
+      const curA = document.getElementById('cur-a');
+      const curB = document.getElementById('cur-b');
+      const txtOptA = document.getElementById('txt-opt-a');
+      const txtOptB = document.getElementById('txt-opt-b');
 
-      window.initSpritesReady = rasterizeAllSprites();
+      let lastChunkIdx = -2;
+      let lastSceneIdx = -2;
 
       window.setFrameData = function(frameIdx, t) {
         const linearRatio = (frameIdx + 1) / totalFrames;
@@ -1246,39 +1084,36 @@ async function main() {
         const progress = Math.max(0, Math.min(1, localT / durEsc));
         const localFrame = Math.floor(localT * 30);
 
-        const shot = esc.shot_type || 'closeup_character';
-        if (shot === 'closeup_character') {
-          drawCloseUpPortrait(esc, progress, localFrame, true);
-        } else if (shot === 'crowd_accumulation') {
-          renderCrowdAccumulation(esc, progress, localFrame);
-        } else if (shot === 'scale_comparison') {
-          renderScaleComparison(esc, progress, localFrame);
-        } else if (shot === 'map_trajectory') {
-          renderMapTrajectory(esc, progress, localFrame);
-        } else if (shot === 'document_blueprint') {
-          renderDocumentBlueprint(esc, progress, localFrame);
-        } else if (shot === 'pyramid_network') {
-          renderPyramidNetwork(esc, progress, localFrame);
-        } else if (shot === 'dramatic_fire_scene') {
-          renderDramaticFireScene(esc, progress, localFrame);
-        } else if (shot === 'final_choice_card') {
-          renderFinalChoiceCard(esc, progress, localFrame);
+        const shot = esc.shot_type || 'protagonist_closeup';
+
+        // Actualizar rótulos superiores/inferiores con soporte completo de Ñ y tildes
+        if (activeIdx !== lastSceneIdx) {
+          lastSceneIdx = activeIdx;
+          labelTop.textContent = esc.texto_1 || 'HISTORIA';
+          labelBot.textContent = esc.texto_2 || 'CASO REAL';
+          txtOptA.textContent = esc.choice_a || 'SI, CAERIA EN LA TRAMPA';
+          txtOptB.textContent = esc.choice_b || 'NO, DESCONFIARIA AL INSTANTE';
+        }
+
+        // Mostrar u ocultar el modal RPG interactivo con texto real en la escena final
+        if (shot === 'final_rpg_decision') {
+          rpgModal.style.display = 'block';
+          const selectB = (Math.floor(localFrame / 18) % 2 === 1);
+          rpgOptA.classList.toggle('selected', !selectB);
+          rpgOptB.classList.toggle('selected', selectB);
+          curA.style.visibility = selectB ? 'hidden' : 'visible';
+          curB.style.visibility = selectB ? 'visible' : 'hidden';
+          renderProtagonistCloseup(esc, progress, localFrame);
         } else {
-          renderSideScrollJourney(esc, progress, localFrame);
+          rpgModal.style.display = 'none';
+          if (shot === 'two_characters_deal') renderTwoCharactersDeal(esc, progress, localFrame);
+          else if (shot === 'landmark_monument') renderLandmarkMonument(esc, progress, localFrame);
+          else if (shot === 'cash_heist_tally') renderCashHeistTally(esc, progress, localFrame);
+          else if (shot === 'document_forgery_desk') renderDocumentForgeryDesk(esc, progress, localFrame);
+          else if (shot === 'night_train_escape') renderNightTrainEscape(esc, progress, localFrame);
+          else if (shot === 'press_headline') renderPressHeadline(esc, progress, localFrame);
+          else renderProtagonistCloseup(esc, progress, localFrame);
         }
-
-        let topText = esc.texto_1 || '';
-        if ((shot === 'crowd_accumulation' || shot === 'scale_comparison') && esc.big_metric) {
-          const digitsOnly = String(esc.big_metric).replace(/[^0-9]/g, '');
-          const baseNum = parseInt(digitsOnly, 10);
-          if (!isNaN(baseNum) && baseNum > 10) {
-            const curVal = Math.max(1, Math.round(baseNum * Math.min(1, progress * 1.15)));
-            topText = String(curVal) + '+';
-          }
-        }
-
-        if (topText) drawPixelString(topText, 60, 19, '#ffd166');
-        if (esc.texto_2) drawPixelString(esc.texto_2, 60, 148, '#00f5d4');
 
         flushGridToCanvas();
 
@@ -1325,9 +1160,8 @@ async function main() {
   await page.setViewport({ width: 720, height: 1280 });
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
-  await page.evaluate(async () => { await window.initSpritesReady; });
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v7.2 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v8.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1340,13 +1174,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final Pixel-Art Studio v7.2...');
+  console.log('🔊 Ensamblando MP4 final Pixel-Art Studio v8.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v7.2 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v8.0 generado con éxito!');
   process.exit(0);
 }
 
