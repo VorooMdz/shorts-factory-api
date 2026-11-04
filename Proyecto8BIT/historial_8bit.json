@@ -219,5 +219,21 @@
     ],
     "programado_para_madrid": "04/11/2026 a las 16:17",
     "fecha_publicacion": "2026-11-04T15:17:45.057Z"
+  },
+  {
+    "id_concepto": "knight_capital_glitch_2012",
+    "subrama": "Glitches Financieros en Wall Street",
+    "titulo": "El bug que evaporó 440 millones en 45 minutos: Knight Capital",
+    "keywords_concepto": [
+      "Knight Capital",
+      "Wall Street",
+      "Power Peg",
+      "high frequency trading",
+      "fat finger",
+      "glitch financiero",
+      "NYSE"
+    ],
+    "programado_para_madrid": "04/11/2026 a las 16:32",
+    "fecha_publicacion": "2026-11-04T15:32:36.370Z"
   }
 ]
