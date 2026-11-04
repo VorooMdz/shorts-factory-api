@@ -161,5 +161,19 @@
     ],
     "programado_para_madrid": "04/11/2026 a las 14:26",
     "fecha_publicacion": "2026-11-04T13:26:22.704Z"
+  },
+  {
+    "id_concepto": "el_hombre_que_vendio_la_torre_eiffel",
+    "subrama": "8Bit Heists",
+    "titulo": "El Hombre que Vendio la Torre Eiffel",
+    "keywords_concepto": [
+      "Victor Lustig",
+      "Torre Eiffel",
+      "Estafas historicas",
+      "Paris 1925",
+      "Pixel Art"
+    ],
+    "programado_para_madrid": "04/11/2026 a las 15:15",
+    "fecha_publicacion": "2026-11-04T14:15:19.488Z"
   }
 ]
