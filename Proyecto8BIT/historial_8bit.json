@@ -145,5 +145,21 @@
     ],
     "programado_para_madrid": "04/11/2026 a las 13:52",
     "fecha_publicacion": "2026-11-04T12:52:16.069Z"
+  },
+  {
+    "id_concepto": "mars_climate_orbiter_1999",
+    "subrama": "Ingenieria Aeroespacial e Historia de la Ciencia",
+    "titulo": "El Error de Unidades de la NASA en Marte",
+    "keywords_concepto": [
+      "NASA",
+      "Marte",
+      "Mars Climate Orbiter",
+      "error de conversion",
+      "newtons",
+      "libras fuerza",
+      "historia espacial"
+    ],
+    "programado_para_madrid": "04/11/2026 a las 14:26",
+    "fecha_publicacion": "2026-11-04T13:26:22.704Z"
   }
 ]
