@@ -281,5 +281,19 @@
     ],
     "programado_para_madrid": "04/11/2026 a las 17:29",
     "fecha_publicacion": "2026-11-04T16:29:14.105Z"
+  },
+  {
+    "id_concepto": "patriot_missile_dhahran_1991",
+    "subrama": "Bugs Espaciales y Militares",
+    "titulo": "El bug de redondeo del misil Patriot en 1991",
+    "keywords_concepto": [
+      "Patriot missile bug",
+      "Guerra del Golfo 1991",
+      "error de redondeo binario",
+      "Dhahran Scud",
+      "fallos de software militar"
+    ],
+    "programado_para_madrid": "04/11/2026 a las 17:49",
+    "fecha_publicacion": "2026-11-04T16:49:03.051Z"
   }
 ]
