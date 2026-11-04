@@ -48,7 +48,6 @@ const ES_TO_EN_MAP = {
   'antena': 'satellite-antenna', 'altavoz': 'loudspeaker', 'musica': 'musical-note', 'hacker': 'detective'
 };
 
-// Pool de iconos de respaldo variados (100% ilustrados a color) para impedir repeticiones
 const FALLBACK_COLOR_ICONS = [
   'telephone', 'package', 'loudspeaker', 'satellite-antenna', 'laptop',
   'globe-showing-americas', 'classical-building', 'detective', 'trophy',
@@ -65,7 +64,6 @@ async function resolveSvgForPixelArt(rawQuery) {
   if (ES_TO_EN_MAP[q]) q = ES_TO_EN_MAP[q];
   const cleanName = q.includes(':') ? q.split(':')[1] : q.replace(/\s+/g, '-');
 
-  // Prioridad absoluta a colecciones ilustradas SÓLIDAS y rellenas a color (nunca iconos huecos de líneas finas)
   const colorPrefixes = ['fluent-emoji-flat', 'twemoji', 'noto', 'flat-color-icons'];
   for (const pref of colorPrefixes) {
     const svg = await fetchText(`https://api.iconify.design/${pref}/${cleanName}.svg`);
@@ -74,7 +72,6 @@ async function resolveSvgForPixelArt(rawQuery) {
     }
   }
 
-  // Búsqueda semántica restringida primero a packs rellenos a todo color
   const colorSearchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=fluent-emoji-flat,twemoji,noto,flat-color-icons&limit=5`;
   const colorRes = await fetchText(colorSearchUrl);
   if (colorRes) {
@@ -90,7 +87,6 @@ async function resolveSvgForPixelArt(rawQuery) {
     } catch (e) {}
   }
 
-  // Si no existe en emojis, buscar en game-icons (que son siluetas sólidas rellenas, no líneas huecas)
   const gameSearchUrl = `https://api.iconify.design/search?query=${encodeURIComponent(cleanName)}&prefixes=game-icons&limit=3`;
   const gameRes = await fetchText(gameSearchUrl);
   if (gameRes) {
@@ -111,19 +107,23 @@ async function resolveSvgForPixelArt(rawQuery) {
 }
 
 // ============================================================================
-// 2. DEDUPLICADOR ESTRICTO DE SPRITES Y MUNDOS POR ESCENA
+// 2. ENRIQUECEDOR CINEMATOGRÁFICO Y DEDUPLICADOR ESTRICTO DE SPRITES
 // ============================================================================
-function enforceUniqueScenesAndSprites(escenas, hash) {
-  const allWorlds = [
-    'city_night', 'suburban_room', 'telecom_central', 'retro_office',
-    'server_datacenter', 'world_map_room', 'science_lab', 'nature_park',
-    'sky_airspace', 'bank_vault', 'industrial_plant', 'grand_hall'
+function prepareCinematicScenes(escenas, hash) {
+  const allShotTypes = [
+    'closeup_character',
+    'side_scroll_journey',
+    'document_blueprint',
+    'map_trajectory',
+    'crowd_accumulation',
+    'scale_comparison',
+    'pyramid_network',
+    'dramatic_fire_scene',
+    'final_choice_card'
   ];
-  const allLayouts = [
-    'versus_confrontation', 'unbox_discovery', 'signal_transmission',
-    'system_override_console', 'world_map_routing', 'dialogue_stage',
-    'chain_reaction', 'vehicle_journey', 'chase_pursuit', 'grand_monument'
-  ];
+
+  const charRoles = ['suit_boss', 'scientist', 'engineer', 'military', 'hacker', 'explorer'];
+  const palettes = ['sunset', 'day', 'night', 'sepia', 'cyber', 'storm'];
 
   const usedIcons = new Set();
   let fallbackCursor = 0;
@@ -132,7 +132,7 @@ function enforceUniqueScenesAndSprites(escenas, hash) {
     let key = String(requestedIcon || '').toLowerCase().trim();
     if (ES_TO_EN_MAP[key]) key = ES_TO_EN_MAP[key];
     if (!key || usedIcons.has(key)) {
-      while (fallbackCursor < FALLBACK_COLOR_ICONS.length) {
+      while (fallbackCursor < FALLBACK_COLOR_ICONS.length * 2) {
         const cand = FALLBACK_COLOR_ICONS[(fallbackCursor + hash) % FALLBACK_COLOR_ICONS.length];
         fallbackCursor++;
         if (!usedIcons.has(cand)) {
@@ -145,68 +145,59 @@ function enforceUniqueScenesAndSprites(escenas, hash) {
     return key;
   }
 
-  let prevWorld = '';
-  let prevLayout = '';
+  let prevShot = '';
 
   return (escenas || []).map((esc, idx) => {
     const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''} ${esc.narrativa_visual || ''}`.toLowerCase();
+    let shot = String(esc.shot_type || esc.stage_layout || '').toLowerCase().trim();
 
-    // 1. Asignar layout narrativo coherente con el texto y sin repetir el anterior
-    let layout = esc.stage_layout || esc.choreography || '';
-    if (!allLayouts.includes(layout) || layout === prevLayout) {
-      if (idx === (escenas.length - 1)) layout = 'grand_monument';
-      else if (/dentro|caja|descubri|encontr|oculto|escondid/.test(text)) layout = 'unbox_discovery';
-      else if (/frecuencia|hercio|hz|sonido|soplar|tono|senal|onda|llamada/.test(text)) layout = 'signal_transmission';
-      else if (/continente|mundo|ruta|desviar|pais|global|mapa|casa blanca/.test(text)) layout = 'world_map_routing';
-      else if (/sistema|reinici|abierta|control|codigo|contador|red|troncal/.test(text)) layout = 'system_override_console';
-      else if (/derrotad|mayor|gigante|contra|poderos|juguete/.test(text)) layout = 'versus_confrontation';
-      else if (/avion|vuelo|coche|tren|viaj|despeg/.test(text)) layout = 'vehicle_journey';
-      else if (/perro|pelota|perseguir|correr|huir|escap/.test(text)) layout = 'chase_pursuit';
-      else if (/contagi|miles|millones|masivo|propag/.test(text)) layout = 'chain_reaction';
-      else layout = allLayouts[(idx * 3 + hash) % allLayouts.length];
+    if (idx === escenas.length - 1) {
+      shot = 'final_choice_card';
+    } else if (!allShotTypes.includes(shot) || shot === prevShot) {
+      if (idx === 0) shot = 'closeup_character';
+      else if (/mapa|ruta|orbita|pais|italia|marte|continente|distancia|viaje/.test(text)) shot = 'map_trajectory';
+      else if (/millon|dolar|euro|altura|veces|escala|peso|kilo|compar|248|300|1500/.test(text)) shot = 'scale_comparison';
+      else if (/multitud|fila|cola|cientos|miles|personas|soldados|jugadores|habitantes/.test(text)) shot = 'crowd_accumulation';
+      else if (/codigo|documento|cupon|informe|contrato|ley|auditoria|secreto|error/.test(text)) shot = 'document_blueprint';
+      else if (/red|sistema|piramide|banco|servidores|colaps|cascada|nodos/.test(text)) shot = 'pyramid_network';
+      else if (/fuego|explosion|desintegr|quem|incendio|destru|catastrofe|pánico|panico/.test(text)) shot = 'dramatic_fire_scene';
+      else if (/camin|corri|despeg|vuelo|avion|cohete|sonda|perro|cueva/.test(text)) shot = 'side_scroll_journey';
+      else shot = allShotTypes[(idx * 2 + hash) % (allShotTypes.length - 1)];
 
-      if (layout === prevLayout) {
-        layout = allLayouts.find(l => l !== prevLayout) || 'system_override_console';
+      if (shot === prevShot) {
+        shot = allShotTypes.find(s => s !== prevShot && s !== 'final_choice_card') || 'closeup_character';
       }
     }
-    prevLayout = layout;
+    prevShot = shot;
 
-    // 2. Asignar mundo coherente sin repetir el anterior
-    let world = esc.world_theme || '';
-    if (!allWorlds.includes(world) || world === prevWorld) {
-      if (layout === 'world_map_routing') world = 'world_map_room';
-      else if (/cereal|cocina|casa|juguete|niño/.test(text)) world = 'suburban_room';
-      else if (/frecuencia|2600|troncal|telefon|at&t|central/.test(text)) world = 'telecom_central';
-      else if (/servidor|sistema|red|codigo|hacker|phreak/.test(text)) world = 'server_datacenter';
-      else if (/parque|perro|pelota|arbol|bosque|montaña/.test(text)) world = 'nature_park';
-      else if (/avion|cielo|vuelo|nube/.test(text)) world = 'sky_airspace';
-      else if (/banco|millon|dinero|bolsa|gratis/.test(text)) world = 'bank_vault';
-      else if (/ciencia|medico|hospital|estudio/.test(text)) world = 'science_lab';
-      else world = allWorlds[(idx + hash) % allWorlds.length];
-
-      if (world === prevWorld) {
-        world = allWorlds.find(w => w !== prevWorld) || allWorlds[(idx + 2) % allWorlds.length];
-      }
+    let role = esc.character_role || '';
+    if (!charRoles.includes(role)) {
+      if (/militar|marine|soldado|guerra|general|policia/.test(text)) role = 'military';
+      else if (/cientifico|nasa|medico|laboratorio|estudio|física/.test(text)) role = 'scientist';
+      else if (/ingeniero|constructor|motor|maquina|obrero/.test(text)) role = 'engineer';
+      else if (/hacker|programador|software|codigo|juego/.test(text)) role = 'hacker';
+      else if (/explorador|selva|isla|cueva|montaña/.test(text)) role = 'explorer';
+      else role = 'suit_boss';
     }
-    prevWorld = world;
 
-    // 3. Garantizar que actor_1 y actor_2 sean únicos en todo el vídeo
-    const rawIcon1 = esc.actor_1?.icon || 'telephone';
-    const rawIcon2 = esc.actor_2?.icon || 'package';
-
+    const rawIcon1 = esc.actor_1?.icon || 'rocket';
+    const rawIcon2 = esc.actor_2?.icon || 'globe-showing-americas';
     const uniqueIcon1 = getUniqueIcon(rawIcon1);
     const uniqueIcon2 = getUniqueIcon(rawIcon2);
 
-    // El fondo SOLO se mueve si es un viaje en vehículo o una persecución corriendo
-    const shouldScrollBg = (layout === 'vehicle_journey' || layout === 'chase_pursuit');
+    const numMatch = (esc.subtitulo || '').match(/\d+(?:[.,]\d+)?/);
+    const bigNumber = esc.big_metric || (numMatch ? numMatch[0] : '');
 
     return {
       ...esc,
-      world_theme: world,
-      stage_layout: layout,
-      bg_scroll: shouldScrollBg,
+      shot_type: shot,
+      character_role: role,
+      palette_mode: esc.palette_mode || palettes[(idx + hash) % palettes.length],
       actor_1: { icon: uniqueIcon1 },
-      actor_2: { icon: uniqueIcon2 }
+      actor_2: { icon: uniqueIcon2 },
+      big_metric: String(bigNumber).toUpperCase().slice(0, 10),
+      texto_1: (esc.texto_1 || esc.big_metric || `ACTO 0${idx + 1}`).toUpperCase().slice(0, 11),
+      texto_2: (esc.texto_2 || 'HISTORIA').toUpperCase().slice(0, 11)
     };
   });
 }
@@ -487,16 +478,16 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   function get8BitRecipe(type, pitchMod) {
     const p = pitchMod.toFixed(3);
     const catalog = {
-      coin_8bit: { expr: `0.20*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`, dur: 0.42 },
-      laser_8bit: { expr: `0.18*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.32 },
-      explosion_8bit: { expr: `0.28*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.65 },
-      powerup_8bit: { expr: `0.18*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`, dur: 0.45 },
-      alarm_8bit: { expr: `0.18*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`, dur: 0.55 },
-      glitch_8bit: { expr: `0.18*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`, dur: 0.35 },
-      jump_8bit: { expr: `0.19*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`, dur: 0.30 },
-      error_8bit: { expr: `0.22*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`, dur: 0.45 },
-      typing_8bit: { expr: `0.16*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`, dur: 0.30 },
-      level_clear_8bit: { expr: `0.18*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`, dur: 0.65 }
+      coin_8bit: { expr: `0.18*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`, dur: 0.42 },
+      laser_8bit: { expr: `0.16*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.32 },
+      explosion_8bit: { expr: `0.25*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.65 },
+      powerup_8bit: { expr: `0.16*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`, dur: 0.45 },
+      alarm_8bit: { expr: `0.16*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`, dur: 0.55 },
+      glitch_8bit: { expr: `0.16*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`, dur: 0.35 },
+      jump_8bit: { expr: `0.17*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`, dur: 0.30 },
+      error_8bit: { expr: `0.20*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`, dur: 0.45 },
+      typing_8bit: { expr: `0.15*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`, dur: 0.30 },
+      level_clear_8bit: { expr: `0.16*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`, dur: 0.65 }
     };
     return catalog[type] || catalog.coin_8bit;
   }
@@ -531,12 +522,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 5. MOTOR PRINCIPAL v6.0 (REJILLA HD 90x160 + SPRITES SÓLIDOS SIN HUECOS)
+// 5. MOTOR PRINCIPAL v7.1 (HUD CLÁSICO + ANIMACIONES CINEMÁTICAS 8-BIT)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload Universal 8-BIT v6.0 desde URL...');
+    console.log('📥 Descargando payload Pixel-Art Studio v7.1 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -572,16 +563,15 @@ async function main() {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
 
-  // Deduplicar sprites y mundos para garantizar variedad total
-  const escenasUnicas = enforceUniqueScenesAndSprites(payload.escenas || [], hash);
-  console.log('🎨 Descargando Sprites ilustrados a color (cero repeticiones)...');
-  const spriteCache = await preloadAllSceneSprites(escenasUnicas);
-  const subtitleChunks = buildSubtitleChunks(escenasUnicas, payload.alignment, duracionExactaVideo);
+  const escenasCinematic = prepareCinematicScenes(payload.escenas || [], hash);
+  console.log('🎨 Descargando Sprites sólidos de apoyo...');
+  const spriteCache = await preloadAllSceneSprites(escenasCinematic);
+  const subtitleChunks = buildSubtitleChunks(escenasCinematic, payload.alignment, duracionExactaVideo);
 
-  // Mezcla de Audio
+  // Mezcla de Audio con bg_music2.mp3
   try {
     let hasSfx = false;
-    try { hasSfx = buildChiptuneSfxTrack(escenasUnicas, duracionExactaVideo, hash); } catch (e) {}
+    try { hasSfx = buildChiptuneSfxTrack(escenasCinematic, duracionExactaVideo, hash); } catch (e) {}
 
     let bgMusicPath = path.resolve(__dirname, '../bg_music2.mp3');
     if (!fs.existsSync(bgMusicPath)) bgMusicPath = path.resolve('bg_music2.mp3');
@@ -589,11 +579,11 @@ async function main() {
 
     if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
-      execSync(`ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.80,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`, { stdio: 'inherit' });
+      execSync(`ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.78,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`, { stdio: 'inherit' });
       if (hasSfx) {
-        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.15[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
+        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.18[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
       } else {
-        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.15[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
+        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.18[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
       }
     } else {
       fs.copyFileSync('voice_clean.wav', 'audio.wav');
@@ -633,6 +623,7 @@ async function main() {
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
+      /* TU HUD CLÁSICO INTACTO */
       .arcade-hud {
         position: absolute; top: 32px; left: 26px; right: 26px;
         display: flex; justify-content: space-between; align-items: center;
@@ -688,23 +679,23 @@ async function main() {
     </div>
 
     <script>
-      const escenas = ${JSON.stringify(escenasUnicas)};
+      const escenas = ${JSON.stringify(escenasCinematic)};
       const subtitleChunks = ${JSON.stringify(subtitleChunks)};
       const rawSpriteCache = ${JSON.stringify(spriteCache)};
       const totalFrames = ${totalFrames};
 
-      // REJILLA HD 90x160 (Cada celda = 8x8 px -> 720x1280 exactos, nitidez 16-Bit/8-Bit)
-      const COLS = 90;
-      const ROWS = 160;
-      const CELL = 8;
-      const GROUND_Y = 104;
+      // RESOLUCIÓN PIXEL-ART CONTINUA: 120x213 celdas (6x6 px reales sin huecos negros intermedios)
+      const COLS = 120;
+      const ROWS = 213;
+      const CELL = 6;
+      const GROUND_Y = 140; // Suelo calibrado encima del rótulo texto_2 y de la caja de subtítulos
 
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
-      let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#101420'));
+      let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1a1c2c'));
       const rasterizedSprites = {};
 
-      function setCell(x, y, color) {
+      function setPx(x, y, color) {
         const cx = Math.round(x);
         const cy = Math.round(y);
         if (cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS && color) {
@@ -712,42 +703,38 @@ async function main() {
         }
       }
 
-      function drawRect(x, y, w, h, color) {
+      function fillRect(x, y, w, h, color) {
         const x0 = Math.round(x), y0 = Math.round(y);
         const rw = Math.round(w), rh = Math.round(h);
         for (let r = 0; r < rh; r++) {
-          for (let c = 0; c < rw; c++) setCell(x0 + c, y0 + r, color);
+          for (let c = 0; c < rw; c++) setPx(x0 + c, y0 + r, color);
         }
       }
 
-      function drawCircle(cx, cy, radius, color) {
+      function fillBorderedRect(x, y, w, h, fillColor, borderColor = '#0b0c10') {
+        fillRect(x, y, w, h, borderColor);
+        if (w > 2 && h > 2) {
+          fillRect(x + 1, y + 1, w - 2, h - 2, fillColor);
+        }
+      }
+
+      function fillCircle(cx, cy, radius, color) {
         const rInt = Math.round(radius);
         for (let r = -rInt; r <= rInt; r++) {
           for (let c = -rInt; c <= rInt; c++) {
-            if (c * c + r * r <= rInt * rInt) setCell(cx + c, cy + r, color);
+            if (c * c + r * r <= rInt * rInt) setPx(cx + c, cy + r, color);
           }
         }
       }
 
-      function drawRing(cx, cy, radius, thickness, color) {
-        const rOut = Math.round(radius);
-        const rIn = Math.max(0, rOut - thickness);
-        for (let r = -rOut; r <= rOut; r++) {
-          for (let c = -rOut; c <= rOut; c++) {
-            const d2 = c * c + r * r;
-            if (d2 <= rOut * rOut && d2 >= rIn * rIn) setCell(cx + c, cy + r, color);
-          }
-        }
-      }
-
-      function drawLine(x0, y0, x1, y1, thickness, color) {
+      function drawPixelLine(x0, y0, x1, y1, thickness, color) {
         let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
         let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
         let err = dx + dy;
         let cx = Math.round(x0), cy = Math.round(y0);
         const ex = Math.round(x1), ey = Math.round(y1);
-        for (let i = 0; i < 200; i++) {
-          drawRect(cx - Math.floor(thickness / 2), cy - Math.floor(thickness / 2), thickness, thickness, color);
+        for (let i = 0; i < 300; i++) {
+          fillRect(cx - Math.floor(thickness / 2), cy - Math.floor(thickness / 2), thickness, thickness, color);
           if (cx === ex && cy === ey) break;
           let e2 = 2 * err;
           if (e2 >= dy) { err += dy; cx += sx; }
@@ -756,7 +743,7 @@ async function main() {
       }
 
       // ======================================================================
-      // RASTERIZADOR DE ALTA DEFINICIÓN (30x30 CELDAS) + RELLENO SÓLIDO
+      // RASTERIZADOR SÓLIDO DE SPRITES DE APOYO (30x30 SIN HUECOS)
       // ======================================================================
       async function rasterizeAllSprites() {
         const SIZE = 30;
@@ -805,15 +792,12 @@ async function main() {
               }
             }
 
-            // Cerrar cualquier hueco interior de 1 píxel (Morphological Closing) y añadir borde negro sólido
             const closed = mat.map(row => [...row]);
             for (let r = 1; r < SIZE - 1; r++) {
               for (let c = 1; c < SIZE - 1; c++) {
                 if (!mat[r][c]) {
                   const neighbors = [mat[r - 1][c], mat[r + 1][c], mat[r][c - 1], mat[r][c + 1]].filter(Boolean);
-                  if (neighbors.length >= 3) {
-                    closed[r][c] = neighbors[0];
-                  }
+                  if (neighbors.length >= 3) closed[r][c] = neighbors[0];
                 }
               }
             }
@@ -833,7 +817,6 @@ async function main() {
         }
       }
 
-      // MAPEO INVERSO: PINTA EL SPRITE A CUALQUIER ESCALA CON CERO PÍXELES ROTOS O FALTANTES
       function drawSolidSprite(iconKey, centerX, centerY, scale = 1.0, flipX = false) {
         const key = String(iconKey || 'sparkles').toLowerCase().trim();
         const mat = rasterizedSprites[key] || rasterizedSprites['sparkles'];
@@ -850,380 +833,359 @@ async function main() {
             const srcX = flipX ? (srcSize - 1 - rawSrcX) : rawSrcX;
             const col = mat[srcY][srcX];
             if (col) {
-              setCell(centerX - halfDest + dx, centerY - halfDest + dy, col);
+              setPx(centerX - halfDest + dx, centerY - halfDest + dy, col);
             }
           }
         }
       }
 
-      // PERSONAJE HUMANO ARTICULADO 16-BIT
-      function drawPerson(x, y, suitColor, hairColor, isWalking, localFrame, facingLeft) {
-        const dir = facingLeft ? -1 : 1;
-        const step = isWalking ? (Math.floor(localFrame / 5) % 2) : 0;
-        const put = (dx, dy, w, h, col) => {
-          const rx = facingLeft ? (x - dx - w + 1) : (x + dx);
-          drawRect(rx, y + dy, w, h, col);
-        };
+      // ======================================================================
+      // CIELOS CON DITHERING RETRO Y PALETAS DE COLOR (COMO ROSSNATOR & HAPPY HILLS)
+      // ======================================================================
+      const PALETTES = {
+        sunset: { sky1: '#2d1b4e', sky2: '#682c57', sky3: '#b84a54', sky4: '#f38157', ground1: '#3b2137', ground2: '#231321' },
+        day:    { sky1: '#2b6cb0', sky2: '#4299e1', sky3: '#63b3ed', sky4: '#bee3f8', ground1: '#48bb78', ground2: '#2f855a' },
+        night:  { sky1: '#090d16', sky2: '#111a2e', sky3: '#1a2642', sky4: '#24345a', ground1: '#2d3748', ground2: '#1a202c' },
+        sepia:  { sky1: '#5c4033', sky2: '#8b5a2b', sky3: '#cd853f', sky4: '#f4a460', ground1: '#4a3525', ground2: '#332419' },
+        cyber:  { sky1: '#0f1026', sky2: '#1b1e44', sky3: '#292d66', sky4: '#3b418c', ground1: '#1e293b', ground2: '#0f172a' },
+        storm:  { sky1: '#111827', sky2: '#1f2937', sky3: '#374151', sky4: '#4b5563', ground1: '#1f2937', ground2: '#111827' }
+      };
 
-        // Sombra en el suelo
-        drawRect(x - 4, y + 6, 9, 2, 'rgba(0,0,0,0.45)');
-        // Pelo y Cabeza
-        put(-3, -14, 7, 3, hairColor || '#4a2c11');
-        put(-3, -11, 7, 5, '#ffcdb2');
-        put(2, -9, 2, 2, '#05050a'); // Ojo
-        // Torso
-        put(-3, -6, 7, 7, suitColor || '#38bdf8');
-        // Brazos y Piernas (Solo caminan si isWalking === true)
-        if (!isWalking) {
-          put(-5, -5, 2, 5, suitColor); put(-5, 0, 2, 2, '#ffcdb2');
-          put(4, -5, 2, 5, suitColor); put(4, 0, 2, 2, '#ffcdb2');
-          put(-3, 1, 3, 5, '#1e293b'); put(-3, 6, 3, 2, '#ffffff');
-          put(1, 1, 3, 5, '#1e293b'); put(1, 6, 3, 2, '#ffffff');
-        } else if (step === 0) {
-          put(-5, -4, 2, 5, suitColor); put(4, -6, 2, 5, suitColor);
-          put(-4, 1, 3, 5, '#1e293b'); put(-5, 6, 3, 2, '#ffffff');
-          put(2, 1, 3, 5, '#1e293b'); put(3, 6, 3, 2, '#ffffff');
+      function drawDitheredSky(palKey, maxRow = GROUND_Y) {
+        const p = PALETTES[palKey] || PALETTES.sunset;
+        const bands = [p.sky1, p.sky2, p.sky3, p.sky4];
+        const bandH = Math.ceil(maxRow / bands.length);
+
+        for (let r = 0; r < maxRow; r++) {
+          const bIdx = Math.min(bands.length - 1, Math.floor(r / bandH));
+          const nextIdx = Math.min(bands.length - 1, bIdx + 1);
+          const localR = r % bandH;
+          const ratio = localR / bandH;
+
+          for (let c = 0; c < COLS; c++) {
+            let col = bands[bIdx];
+            if (ratio > 0.72 && ((r + c) % 2 === 0)) {
+              col = bands[nextIdx];
+            } else if (ratio > 0.86 && ((r % 2 === 0) || (c % 2 === 0))) {
+              col = bands[nextIdx];
+            }
+            grid[r][c] = col;
+          }
+        }
+        fillRect(0, maxRow, COLS, 3, '#0b0c10');
+        for (let r = maxRow + 3; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            grid[r][c] = ((r + c) % 7 === 0) ? p.ground1 : p.ground2;
+          }
+        }
+      }
+
+      // ======================================================================
+      // CONSTRUCTORES ARTESANALES DE PERSONAJES Y ESCENAS (ESTILO 8BIT HEISTS)
+      // ======================================================================
+
+      // 1. RETRATO EN PRIMER PLANO ("TALKING HEAD" - Inspirado en Charles Ponzi de 8Bit Heists)
+      function drawCloseUpPortrait(esc, progress, localFrame, isTalking) {
+        const role = esc.character_role || 'suit_boss';
+        fillRect(0, 0, COLS, ROWS, '#4a3222');
+        for (let c = 0; c < COLS; c += 12) fillRect(c, 0, 1, ROWS, '#362317');
+        fillBorderedRect(10, 42, 30, 22, '#e2e8f0', '#2b1d14');
+        for (let r = 47; r < 59; r += 3) fillRect(14, r, 22, 1, '#94a3b8');
+
+        // Sprite del objeto clave en un cuadro a la derecha
+        fillBorderedRect(82, 40, 28, 28, '#1e293b', '#eab308');
+        drawSolidSprite(esc.actor_1?.icon, 96, 54, 0.75, false);
+
+        const cx = 56;
+        const headY = 82 + Math.round(Math.sin(localFrame * 0.15) * 1);
+
+        let suitCol = '#334155', lapelCol = '#1e293b', tieCol = '#e63946', shirtCol = '#ffffff';
+        let hatCol = '#eab308', hatBand = '#991b1b', hairCol = '#2b1d14';
+
+        if (role === 'scientist') { suitCol = '#f8fafc'; lapelCol = '#cbd5e1'; tieCol = '#0284c7'; hatCol = null; hairCol = '#64748b'; }
+        else if (role === 'engineer') { suitCol = '#ea580c'; lapelCol = '#9a3412'; tieCol = '#facc15'; hatCol = '#facc15'; }
+        else if (role === 'military') { suitCol = '#3f6212'; lapelCol = '#1a2e05'; tieCol = '#1a2e05'; hatCol = '#365314'; }
+        else if (role === 'hacker') { suitCol = '#111827'; lapelCol = '#1f2937'; tieCol = '#10b981'; hatCol = null; }
+
+        // Hombros y Traje
+        fillBorderedRect(cx - 34, headY + 22, 68, 42, suitCol, '#0b0c10');
+        for (let r = 0; r < 20; r++) {
+          const vw = Math.max(2, 11 - Math.floor(r * 0.5));
+          fillRect(cx - vw, headY + 23 + r, vw * 2, 1, shirtCol);
+        }
+        fillRect(cx - 3, headY + 28, 6, 20, tieCol);
+        drawPixelLine(cx - 14, headY + 23, cx - 2, headY + 42, 2, lapelCol);
+        drawPixelLine(cx + 14, headY + 23, cx + 2, headY + 42, 2, lapelCol);
+        fillRect(cx - 22, headY + 40, 8, 3, '#ffffff');
+        fillCircle(cx - 14, headY + 34, 2, '#e63946');
+
+        // Cuello y Cabeza con sombreado lateral pixel-art
+        fillBorderedRect(cx - 9, headY + 14, 18, 10, '#d49a73', '#0b0c10');
+        fillBorderedRect(cx - 18, headY - 18, 36, 34, '#e6ad86', '#0b0c10');
+        fillRect(cx + 10, headY - 16, 7, 32, '#d49a73');
+        fillBorderedRect(cx - 21, headY - 4, 4, 10, '#d49a73', '#0b0c10');
+        fillBorderedRect(cx + 17, headY - 4, 4, 10, '#d49a73', '#0b0c10');
+
+        // Pelo o Sombrero/Casco
+        fillRect(cx - 18, headY - 18, 36, 7, hairCol);
+        if (hatCol) {
+          fillBorderedRect(cx - 28, headY - 20, 56, 5, hatCol, '#0b0c10');
+          fillBorderedRect(cx - 19, headY - 29, 38, 10, hatCol, '#0b0c10');
+          fillRect(cx - 18, headY - 22, 36, 2, hatBand);
+        }
+
+        const isWinking = (progress > 0.60 && progress < 0.85);
+        const isBlinking = (localFrame % 55 < 3);
+        fillRect(cx - 12, headY - 8, 8, 2, '#2b1d14');
+        fillRect(cx + 4, headY - 9, 8, 2, '#2b1d14');
+
+        if (isBlinking) {
+          fillRect(cx - 11, headY - 3, 7, 2, '#2b1d14');
+          fillRect(cx + 4, headY - 3, 7, 2, '#2b1d14');
         } else {
-          put(-4, -6, 2, 5, suitColor); put(4, -4, 2, 5, suitColor);
-          put(-1, 1, 3, 5, '#1e293b'); put(-1, 6, 3, 2, '#ffffff');
-          put(1, 1, 3, 5, '#1e293b'); put(1, 6, 3, 2, '#ffffff');
+          fillRect(cx - 11, headY - 4, 7, 4, '#ffffff');
+          fillRect(cx - 9, headY - 4, 4, 4, '#2b1d14');
+          setPx(cx - 8, headY - 3, '#ffffff');
+          if (isWinking) {
+            fillRect(cx + 4, headY - 3, 7, 2, '#2b1d14');
+          } else {
+            fillRect(cx + 4, headY - 4, 7, 4, '#ffffff');
+            fillRect(cx + 6, headY - 4, 4, 4, '#2b1d14');
+            setPx(cx + 7, headY - 3, '#ffffff');
+          }
+        }
+
+        // Nariz y Boca sincronizada
+        fillRect(cx - 2, headY + 1, 4, 5, '#c6865e');
+        const mouthOpen = isTalking && (Math.floor(localFrame / 3) % 2 === 0);
+        if (mouthOpen) {
+          fillBorderedRect(cx - 7, headY + 7, 14, 6, '#ffffff', '#2b1d14');
+          fillRect(cx - 5, headY + 10, 10, 2, '#991b1b');
+        } else {
+          fillRect(cx - 6, headY + 8, 12, 2, '#2b1d14');
+          fillRect(cx + 5, headY + 7, 2, 2, '#2b1d14');
+        }
+
+        // Mano en primer plano sosteniendo billete / documento
+        const handY = headY + 30 - Math.round(Math.sin(progress * Math.PI) * 5);
+        fillBorderedRect(cx - 6, handY - 8, 34, 16, '#80ed99', '#064e3b');
+        fillBorderedRect(cx - 3, handY - 5, 28, 10, '#52b788', '#1b4332');
+        fillCircle(cx + 11, handY, 3, '#1b4332');
+        fillBorderedRect(cx - 12, handY - 2, 18, 14, '#e6ad86', '#0b0c10');
+        fillRect(cx - 8, handY - 2, 1, 9, '#0b0c10');
+        fillRect(cx - 4, handY - 2, 1, 9, '#0b0c10');
+        fillRect(cx, handY - 2, 1, 9, '#0b0c10');
+      }
+
+      // 2. MINI-PERSONAJE PIXEL-ART EXPRESIVO
+      function drawMiniPerson(x, y, suitCol, hatCol, isWalking, localFrame, facingLeft = false, speechSymbol = null) {
+        const step = isWalking ? (Math.floor(localFrame / 4) % 2) : 0;
+        fillRect(x - 3, y + 1, 7, 1, 'rgba(0,0,0,0.4)');
+        fillBorderedRect(x - 3, y - 5 + (step ? -1 : 0), 3, 6, '#1e293b', '#0b0c10');
+        fillBorderedRect(x, y - 5 + (step ? 0 : -1), 3, 6, '#1e293b', '#0b0c10');
+        fillBorderedRect(x - 4, y - 14, 9, 10, suitCol, '#0b0c10');
+        fillBorderedRect(x - 3, y - 21, 7, 8, '#e6ad86', '#0b0c10');
+        const eyeX = facingLeft ? (x - 2) : (x + 2);
+        setPx(eyeX, y - 18, '#0b0c10');
+        if (hatCol) {
+          fillRect(x - 4, y - 22, 9, 2, hatCol);
+          fillRect(x - 3, y - 24, 7, 2, hatCol);
+        } else {
+          fillRect(x - 3, y - 22, 7, 2, '#2b1d14');
+        }
+        if (speechSymbol) {
+          fillBorderedRect(x - 5, y - 35, 11, 10, '#ffffff', '#0b0c10');
+          fillRect(x - 1, y - 25, 3, 2, '#ffffff');
+          fillRect(x, y - 33, 2, 4, '#e63946');
+          setPx(x, y - 28, '#e63946');
         }
       }
 
-      // ======================================================================
-      // 12 MUNDOS DETALLADOS (ESTÁTICOS POR DEFECTO; SOLO SE MUEVEN EN VIAJES)
-      // ======================================================================
-      function drawWorld(esc, localFrame) {
-        const theme = esc.world_theme || 'city_night';
-        const scrollX = esc.bg_scroll ? Math.floor(localFrame * 0.9) : 0;
-
-        // 1. HABITACIÓN / COCINA AÑOS 70 (Ideal para cereales, inventos caseros, vida cotidiana)
-        if (theme === 'suburban_room') {
-          drawRect(0, 0, COLS, GROUND_Y, '#fef3c7'); // Pared crema cálida
-          // Papel pintado con franjas suaves verticales estáticas
-          for (let c = 6; c < COLS; c += 12) drawRect(c, 0, 2, GROUND_Y, '#fde68a');
-          // Ventana soleada con cortinas
-          drawRect(32, 24, 26, 28, '#38bdf8');
-          drawRect(34 + (Math.floor(localFrame * 0.1) % 10), 30, 8, 3, '#ffffff'); // Nube lenta en ventana
-          drawRect(32, 24, 26, 2, '#78350f'); drawRect(32, 50, 26, 2, '#78350f');
-          drawRect(44, 24, 2, 28, '#78350f');
-          // Mesa / Encimera en la parte baja
-          drawRect(0, GROUND_Y - 4, COLS, 4, '#b45309');
-          for (let r = GROUND_Y; r < ROWS; r++) {
-            for (let c = 0; c < COLS; c++) {
-              grid[r][c] = ((Math.floor(c / 6) + Math.floor(r / 4)) % 2 === 0) ? '#d97706' : '#92400e';
-            }
-          }
-          return;
-        }
-
-        // 2. CENTRAL TELEFÓNICA / CONMUTADORES INDUSTRIALES (AT&T, 2600 Hz, redes)
-        if (theme === 'telecom_central') {
-          drawRect(0, 0, COLS, GROUND_Y, '#1e293b');
-          // Paneles estáticos de conmutación telefónica con cables y luces parpadeantes
-          for (let bx = 8; bx < COLS - 8; bx += 20) {
-            drawRect(bx, 22, 16, GROUND_Y - 22, '#334155');
-            drawRect(bx + 2, 24, 12, GROUND_Y - 26, '#0f172a');
-            for (let ry = 28; ry < GROUND_Y - 6; ry += 5) {
-              for (let rx = bx + 4; rx < bx + 12; rx += 4) {
-                const lit = ((rx + ry + Math.floor(localFrame / 6)) % 3) === 0;
-                drawRect(rx, ry, 2, 2, lit ? '#fde047' : '#0284c7');
-              }
-            }
-          }
-          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#0f172a');
-          drawRect(0, GROUND_Y, COLS, 2, '#64748b');
-          return;
-        }
-
-        // 3. SALA DEL MAPA MUNDIAL / CENTRO DE OPERACIONES GLOBAL
-        if (theme === 'world_map_room') {
-          drawRect(0, 0, COLS, GROUND_Y, '#091526');
-          // Cuadrícula cartográfica estática
-          for (let r = 18; r < GROUND_Y; r += 10) drawRect(0, r, COLS, 1, '#112a46');
-          for (let c = 10; c < COLS; c += 12) drawRect(c, 18, 1, GROUND_Y - 18, '#112a46');
-          // Siluetas de continentes en verde esmeralda oscuro
-          drawRect(12, 34, 18, 14, '#14532d'); drawRect(16, 48, 10, 16, '#14532d'); // América
-          drawRect(42, 30, 22, 16, '#14532d'); drawRect(46, 46, 12, 16, '#14532d'); // Eurasia/África
-          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#050b14');
-          drawRect(0, GROUND_Y, COLS, 2, '#00f5d4');
-          return;
-        }
-
-        // 4. OFICINA RETRO / DESPACHO CON VENTANALES ESTÁTICOS
-        if (theme === 'retro_office') {
-          drawRect(0, 0, COLS, GROUND_Y, '#334155');
-          [10, 50].forEach(wx => {
-            drawRect(wx, 22, 28, 36, '#38bdf8');
-            drawRect(wx + 4, 36, 8, 22, '#1e293b');
-            drawRect(wx + 15, 30, 10, 28, '#0f172a');
-            drawRect(wx, 22, 28, 2, '#e2e8f0'); drawRect(wx, 56, 28, 2, '#e2e8f0');
-          });
-          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#78350f');
-          drawRect(0, GROUND_Y, COLS, 2, '#d97706');
-          return;
-        }
-
-        // 5. CENTRO DE DATOS / SERVIDORES (ESTÁTICO, SOLO PARPADEAN LOS LEDS)
-        if (theme === 'server_datacenter') {
-          drawRect(0, 0, COLS, GROUND_Y, '#090d16');
-          for (let rx = 8; rx < COLS - 8; rx += 19) {
-            drawRect(rx, 24, 14, GROUND_Y - 24, '#1e293b');
-            drawRect(rx + 2, 26, 10, GROUND_Y - 28, '#05070c');
-            for (let ry = 30; ry < GROUND_Y - 6; ry += 6) {
-              const on = ((Math.floor(localFrame / 5) + ry + rx) % 4) < 2;
-              drawRect(rx + 4, ry, 3, 2, on ? '#10b981' : '#064e3b');
-              drawRect(rx + 8, ry, 2, 2, !on ? '#38bdf8' : '#ef4444');
-            }
-          }
-          drawRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#0f172a');
-          drawRect(0, GROUND_Y, COLS, 2, '#00f5d4');
-          return;
-        }
-
-        // 6. PARQUE NATURAL (Se desplaza SOLO si bg_scroll === true)
-        if (theme === 'nature_park') {
-          for (let r = 0; r < GROUND_Y; r++) {
-            drawRect(0, r, COLS, 1, r < 35 ? '#38bdf8' : (r < 70 ? '#7dd3fc' : '#bae6fd'));
-          }
-          drawCircle(72, 26, 8, '#fde047');
-          for (let i = -1; i <= 4; i++) {
-            const tx = ((i * 24 - scrollX) % 110 + 110) % 110 - 15;
-            drawRect(tx + 4, GROUND_Y - 20, 4, 20, '#78350f');
-            drawCircle(tx + 6, GROUND_Y - 24, 9, '#15803d');
-            drawCircle(tx + 5, GROUND_Y - 27, 6, '#22c55e');
-          }
-          drawRect(0, GROUND_Y, COLS, 5, '#22c55e');
-          drawRect(0, GROUND_Y + 5, COLS, ROWS - GROUND_Y - 5, '#15803d');
-          return;
-        }
-
-        // 7. ESPACIO AÉREO / CIELO (Se desplazan las nubes suavemente)
-        if (theme === 'sky_airspace') {
-          for (let r = 0; r < ROWS; r++) {
-            drawRect(0, r, COLS, 1, r < 45 ? '#0284c7' : (r < 95 ? '#38bdf8' : '#0369a1'));
-          }
-          const cloudShift = Math.floor(localFrame * 0.8);
-          for (let i = 0; i < 5; i++) {
-            const cx = ((i * 22 - cloudShift) % 110 + 110) % 110 - 15;
-            const cy = 28 + (i * 13) % 55;
-            drawRect(cx, cy, 18, 5, '#ffffff');
-            drawRect(cx + 4, cy - 3, 10, 3, '#f8fafc');
-          }
-          return;
-        }
-
-        // 8. BÓVEDA BANCARIA / LABORATORIO / CIUDAD NOCTURNA (Estáticos salvo viaje)
-        for (let r = 0; r < GROUND_Y; r++) {
-          drawRect(0, r, COLS, 1, r < 40 ? '#0f172a' : '#1e293b');
-        }
-        // Estrellas parpadeando arriba
-        for (let s = 0; s < 16; s++) {
-          if ((Math.floor(localFrame / 8) + s) % 3 !== 0) {
-            drawRect((s * 17) % COLS, 18 + (s * 7) % 20, 1, 1, '#ffffff');
+      // 3. ACUMULACIÓN DE MULTITUD (Estilo 8 Bit History & 8Bit Heists)
+      function renderCrowdAccumulation(esc, progress, localFrame) {
+        drawDitheredSky(esc.palette_mode, GROUND_Y);
+        fillBorderedRect(62, 48, 52, GROUND_Y - 48, '#9b2226', '#0b0c10');
+        for (let wy = 56; wy < GROUND_Y - 24; wy += 14) {
+          for (let wx = 68; wx < 106; wx += 12) {
+            fillBorderedRect(wx, wy, 7, 9, '#334155', '#0b0c10');
           }
         }
-        // Edificios estáticos (o con scrollX si es vehicle_journey)
-        for (let i = 0; i < 5; i++) {
-          const bx = ((i * 20 - scrollX) % 100 + 100) % 100 - 10;
-          const bh = 38 + (i % 3) * 12;
-          drawRect(bx, GROUND_Y - bh, 16, bh, i % 2 === 0 ? '#1e293b' : '#334155');
-          for (let wy = GROUND_Y - bh + 5; wy < GROUND_Y - 6; wy += 7) {
-            for (let wx = bx + 3; wx < bx + 13; wx += 5) {
-              drawRect(wx, wy, 3, 4, ((wx + wy) % 2 === 0) ? '#fde047' : '#38bdf8');
-            }
-          }
-        }
-        drawRect(0, GROUND_Y, COLS, 3, '#94a3b8');
-        drawRect(0, GROUND_Y + 3, COLS, ROWS - GROUND_Y - 3, '#0f172a');
-      }
+        fillBorderedRect(78, GROUND_Y - 24, 18, 24, '#0b0c10', '#d97706');
 
-      // ======================================================================
-      // 10 COMPOSICIONES PROGRESIVAS (AVANZAN DE 0.0 A 1.0 SIN BUCLES REPETITIVOS)
-      // ======================================================================
-      function renderProgressiveStage(esc, progress, localFrame) {
-        const layout = esc.stage_layout || 'signal_transmission';
-        const icon1 = esc.actor_1?.icon || 'telephone';
-        const icon2 = esc.actor_2?.icon || 'postal-horn';
+        drawMiniPerson(20, GROUND_Y, '#3f6212', '#365314', false, localFrame, false);
 
-        // 1. DESCUBRIMIENTO DENTRO DE CAJA / CONTENEDOR (progress 0.0 -> 1.0)
-        // Ej: El silbato saliendo de dentro de la caja de cereales Cap'n Crunch
-        if (layout === 'unbox_discovery') {
-          // La caja/contenedor está en la parte inferior central y se abre en progress = 0.25
-          const boxY = GROUND_Y - 16;
-          drawSolidSprite(icon1, 45, boxY, 1.15, false);
-
-          // A partir de progress = 0.20, el objeto descubierto (icon2) emerge suavemente hacia arriba
-          if (progress > 0.15) {
-            const emergeP = Math.min(1, (progress - 0.15) / 0.55);
-            const easeOut = 1 - Math.pow(1 - emergeP, 3);
-            const itemY = boxY - Math.round(easeOut * 34);
-            const itemScale = 0.5 + easeOut * 0.75;
-
-            // Halo de descubrimiento dorado detrás del objeto emergente
-            if (emergeP > 0.5) {
-              drawRing(45, itemY, Math.round(16 + Math.sin(localFrame * 0.2) * 2), 2, '#fde047');
-            }
-            drawSolidSprite(icon2, 45, itemY, itemScale, false);
-          }
-          return;
-        }
-
-        // 2. TRANSMISIÓN DE SEÑAL / ONDA ACÚSTICA DE A -> B (progress 0.0 -> 1.0)
-        // Ej: Al soplar el silbato (izquierda), una onda de 2600 Hz viaja e impacta en el teléfono/troncal (derecha)
-        if (layout === 'signal_transmission') {
-          drawSolidSprite(icon1, 20, GROUND_Y - 24, 1.05, false);
-          drawSolidSprite(icon2, 70, GROUND_Y - 24, 1.05, false);
-
-          // Onda sinusoidal acústica y anillos viajando de X=32 a X=58 según progress
-          const waveReachX = Math.round(32 + progress * 28);
-          for (let x = 32; x <= waveReachX; x++) {
-            const wy = (GROUND_Y - 24) + Math.round(Math.sin((x - localFrame * 0.6) * 0.45) * 8);
-            drawRect(x, wy, 2, 3, '#00f5d4');
-          }
-          const pulseX = 32 + Math.round(progress * 26);
-          drawRing(pulseX, GROUND_Y - 24, 6, 2, '#fde047');
-
-          // Cuando la señal alcanza el receptor (progress > 0.75), el receptor brilla con un aura verde/amarilla
-          if (progress > 0.75) {
-            drawRing(70, GROUND_Y - 24, 18, 2, '#4ade80');
-          }
-          return;
-        }
-
-        // 3. ENRUTAMIENTO EN MAPA GLOBAL (progress 0.0 -> 1.0)
-        // Ej: Desviar llamadas a través de continentes enteros hasta llegar a la Casa Blanca
-        if (layout === 'world_map_routing') {
-          const nodes = [
-            { x: 18, y: 74 },
-            { x: 38, y: 46 },
-            { x: 56, y: 70 },
-            { x: 72, y: 44 }
-          ];
-
-          // Dibujar los nodos intermedios y trazar la línea progresivamente de nodo en nodo
-          const totalSegments = nodes.length - 1;
-          const currentFloat = progress * totalSegments;
-
-          for (let i = 0; i < totalSegments; i++) {
-            const segP = Math.max(0, Math.min(1, currentFloat - i));
-            if (segP > 0) {
-              const nx = nodes[i].x + (nodes[i + 1].x - nodes[i].x) * segP;
-              const ny = nodes[i].y + (nodes[i + 1].y - nodes[i].y) * segP;
-              drawLine(nodes[i].x, nodes[i].y, nx, ny, 2, '#ef4444');
-            }
-            drawCircle(nodes[i].x, nodes[i].y, 3, '#fde047');
-          }
-
-          // Icono de origen abajo a la izquierda e Icono de destino (ej. Casa Blanca) arriba a la derecha
-          drawSolidSprite(icon1, 18, 74, 0.85, false);
-          drawSolidSprite(icon2, 72, 44, 1.05, false);
-          if (progress > 0.85) {
-            drawRing(72, 44, 18, 2, '#fde047');
-          }
-          return;
-        }
-
-        // 4. CONSOLA DE CONTROL Y OVERRIDE DE SISTEMA (progress 0.0 -> 1.0)
-        // Ej: El sistema creía que la llamada había terminado, pero la conexión permanecía abierta
-        if (layout === 'system_override_console') {
-          // Gran monitor de control en la parte superior central
-          drawRect(14, 28, 62, 36, '#e2e8f0');
-          drawRect(16, 30, 58, 32, '#05070c');
-
-          // Barra de estado progresiva dentro del monitor que pasa de CERRADO a ABIERTO/OVERRIDE
-          const barW = Math.round(50 * progress);
-          const isOverride = progress > 0.55;
-          drawRect(20, 42, 50, 8, '#1e293b');
-          drawRect(20, 42, barW, 8, isOverride ? '#10b981' : '#f97316');
-
-          // Protagonista operando abajo a la izquierda y los dos iconos a los lados
-          drawPerson(18, GROUND_Y - 8, '#38bdf8', '#4a2c11', false, localFrame, false);
-          drawSolidSprite(icon1, 44, GROUND_Y - 18, 0.95, false);
-          drawSolidSprite(icon2, 70, GROUND_Y - 18, 0.95, false);
-          return;
-        }
-
-        // 5. CONFRONTACIÓN DAVID VS GOLIAT (progress 0.0 -> 1.0)
-        // Ej: La mayor empresa telefónica del mundo derrotada por un simple juguete
-        if (layout === 'versus_confrontation') {
-          const slideIn = Math.min(1, progress / 0.35);
-          const x1 = Math.round(-10 + slideIn * 34);
-          const x2 = Math.round(100 - slideIn * 34);
-
-          drawSolidSprite(icon1, x1, GROUND_Y - 22, 1.20, false);
-          drawSolidSprite(icon2, x2, GROUND_Y - 20, 1.00, false);
-
-          // Rayo de choque en el centro cuando colisionan las fuerzas
-          if (progress > 0.40) {
-            drawLine(45, 36, 42, 62, 2, '#fde047');
-            drawLine(42, 62, 48, 68, 2, '#fde047');
-            drawLine(48, 68, 44, 96, 2, '#fde047');
-          }
-          return;
-        }
-
-        // 6. TRAYECTO EN VEHÍCULO / VUELO (Aquí el fondo SÍ se desplaza)
-        if (layout === 'vehicle_journey') {
-          const vx = Math.round(20 + progress * 35);
-          const vy = (esc.world_theme === 'sky_airspace') ? 56 : (GROUND_Y - 18);
-          drawSolidSprite(icon1, vx, vy, 1.25, false);
-          drawSolidSprite(icon2, 72, 38, 0.90, false);
-          return;
-        }
-
-        // 7. PERSECUCIÓN EN MOVIMIENTO (Aquí el fondo SÍ se desplaza)
-        if (layout === 'chase_pursuit') {
-          const chaserX = Math.round(16 + progress * 34);
-          const targetX = Math.min(76, chaserX + 24 - Math.round(progress * 10));
-          const bounceY = GROUND_Y - 16 - Math.abs(Math.round(Math.sin(progress * Math.PI * 4) * 14));
-
-          drawSolidSprite(icon1, chaserX, GROUND_Y - 18, 1.10, false);
-          drawSolidSprite(icon2, targetX, bounceY, 0.95, false);
-          return;
-        }
-
-        // 8. REACCIÓN EN CADENA SECUENCIAL (progress 0.0 -> 1.0)
-        if (layout === 'chain_reaction') {
-          const thresholds = [0.15, 0.40, 0.65, 0.85];
-          thresholds.forEach((th, idx) => {
-            const px = 16 + idx * 19;
-            const activated = progress >= th;
-            drawSolidSprite(activated ? icon2 : icon1, px, GROUND_Y - 18, 0.85, false);
-            if (activated) {
-              drawRing(px, GROUND_Y - 18, 12, 1, '#fde047');
-            }
-          });
-          return;
-        }
-
-        // 9. ESCENARIO DE DIÁLOGO / FUNDADORES (progress 0.0 -> 1.0)
-        if (layout === 'dialogue_stage') {
-          drawPerson(22, GROUND_Y - 8, '#38bdf8', '#4a2c11', false, localFrame, false);
-          drawPerson(68, GROUND_Y - 8, '#f43f5e', '#1e293b', false, localFrame, true);
-
-          // Pantalla central mostrando el primer objeto en la 1ª mitad de la frase y el 2º en la 2ª mitad
-          drawRect(28, 30, 34, 34, '#ffffff');
-          drawRect(30, 32, 30, 30, '#0f172a');
-          const shownIcon = (progress < 0.5) ? icon1 : icon2;
-          drawSolidSprite(shownIcon, 45, 47, 0.95, false);
-          return;
-        }
-
-        // 10. MONUMENTO FINAL / LEGADO HISTÓRICO (progress 0.0 -> 1.0)
-        // Pedestal central con ambos iconos de legado y partículas ascendentes
-        drawRect(28, GROUND_Y - 12, 34, 12, '#475569');
-        drawRect(24, GROUND_Y - 4, 42, 4, '#94a3b8');
-        drawSolidSprite(icon1, 33, GROUND_Y - 30, 1.05, false);
-        drawSolidSprite(icon2, 57, GROUND_Y - 30, 1.05, false);
-        for (let p = 0; p < 8; p++) {
-          const px = 20 + (p * 7);
-          const py = Math.round(GROUND_Y - 16 - ((progress * 50 + p * 9) % 50));
-          drawRect(px, py, 2, 2, '#fde047');
+        const totalPeople = Math.max(3, Math.floor(progress * 28));
+        const colors = ['#38bdf8', '#f97316', '#eab308', '#a855f7', '#10b981', '#64748b'];
+        for (let i = 0; i < totalPeople; i++) {
+          const row = Math.floor(i / 7);
+          const col = i % 7;
+          const px = 34 + col * 9 + (row % 2) * 3;
+          const py = GROUND_Y - row * 6;
+          drawMiniPerson(px, py, colors[i % colors.length], i % 2 === 0 ? '#1e293b' : null, false, localFrame, true);
         }
       }
 
-      // FUENTE PIXEL ART 3x5 PARA RÓTULOS EN PANTALLA
+      // 4. COMPARACIÓN DE ESCALA / APILAMIENTO (Estilo Everest & Báscula de 8Bit Heists)
+      function renderScaleComparison(esc, progress, localFrame) {
+        drawDitheredSky('night', GROUND_Y);
+        for (let r = 0; r < 65; r++) {
+          const mw = Math.floor(r * 0.85);
+          const col = r < 22 ? '#ffffff' : '#475569';
+          fillRect(92 - mw, GROUND_Y - 65 + r, mw * 2, 1, col);
+        }
+        [125, 95, 65].forEach(ly => fillRect(6, ly, 14, 2, '#ffffff'));
+
+        drawMiniPerson(32, GROUND_Y, '#78350f', '#eab308', false, localFrame, false);
+        drawSolidSprite(esc.actor_1?.icon, 20, 56, 0.85, false);
+
+        const maxTowerH = 85;
+        const curH = Math.max(8, Math.round(progress * maxTowerH));
+        for (let y = GROUND_Y - curH; y < GROUND_Y; y += 4) {
+          fillBorderedRect(48, y, 14, 4, (y % 8 === 0) ? '#80ed99' : '#e2e8f0', '#0b0c10');
+        }
+      }
+
+      // 5. MAPA Y TRAYECTORIA DE PUNTOS (Estilo Mapa Italia -> USA de 8Bit Heists)
+      function renderMapTrajectory(esc, progress, localFrame) {
+        fillRect(0, 0, COLS, ROWS, '#1d4ed8');
+        for (let r = 0; r < ROWS; r += 6) {
+          for (let c = 0; c < COLS; c += 6) {
+            setPx(c + (r % 12 === 0 ? 3 : 0), r, '#1e40af');
+          }
+        }
+        fillCircle(16, 108, 24, '#15803d');
+        fillCircle(22, 92, 16, '#16a34a');
+        fillCircle(104, 84, 24, '#b45309');
+        fillCircle(94, 100, 16, '#d97706');
+
+        const totalDots = 16;
+        const activeDots = Math.max(2, Math.floor(progress * totalDots));
+        for (let i = 0; i < activeDots; i++) {
+          const t = i / (totalDots - 1);
+          const dx = 24 + t * 72;
+          const dy = 102 - Math.sin(t * Math.PI) * 38;
+          fillBorderedRect(dx - 2, dy - 2, 4, 4, i % 2 === 0 ? '#ef4444' : '#ffffff', '#0b0c10');
+        }
+
+        drawSolidSprite(esc.actor_1?.icon, 22, 105, 0.85, false);
+        drawSolidSprite(esc.actor_2?.icon, 96, 82, 0.85, false);
+      }
+
+      // 6. PLANO TÉCNICO / DOCUMENTO OFICIAL CON SELLO DE ALERTA
+      function renderDocumentBlueprint(esc, progress, localFrame) {
+        fillRect(0, 0, COLS, ROWS, '#2b1d14');
+        fillBorderedRect(12, 44, 96, 92, '#f5ebe0', '#0b0c10');
+        fillBorderedRect(16, 48, 88, 84, '#edede9', '#7f5539');
+
+        drawSolidSprite(esc.actor_1?.icon, 60, 90, 0.95, false);
+
+        const linesToShow = Math.floor(progress * 6) + 2;
+        for (let i = 0; i < linesToShow; i++) {
+          const ly = 56 + i * 11;
+          const lw = (i % 2 === 0) ? 64 : 48;
+          fillRect(60 - Math.floor(lw / 2), ly, lw, 3, '#334155');
+        }
+
+        if (progress > 0.40) {
+          const pulse = (Math.floor(localFrame / 4) % 2 === 0) ? 1 : 0;
+          fillBorderedRect(54 - pulse, 72 - pulse, 12 + pulse * 2, 24 + pulse * 2, '#ef4444', '#0b0c10');
+          fillBorderedRect(54 - pulse, 100 - pulse, 12 + pulse * 2, 9 + pulse * 2, '#ef4444', '#0b0c10');
+        }
+      }
+
+      // 7. RED PIRAMIDAL / COLAPSO DE SISTEMA
+      function renderPyramidNetwork(esc, progress, localFrame) {
+        fillRect(0, 0, COLS, ROWS, '#141622');
+        const rows = [1, 2, 3, 4];
+        const isCollapsing = progress > 0.72;
+        const dropOffset = isCollapsing ? Math.round(Math.pow((progress - 0.72) * 3.5, 2) * 28) : 0;
+
+        rows.forEach((count, rIdx) => {
+          const boxW = 16, boxH = 16, gap = 6;
+          const totalW = count * boxW + (count - 1) * gap;
+          const startX = Math.floor((COLS - totalW) / 2);
+          const baseY = 46 + rIdx * 21 + (isCollapsing ? dropOffset * (rIdx + 1) * 0.25 : 0);
+
+          for (let cIdx = 0; cIdx < count; cIdx++) {
+            const bx = startX + cIdx * (boxW + gap);
+            const boxCol = isCollapsing ? '#991b1b' : (rIdx === 3 ? '#065f46' : '#3b2818');
+            const borderCol = isCollapsing ? '#ef4444' : '#eab308';
+            fillBorderedRect(bx, baseY, boxW, boxH, boxCol, borderCol);
+            fillRect(bx + 5, baseY + 3, 6, 5, '#e6ad86');
+            fillRect(bx + 4, baseY + 8, 8, 6, '#1e293b');
+          }
+        });
+      }
+
+      // 8. ESCENA LATERAL CON PAISAJE, OBJETO Y BOCADILLOS (Estilo Happy Hills y Rossnator)
+      function renderSideScrollJourney(esc, progress, localFrame) {
+        drawDitheredSky(esc.palette_mode, GROUND_Y);
+
+        for (let r = 0; r < 52; r++) {
+          const w = 10 + Math.floor(r * 0.9);
+          fillRect(75 - w, GROUND_Y - 52 + r, w * 2, 1, '#3b2137');
+        }
+        for (let i = 0; i < 6; i++) {
+          const py = GROUND_Y - 56 - ((localFrame + i * 11) % 24);
+          const px = 75 + Math.round(Math.sin(localFrame * 0.1 + i) * 6);
+          fillRect(px, py, 2, 2, '#f97316');
+        }
+
+        const walkX = Math.round(18 + progress * 48);
+        drawMiniPerson(walkX - 14, GROUND_Y, '#dc2626', null, true, localFrame, false);
+        drawMiniPerson(walkX, GROUND_Y, '#f8fafc', null, true, localFrame + 3, false, progress > 0.35 ? '!' : null);
+        drawMiniPerson(walkX + 14, GROUND_Y, '#16a34a', '#eab308', true, localFrame + 6, false);
+
+        const botY = GROUND_Y - 36 + Math.round(Math.sin(localFrame * 0.2) * 3);
+        drawSolidSprite(esc.actor_1?.icon, walkX + 26, botY, 0.85, false);
+      }
+
+      // 9. CLÍMAX DE FUEGO Y LLUVIA PIXEL-ART (Estilo Rossnator)
+      function renderDramaticFireScene(esc, progress, localFrame) {
+        drawDitheredSky('storm', GROUND_Y);
+
+        [14, 68].forEach((hx) => {
+          fillBorderedRect(hx, GROUND_Y - 32, 36, 32, '#78350f', '#0b0c10');
+          for (let r = 0; r < 14; r++) {
+            fillRect(hx - 2 + r, GROUND_Y - 32 - r, 40 - r * 2, 1, '#451a03');
+          }
+          for (let f = 0; f < 18; f++) {
+            const fx = hx + 4 + (f * 2) % 28;
+            const fh = 6 + ((localFrame + f * 5) % 12);
+            fillRect(fx, GROUND_Y - 32 - fh, 3, fh, '#dc2626');
+            fillRect(fx, GROUND_Y - 32 - Math.floor(fh * 0.65), 3, Math.floor(fh * 0.65), '#f97316');
+            fillRect(fx, GROUND_Y - 32 - Math.floor(fh * 0.35), 2, Math.floor(fh * 0.35), '#fde047');
+          }
+        });
+
+        for (let r = 0; r < 24; r++) {
+          const rx = ((r * 19 - localFrame * 2) % COLS + COLS) % COLS;
+          const ry = (r * 13 + localFrame * 3) % GROUND_Y;
+          fillRect(rx, ry, 1, 3, '#fde047');
+        }
+
+        drawMiniPerson(52, GROUND_Y, '#31102f', '#eab308', false, localFrame, false);
+        drawSolidSprite(esc.actor_2?.icon, 60, 62, 0.90, false);
+      }
+
+      // 10. TARJETA FINAL DE DECISIÓN ESTILO RPG
+      function renderFinalChoiceCard(esc, progress, localFrame) {
+        renderCrowdAccumulation(esc, 0.85, localFrame);
+
+        fillBorderedRect(14, 58, 92, 48, '#141829', '#eab308');
+        fillBorderedRect(17, 61, 86, 42, '#0f172a', '#0b0c10');
+
+        const selectSecond = (Math.floor(localFrame / 18) % 2 === 1);
+        const cursorY = selectSecond ? 86 : 72;
+        fillRect(24, cursorY, 2, 6, '#80ed99');
+        fillRect(26, cursorY + 1, 2, 4, '#80ed99');
+        fillRect(28, cursorY + 2, 2, 2, '#80ed99');
+
+        fillRect(34, 73, 52, 4, selectSecond ? '#64748b' : '#ffd166');
+        fillRect(34, 87, 42, 4, selectSecond ? '#ffd166' : '#64748b');
+      }
+
+      // FUENTE PIXEL ART 3x5 PARA RÓTULOS EN EL LIENZO (COMO EN TU v6.0)
       const FONT_3X5 = {
         'A': ['010','101','111','101','101'], 'B': ['110','101','110','101','110'],
         'C': ['111','100','100','100','111'], 'D': ['110','101','101','101','110'],
@@ -1244,20 +1206,21 @@ async function main() {
         '6': ['111','100','111','101','111'], '7': ['111','001','001','001','001'],
         '8': ['111','101','111','101','111'], '9': ['111','101','111','001','111'],
         '$': ['010','111','010','111','010'], '%': ['101','001','010','100','101'],
-        '!': ['010','010','010','000','010'], '?': ['111','001','011','000','010']
+        '!': ['010','010','010','000','010'], '?': ['111','001','011','000','010'],
+        '+': ['000','010','111','010','000'], '-': ['000','000','111','000','000']
       };
 
       function drawPixelString(str, centerX, startY, color) {
-        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!? ]/g, '').slice(0, 11);
+        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!?+- ]/g, '').slice(0, 12);
         if (!clean) return;
-        const scale = 2; // Escala doble para la rejilla 90x160
+        const scale = 2;
         const charW = 3 * scale;
         const charH = 5 * scale;
         const gap = 1 * scale;
         const totalW = clean.length * (charW + gap) - gap;
         let cx = Math.max(3, Math.floor(centerX - totalW / 2));
 
-        drawRect(cx - 3, startY - 2, totalW + 6, charH + 4, '#05050a');
+        fillBorderedRect(cx - 4, startY - 3, totalW + 8, charH + 6, '#080a14', '#000000');
         for (let i = 0; i < clean.length; i++) {
           const ch = clean[i];
           const glyph = FONT_3X5[ch];
@@ -1265,7 +1228,7 @@ async function main() {
             for (let r = 0; r < 5; r++) {
               for (let c = 0; c < 3; c++) {
                 if (glyph[r][c] === '1') {
-                  drawRect(cx + c * scale, startY + r * scale, scale, scale, color);
+                  fillRect(cx + c * scale, startY + r * scale, scale, scale, color);
                 }
               }
             }
@@ -1275,12 +1238,10 @@ async function main() {
       }
 
       function flushGridToCanvas() {
-        ctx.fillStyle = '#05050a';
-        ctx.fillRect(0, 0, 720, 1280);
         for (let r = 0; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
             ctx.fillStyle = grid[r][c];
-            ctx.fillRect(c * CELL, r * CELL, CELL - 1, CELL - 1);
+            ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
           }
         }
       }
@@ -1309,20 +1270,45 @@ async function main() {
         const progress = Math.max(0, Math.min(1, localT / durEsc));
         const localFrame = Math.floor(localT * 30);
 
-        // 1. Pintar el Mundo (Estático por defecto; solo se desplaza si es viaje/persecución)
-        drawWorld(esc, localFrame);
+        // 1. Renderizar el Plano Cinematográfico correspondiente
+        const shot = esc.shot_type || 'closeup_character';
+        if (shot === 'closeup_character') {
+          drawCloseUpPortrait(esc, progress, localFrame, true);
+        } else if (shot === 'crowd_accumulation') {
+          renderCrowdAccumulation(esc, progress, localFrame);
+        } else if (shot === 'scale_comparison') {
+          renderScaleComparison(esc, progress, localFrame);
+        } else if (shot === 'map_trajectory') {
+          renderMapTrajectory(esc, progress, localFrame);
+        } else if (shot === 'document_blueprint') {
+          renderDocumentBlueprint(esc, progress, localFrame);
+        } else if (shot === 'pyramid_network') {
+          renderPyramidNetwork(esc, progress, localFrame);
+        } else if (shot === 'dramatic_fire_scene') {
+          renderDramaticFireScene(esc, progress, localFrame);
+        } else if (shot === 'final_choice_card') {
+          renderFinalChoiceCard(esc, progress, localFrame);
+        } else {
+          renderSideScrollJourney(esc, progress, localFrame);
+        }
 
-        // 2. Pintar la Composición Progresiva de la Escena (0.0 -> 1.0 sin bucles repetitivos)
-        renderProgressiveStage(esc, progress, localFrame);
+        // 2. Rótulos pixelados dentro del lienzo (Con contador progresivo si hay cifra en multitud/escala)
+        let topText = esc.texto_1 || '';
+        if ((shot === 'crowd_accumulation' || shot === 'scale_comparison') && esc.big_metric) {
+          const baseNum = parseInt(String(esc.big_metric).replace(/\D/g, ''), 10);
+          if (!isNaN(baseNum) && baseNum > 10) {
+            const curVal = Math.max(1, Math.round(baseNum * Math.min(1, progress * 1.15)));
+            topText = String(curVal) + '+';
+          }
+        }
 
-        // 3. Rótulos superiores e inferiores nítidos
-        if (esc.texto_1) drawPixelString(esc.texto_1, 45, 14, '#ffd166');
-        if (esc.texto_2) drawPixelString(esc.texto_2, 45, 110, '#00f5d4');
+        if (topText) drawPixelString(topText, 60, 19, '#ffd166');
+        if (esc.texto_2) drawPixelString(esc.texto_2, 60, 148, '#00f5d4');
 
-        // 4. Volcar la matriz 90x160 al lienzo
+        // 3. Volcar la matriz al lienzo
         flushGridToCanvas();
 
-        // 5. Subtítulos sincronizados
+        // 4. Subtítulos sincronizados
         let cIdx = subtitleChunks.findIndex((c, idx) => {
           if (idx === subtitleChunks.length - 1) return t >= c.start;
           return t >= c.start && t < c.end;
@@ -1367,7 +1353,7 @@ async function main() {
   await page.evaluateHandle('document.fonts.ready');
   await page.evaluate(async () => { await window.initSpritesReady; });
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Pro v6.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v7.1 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1380,13 +1366,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final Pixel-Art Pro v6.0...');
+  console.log('🔊 Ensamblando MP4 final Pixel-Art Studio v7.1...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Universal 8-Bit v6.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v7.1 generado con éxito!');
   process.exit(0);
 }
 
