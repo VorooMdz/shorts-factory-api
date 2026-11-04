@@ -26,6 +26,17 @@ function normalizeForMatch(str) {
   return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 }
 
+function cleanArcadeLabel(str) {
+  return String(str || '')
+    .toUpperCase()
+    .replace(/[ÁÀÄÂ]/g, 'A')
+    .replace(/[ÉÈËÊ]/g, 'E')
+    .replace(/[ÍÌÏÎ]/g, 'I')
+    .replace(/[ÓÒÖÔ]/g, 'O')
+    .replace(/[ÚÙÜÛ]/g, 'U')
+    .trim();
+}
+
 function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   const stopWords = new Set([
     'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
@@ -322,115 +333,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR DE DIRECCIÓN ARTÍSTICA CONTEXTUAL v8.0 (ESTILO ESTAFADOR EN TODAS)
-// ============================================================================
-function prepareStudioScenes(escenas, hash) {
-  const allShots = [
-    'protagonist_closeup',
-    'two_characters_deal',
-    'landmark_monument',
-    'document_forgery_desk',
-    'cash_heist_tally',
-    'night_train_escape',
-    'press_headline',
-    'final_rpg_decision'
-  ];
-
-  const expressions = ['smirk_wink', 'greedy_dollar', 'scheming_evil', 'shock_sweat', 'ashamed_red', 'proud_confident'];
-  const props = ['cash_bundle', 'secret_contract', 'iron_ingot', 'magnifying_glass', 'pocket_watch', 'microchip', 'key_master', 'trophy_cup'];
-  const roles = ['con_artist', 'merchant_rich', 'scientist', 'engineer', 'military', 'hacker'];
-
-  let prevShot = '';
-
-  return (escenas || []).map((esc, idx) => {
-    const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''} ${esc.narrativa_visual || ''}`.toLowerCase();
-    let shot = String(esc.shot_type || '').toLowerCase().trim();
-
-    // Asignación semántica inteligente para que NINGUNA escena sea incoherente con lo que dice el locutor
-    if (idx === escenas.length - 1) {
-      shot = 'final_rpg_decision';
-    } else if (/torre|eiffel|demoler|hierro|tonelada|monumento|edificio|estructura|7\.?000/.test(text)) {
-      shot = 'landmark_monument';
-    } else if (/prensa|periodico|diario|noticia|titular|publico|escandalo/.test(text)) {
-      shot = 'press_headline';
-    } else if (/falsific|credencial|documento|carta|contrato|ello|oficial|ley|codigo/.test(text)) {
-      shot = 'document_forgery_desk';
-    } else if (/suite|hotel|reuni|cito|ofreci|soborno|negoci|comerciante|magnate|convers/.test(text)) {
-      shot = 'two_characters_deal';
-    } else if (/entreg|dolar|euro|millon|botin|70\.?000|dinero|pago|fortuna|costo/.test(text)) {
-      shot = 'cash_heist_tally';
-    } else if (/tren|viena|fuga|escap|abord|viaj|avion|vuelo|coche|barco|regres/.test(text)) {
-      shot = 'night_train_escape';
-    } else if (/verguenza|confes|estafador|lustig| Fing|burocrata|oportunidad|ambicion/.test(text)) {
-      shot = 'protagonist_closeup';
-    } else if (!allShots.includes(shot)) {
-      shot = allShots[(idx + hash) % (allShots.length - 1)];
-    }
-
-    // Evitar que dos escenas seguidas tengan el mismo plano
-    if (shot === prevShot && idx < escenas.length - 1) {
-      if (shot === 'protagonist_closeup') shot = 'two_characters_deal';
-      else if (shot === 'two_characters_deal') shot = 'protagonist_closeup';
-      else shot = 'protagonist_closeup';
-    }
-    prevShot = shot;
-
-    // Inferir expresión facial coherente con la frase
-    let expr = esc.expression || '';
-    if (!expressions.includes(expr)) {
-      if (/verguenza|jamás confesó|miedo|temor|ridiculo/.test(text)) expr = 'ashamed_red';
-      else if (/dolar|millon|dinero|botin|ambicion|fortuna|70\.?000/.test(text)) expr = 'greedy_dollar';
-      else if (/fallo|error|panico|catastrofe|descubri/.test(text)) expr = 'shock_sweat';
-      else if (/secreto|soborno|enga|fingi|trampa|falsific/.test(text)) expr = 'scheming_evil';
-      else expr = 'smirk_wink';
-    }
-
-    // Inferir objeto en mano coherente con la frase
-    let prop = esc.hand_prop || '';
-    if (!props.includes(prop)) {
-      if (/hierro|tonelada|metal|acero|chatarra/.test(text)) prop = 'iron_ingot';
-      else if (/credencial|contrato|documento|firma|ley/.test(text)) prop = 'secret_contract';
-      else if (/investig|auditoria|secreto|pista/.test(text)) prop = 'magnifying_glass';
-      else if (/tiempo|meses|segundo|hora|reloj/.test(text)) prop = 'pocket_watch';
-      else if (/software|codigo|chip|sistema/.test(text)) prop = 'microchip';
-      else prop = 'cash_bundle';
-    }
-
-    // Inferir rol visual del personaje
-    let role = esc.character_role || '';
-    if (!roles.includes(role)) {
-      if (/verguenza|poisson|comerciante|magnate|inversor/.test(text) && shot === 'protagonist_closeup') role = 'merchant_rich';
-      else if (/cientifico|nasa|medico/.test(text)) role = 'scientist';
-      else if (/ingeniero|obrero|motor/.test(text)) role = 'engineer';
-      else if (/militar|soldado|marine/.test(text)) role = 'military';
-      else if (/hacker|programador/.test(text)) role = 'hacker';
-      else role = 'con_artist';
-    }
-
-    const cleanT1 = String(esc.texto_1 || `ESCENA 0${idx + 1}`).toUpperCase().trim().slice(0, 14);
-    const cleanT2 = String(esc.texto_2 || 'HISTORIA REAL').toUpperCase().trim().slice(0, 14);
-
-    return {
-      ...esc,
-      shot_type: shot,
-      expression: expr,
-      hand_prop: prop,
-      character_role: role,
-      texto_1: cleanT1,
-      texto_2: cleanT2,
-      choice_a: (esc.choice_a || 'SI, CAERIA EN LA TRAMPA').toUpperCase().slice(0, 24),
-      choice_b: (esc.choice_b || 'NO, SOSPECHARIA AL INSTANTE').toUpperCase().slice(0, 24)
-    };
-  });
-}
-
-// ============================================================================
-// 4. EJECUCIÓN PRINCIPAL Y RENDERIZADOR v8.0
+// 3. MOTOR PRINCIPAL v9.0 (MOTOR GENERATIVO LIBRE PROGRAMADO POR IA)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload Pixel-Art Studio v8.0 desde URL...');
+    console.log('📥 Descargando payload Generativo v9.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -466,13 +374,18 @@ async function main() {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
 
-  const escenasStudio = prepareStudioScenes(payload.escenas || [], hash);
-  const subtitleChunks = buildSubtitleChunks(escenasStudio, payload.alignment, duracionExactaVideo);
+  const escenas = (payload.escenas || []).map((esc, idx) => ({
+    ...esc,
+    texto_1: cleanArcadeLabel(esc.texto_1 || `ACTO 0${idx + 1}`).slice(0, 15),
+    texto_2: cleanArcadeLabel(esc.texto_2 || 'HISTORIA REAL').slice(0, 15)
+  }));
+
+  const subtitleChunks = buildSubtitleChunks(escenas, payload.alignment, duracionExactaVideo);
 
   // Mezcla de Audio con bg_music2.mp3
   try {
     let hasSfx = false;
-    try { hasSfx = buildChiptuneSfxTrack(escenasStudio, duracionExactaVideo, hash); } catch (e) {}
+    try { hasSfx = buildChiptuneSfxTrack(escenas, duracionExactaVideo, hash); } catch (e) {}
 
     let bgMusicPath = path.resolve(__dirname, '../bg_music2.mp3');
     if (!fs.existsSync(bgMusicPath)) bgMusicPath = path.resolve('bg_music2.mp3');
@@ -493,8 +406,9 @@ async function main() {
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
 
-  const safeEscenasJson = JSON.stringify(escenasStudio).replace(/<\/script>/gi, '<\\/script>');
+  const safeEscenasJson = JSON.stringify(escenas).replace(/<\/script>/gi, '<\\/script>');
   const safeChunksJson = JSON.stringify(subtitleChunks).replace(/<\/script>/gi, '<\\/script>');
+  const safeSubrama = cleanArcadeLabel(payload.subrama || 'HISTORIA 8-BIT').slice(0, 28);
 
   const htmlContent = `
   <!DOCTYPE html>
@@ -523,66 +437,38 @@ async function main() {
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
       }
-      /* TU HUD CLÁSICO INTACTO */
+      /* HUD SUPERIOR LIMPIO (SIN EL CONTADOR DE ESCENAS A LA DERECHA) */
       .arcade-hud {
         position: absolute; top: 32px; left: 26px; right: 26px;
-        display: flex; justify-content: space-between; align-items: center;
+        display: flex; justify-content: center; align-items: center;
         background: rgba(8, 10, 22, 0.92);
         border: 4px solid #00f2fe;
         padding: 13px 18px;
         box-shadow: 0 8px 0 #000000;
         z-index: 20;
       }
-      .hud-tag { color: #ffd000; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; }
-      .hud-score { color: #ffffff; font-size: 12px; }
+      .hud-tag { color: #ffd000; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; text-align: center; }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 12px;
         background: linear-gradient(90deg, #ff2a5f, #ffd000, #00f2fe);
         width: 0%; z-index: 30;
       }
-
-      /* RÓTULOS PIXEL-ART NÍTIDOS CON SOPORTE TOTAL PARA Ñ Y TILDES (CERO PALABRAS ROTAS) */
       .label-box-top {
-        position: absolute; top: 108px; left: 50%; transform: translateX(-50%);
+        position: absolute; top: 106px; left: 50%; transform: translateX(-50%);
         background: #080a14; border: 4px solid #000000;
         box-shadow: inset 0 0 0 2px #2b3248, 0 8px 0 rgba(0,0,0,0.75);
-        padding: 14px 26px; color: #ffd166; font-size: 28px;
+        padding: 13px 24px; color: #ffd166; font-size: 25px;
         text-transform: uppercase; white-space: nowrap; letter-spacing: 2px;
         text-shadow: 4px 4px 0 #000000; z-index: 18;
       }
       .label-box-bot {
-        position: absolute; top: 882px; left: 50%; transform: translateX(-50%);
+        position: absolute; top: 884px; left: 50%; transform: translateX(-50%);
         background: #080a14; border: 4px solid #000000;
         box-shadow: inset 0 0 0 2px #2b3248, 0 8px 0 rgba(0,0,0,0.75);
-        padding: 14px 26px; color: #00f5d4; font-size: 28px;
+        padding: 13px 24px; color: #00f5d4; font-size: 25px;
         text-transform: uppercase; white-space: nowrap; letter-spacing: 2px;
         text-shadow: 4px 4px 0 #000000; z-index: 18;
       }
-
-      /* CAJA DE PREGUNTA FINAL RPG CON TEXTO REAL 100% LEGIBLE */
-      .rpg-choice-modal {
-        position: absolute; top: 380px; left: 48px; right: 48px;
-        background: #0f172a; border: 6px solid #eab308;
-        outline: 6px solid #000000;
-        box-shadow: 0 14px 0 rgba(0,0,0,0.85);
-        padding: 28px 26px; z-index: 22; display: none;
-      }
-      .rpg-question-title {
-        color: #ffffff; font-size: 18px; line-height: 1.5;
-        margin-bottom: 24px; text-align: center;
-        text-shadow: 3px 3px 0 #000000;
-      }
-      .rpg-option-row {
-        font-size: 17px; padding: 12px 14px; margin-bottom: 10px;
-        color: #64748b; text-shadow: 2px 2px 0 #000000;
-        display: flex; align-items: center; gap: 14px;
-      }
-      .rpg-option-row.selected {
-        color: #ffd166; background: rgba(255, 209, 102, 0.12);
-        border: 3px solid #ffd166;
-      }
-      .rpg-cursor { color: #80ed99; font-size: 20px; }
-
       .subtitle-container {
         position: absolute; bottom: 78px; left: 26px; right: 26px;
         min-height: 155px; display: flex; justify-content: center; align-items: center;
@@ -608,26 +494,11 @@ async function main() {
   <body>
     <div class="progress-bar" id="pbar"></div>
     <div class="arcade-hud">
-      <div class="hud-tag">${(payload.subrama || '8BIT HEISTS').slice(0, 24)}</div>
-      <div class="hud-score" id="hud-frame">ESC:01</div>
+      <div class="hud-tag">${safeSubrama}</div>
     </div>
 
-    <!-- RÓTULOS CON TIPOGRAFÍA ARCADE REAL (CERO PALABRAS ROTAS, SOPORTA Ñ Y TILDES) -->
-    <div class="label-box-top" id="label-top">1925</div>
-    <div class="label-box-bot" id="label-bot">HISTORIA</div>
-
-    <!-- MODAL RPG PARA LA PREGUNTA FINAL CON TEXTO LEGIBLE -->
-    <div class="rpg-choice-modal" id="rpg-modal">
-      <div class="rpg-question-title">¿QUÉ HABRÍAS HECHO TÚ EN SU LUGAR?</div>
-      <div class="rpg-option-row selected" id="rpg-opt-a">
-        <span class="rpg-cursor" id="cur-a">▶</span>
-        <span id="txt-opt-a">ACEPTAR EL TRATO</span>
-      </div>
-      <div class="rpg-option-row" id="rpg-opt-b">
-        <span class="rpg-cursor" id="cur-b" style="visibility:hidden">▶</span>
-        <span id="txt-opt-b">SOSPECHAR Y DENUNCIAR</span>
-      </div>
-    </div>
+    <div class="label-box-top" id="label-top">HISTORIA</div>
+    <div class="label-box-bot" id="label-bot">CASO REAL</div>
 
     <canvas id="pixel-canvas" width="720" height="1280"></canvas>
     <div class="crt-scanlines"></div>
@@ -641,15 +512,20 @@ async function main() {
       const subtitleChunks = ${safeChunksJson};
       const totalFrames = ${totalFrames};
 
+      // LIENZO PIXEL-ART DE 120x213 PÍXELES VIRTUALES (6x6 px reales continuos)
+      // Zona visible principal entre rótulos: X = 0..120, Y = 34..144 (GROUND_Y = 138)
       const COLS = 120;
       const ROWS = 213;
       const CELL = 6;
-      const GROUND_Y = 142;
+      const GROUND_Y = 138;
 
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1a1c2c'));
 
+      // ======================================================================
+      // API GRÁFICA PIXEL-ART COMPLETA PARA EL NODO PROGRAMADOR DE IA
+      // ======================================================================
       function setPx(x, y, color) {
         const cx = Math.round(x);
         const cy = Math.round(y);
@@ -682,7 +558,23 @@ async function main() {
         }
       }
 
-      function drawPixelLine(x0, y0, x1, y1, thickness, color) {
+      function fillBorderedCircle(cx, cy, radius, fillColor, borderColor = '#0b0c10') {
+        fillCircle(cx, cy, radius, borderColor);
+        if (radius > 1) fillCircle(cx, cy, radius - 1, fillColor);
+      }
+
+      function drawRing(cx, cy, radius, thickness = 2, color = '#fde047') {
+        const rOut = Math.round(radius);
+        const rIn = Math.max(0, rOut - thickness);
+        for (let r = -rOut; r <= rOut; r++) {
+          for (let c = -rOut; c <= rOut; c++) {
+            const d2 = c * c + r * r;
+            if (d2 <= rOut * rOut && d2 >= rIn * rIn) setPx(cx + c, cy + r, color);
+          }
+        }
+      }
+
+      function drawPixelLine(x0, y0, x1, y1, thickness = 2, color = '#ffffff') {
         let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
         let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
         let err = dx + dy;
@@ -697,349 +589,305 @@ async function main() {
         }
       }
 
-      // ======================================================================
-      // MOTOR DE OBJETOS DE MANO Y PROPS DETALLADOS (MISMO ESTILO DEL BILLETE)
-      // ======================================================================
-      function drawDetailedProp(propType, x, y) {
-        if (propType === 'secret_contract') {
-          fillBorderedRect(x - 14, y - 12, 28, 24, '#f8fafc', '#0b0c10');
-          fillRect(x - 10, y - 8, 20, 2, '#1e293b');
-          fillRect(x - 10, y - 4, 16, 2, '#64748b');
-          fillRect(x - 10, y, 18, 2, '#64748b');
-          fillCircle(x + 6, y + 5, 4, '#dc2626'); // Sello lacrado rojo
-          return;
-        }
-        if (propType === 'iron_ingot') {
-          // Viga / Lingote pesado de hierro remachado
-          fillBorderedRect(x - 16, y - 8, 32, 16, '#64748b', '#0b0c10');
-          fillRect(x - 14, y - 4, 28, 8, '#94a3b8');
-          [-10, 0, 10].forEach(rx => fillRect(x + rx, y - 2, 2, 4, '#1e293b'));
-          return;
-        }
-        if (propType === 'magnifying_glass') {
-          fillCircle(x + 4, y - 4, 9, '#0b0c10');
-          fillCircle(x + 4, y - 4, 7, '#38bdf8');
-          fillRect(x + 1, y - 7, 3, 3, '#ffffff');
-          drawPixelLine(x - 2, y + 2, x - 10, y + 10, 3, '#d97706');
-          return;
-        }
-        if (propType === 'pocket_watch') {
-          fillCircle(x, y, 10, '#eab308');
-          fillCircle(x, y, 7, '#ffffff');
-          fillRect(x, y - 5, 2, 5, '#0b0c10');
-          fillRect(x, y, 4, 2, '#dc2626');
-          return;
-        }
-        // Por defecto: Fajo de billetes verdes (el favorito del usuario)
-        fillBorderedRect(x - 16, y - 8, 34, 16, '#80ed99', '#064e3b');
-        fillBorderedRect(x - 13, y - 5, 28, 10, '#52b788', '#1b4332');
-        fillRect(x - 2, y - 8, 5, 16, '#eab308'); // Cinta dorada del fajo
-        fillCircle(x + 6, y, 3, '#1b4332');
-      }
+      function fillPolygon(points, fillColor, borderColor = '#0b0c10') {
+        if (!Array.isArray(points) || points.length < 3) return;
+        let minY = ROWS, maxY = 0;
+        points.forEach(p => {
+          if (p[1] < minY) minY = Math.floor(p[1]);
+          if (p[1] > maxY) maxY = Math.ceil(p[1]);
+        });
+        minY = Math.max(0, minY);
+        maxY = Math.min(ROWS - 1, maxY);
 
-      // ======================================================================
-      // CONSTRUCTOR UNIVERSAL DE PERSONAJES EXPRESIVOS DE MEDIO CUERPO
-      // (LA MISMA CALIDAD Y CONSISTENCIA DEL ESTAFADOR PARA TODOS LOS PLANOS)
-      // ======================================================================
-      function drawExpressiveCharacter(cx, headY, role, expression, isTalking, localFrame, scale = 1.0, facingLeft = false) {
-        let suitCol = '#334155', lapelCol = '#1e293b', tieCol = '#e63946', shirtCol = '#ffffff';
-        let hatCol = '#eab308', hatBand = '#991b1b', hairCol = '#2b1d14';
-
-        if (role === 'merchant_rich') { suitCol = '#1e3a8a'; lapelCol = '#172554'; tieCol = '#eab308'; hatCol = '#1e293b'; hatBand = '#eab308'; hairCol = '#475569'; }
-        else if (role === 'scientist') { suitCol = '#f8fafc'; lapelCol = '#cbd5e1'; tieCol = '#0284c7'; hatCol = null; hairCol = '#64748b'; }
-        else if (role === 'engineer') { suitCol = '#ea580c'; lapelCol = '#9a3412'; tieCol = '#facc15'; hatCol = '#facc15'; }
-        else if (role === 'military') { suitCol = '#3f6212'; lapelCol = '#1a2e05'; tieCol = '#1a2e05'; hatCol = '#365314'; }
-        else if (role === 'hacker') { suitCol = '#111827'; lapelCol = '#1f2937'; tieCol = '#10b981'; hatCol = null; }
-
-        const s = scale;
-        const bobY = headY + Math.round(Math.sin(localFrame * 0.15) * 1);
-
-        // Torso y Traje con solapas y corbata
-        const bodyW = Math.round(64 * s);
-        const bodyH = Math.round(42 * s);
-        fillBorderedRect(cx - Math.floor(bodyW / 2), bobY + Math.round(20 * s), bodyW, bodyH, suitCol, '#0b0c10');
-
-        for (let r = 0; r < Math.round(18 * s); r++) {
-          const vw = Math.max(2, Math.round(10 * s) - Math.floor(r * 0.5));
-          fillRect(cx - vw, bobY + Math.round(21 * s) + r, vw * 2, 1, shirtCol);
-        }
-        fillRect(cx - Math.round(3 * s), bobY + Math.round(26 * s), Math.round(6 * s), Math.round(18 * s), tieCol);
-        fillRect(cx - Math.round(20 * s), bobY + Math.round(36 * s), Math.round(7 * s), Math.round(3 * s), '#ffffff');
-        fillCircle(cx - Math.round(13 * s), bobY + Math.round(31 * s), Math.max(1, Math.round(2 * s)), '#e63946');
-
-        // Cuello y Cabeza con sombreado
-        const headW = Math.round(34 * s);
-        const headH = Math.round(32 * s);
-        const hx = cx - Math.floor(headW / 2);
-        const hy = bobY - Math.floor(headH / 2);
-
-        fillBorderedRect(cx - Math.round(8 * s), hy + headH - 2, Math.round(16 * s), Math.round(9 * s), '#d49a73', '#0b0c10');
-        fillBorderedRect(hx, hy, headW, headH, '#e6ad86', '#0b0c10');
-        fillRect(hx + headW - Math.round(7 * s), hy + 1, Math.round(6 * s), headH - 2, '#d49a73');
-
-        // Mejillas sonrojadas si está avergonzado (ashamed_red)
-        if (expression === 'ashamed_red') {
-          fillRect(hx + 3, bobY + 2, Math.round(6 * s), Math.round(4 * s), '#ef4444');
-          fillRect(hx + headW - Math.round(9 * s), bobY + 2, Math.round(6 * s), Math.round(4 * s), '#ef4444');
-        }
-
-        // Orejas
-        fillBorderedRect(hx - Math.round(3 * s), bobY - 3, Math.round(4 * s), Math.round(9 * s), '#d49a73', '#0b0c10');
-        fillBorderedRect(hx + headW - 1, bobY - 3, Math.round(4 * s), Math.round(9 * s), '#d49a73', '#0b0c10');
-
-        // Pelo y Sombrero
-        fillRect(hx, hy, headW, Math.round(6 * s), hairCol);
-        if (hatCol) {
-          fillBorderedRect(cx - Math.round(26 * s), hy - Math.round(2 * s), Math.round(52 * s), Math.round(5 * s), hatCol, '#0b0c10');
-          fillBorderedRect(cx - Math.round(18 * s), hy - Math.round(11 * s), Math.round(36 * s), Math.round(10 * s), hatCol, '#0b0c10');
-          fillRect(cx - Math.round(17 * s), hy - Math.round(4 * s), Math.round(34 * s), Math.round(2 * s), hatBand);
-        }
-
-        // Cejas y Ojos Expresivos
-        const isBlinking = (localFrame % 55 < 3);
-        fillRect(cx - Math.round(11 * s), bobY - Math.round(7 * s), Math.round(7 * s), 2, '#2b1d14');
-        fillRect(cx + Math.round(4 * s), bobY - Math.round(8 * s), Math.round(7 * s), 2, '#2b1d14');
-
-        if (expression === 'greedy_dollar') {
-          // Ojos de símbolo '$' dorado parpadeantes
-          fillBorderedRect(cx - Math.round(11 * s), bobY - Math.round(4 * s), Math.round(7 * s), Math.round(6 * s), '#eab308', '#0b0c10');
-          fillBorderedRect(cx + Math.round(4 * s), bobY - Math.round(4 * s), Math.round(7 * s), Math.round(6 * s), '#eab308', '#0b0c10');
-        } else if (isBlinking) {
-          fillRect(cx - Math.round(10 * s), bobY - 2, Math.round(6 * s), 2, '#2b1d14');
-          fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(6 * s), 2, '#2b1d14');
-        } else {
-          const pupilShift = facingLeft ? -1 : 1;
-          fillRect(cx - Math.round(10 * s), bobY - Math.round(4 * s), Math.round(6 * s), Math.round(4 * s), '#ffffff');
-          fillRect(cx - Math.round(8 * s) + pupilShift, bobY - Math.round(4 * s), Math.round(3 * s), Math.round(4 * s), '#2b1d14');
-
-          if (expression === 'smirk_wink' && (localFrame % 90 > 45)) {
-            fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(6 * s), 2, '#2b1d14');
-          } else {
-            fillRect(cx + Math.round(4 * s), bobY - Math.round(4 * s), Math.round(6 * s), Math.round(4 * s), '#ffffff');
-            fillRect(cx + Math.round(6 * s) + pupilShift, bobY - Math.round(4 * s), Math.round(3 * s), Math.round(4 * s), '#2b1d14');
+        for (let y = minY; y <= maxY; y++) {
+          const nodes = [];
+          let j = points.length - 1;
+          for (let i = 0; i < points.length; i++) {
+            const yi = points[i][1], yj = points[j][1];
+            const xi = points[i][0], xj = points[j][0];
+            if ((yi < y && yj >= y) || (yj < y && yi >= y)) {
+              nodes.push(xi + (y - yi) / (yj - yi) * (xj - xi));
+            }
+            j = i;
+          }
+          nodes.sort((a, b) => a - b);
+          for (let i = 0; i < nodes.length; i += 2) {
+            if (nodes[i + 1] !== undefined) {
+              for (let x = Math.round(nodes[i]); x <= Math.round(nodes[i + 1]); x++) {
+                setPx(x, y, fillColor);
+              }
+            }
           }
         }
+        if (borderColor) {
+          for (let i = 0; i < points.length; i++) {
+            const p1 = points[i];
+            const p2 = points[(i + 1) % points.length];
+            drawPixelLine(p1[0], p1[1], p2[0], p2[1], 1, borderColor);
+          }
+        }
+      }
 
-        // Gota de sudor azul si está en shock o avergonzado
-        if (expression === 'shock_sweat' || expression === 'ashamed_red') {
-          const dropY = hy + 4 + (Math.floor(localFrame * 0.3) % 8);
-          fillRect(hx + headW - 4, dropY, 3, 5, '#38bdf8');
+      function fillTriangle(x1, y1, x2, y2, x3, y3, fillColor, borderColor = '#0b0c10') {
+        fillPolygon([[x1, y1], [x2, y2], [x3, y3]], fillColor, borderColor);
+      }
+
+      // CIELO CON DITHERING 8-BIT + SUELO PERSONALIZABLE
+      function drawSky(skyTop = '#1e293b', skyMid = '#3b82f6', skyBot = '#93c5fd', groundCol = '#1e293b', horizonY = GROUND_Y) {
+        const bands = [skyTop, skyMid, skyBot];
+        const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
+        for (let r = 0; r < horizonY; r++) {
+          const bIdx = Math.min(bands.length - 1, Math.floor(r / bandH));
+          const nextIdx = Math.min(bands.length - 1, bIdx + 1);
+          const ratio = (r % bandH) / bandH;
+          for (let c = 0; c < COLS; c++) {
+            let col = bands[bIdx];
+            if (ratio > 0.72 && ((r + c) % 2 === 0)) col = bands[nextIdx];
+            grid[r][c] = col;
+          }
+        }
+        fillRect(0, horizonY, COLS, 2, '#0b0c10');
+        for (let r = horizonY + 2; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            grid[r][c] = ((r + c) % 6 === 0) ? '#0f172a' : groundCol;
+          }
+        }
+      }
+
+      function drawRoom(wallCol = '#3b2818', stripeCol = '#2b1d14', floorCol = '#78350f', groundY = GROUND_Y) {
+        fillRect(0, 0, COLS, groundY, wallCol);
+        for (let c = 0; c < COLS; c += 12) fillRect(c, 0, 2, groundY, stripeCol);
+        fillBorderedRect(0, groundY - 3, COLS, 4, '#d97706', '#0b0c10');
+        for (let r = groundY + 1; r < ROWS; r++) {
+          for (let c = 0; c < COLS; c++) {
+            grid[r][c] = ((r + c) % 5 === 0) ? '#451a03' : floorCol;
+          }
+        }
+      }
+
+      function drawStars(count = 20, localFrame = 0) {
+        for (let i = 0; i < count; i++) {
+          const sx = (i * 19 + 7) % COLS;
+          const sy = 36 + (i * 11) % 65;
+          if ((Math.floor(localFrame / 6) + i) % 3 !== 0) {
+            setPx(sx, sy, i % 4 === 0 ? '#fde047' : '#ffffff');
+          }
+        }
+      }
+
+      function drawClouds(count = 3, speed = 0.4, localFrame = 0, yMin = 44) {
+        for (let i = 0; i < count; i++) {
+          const cx = ((i * 38 - Math.floor(localFrame * speed)) % (COLS + 24) + (COLS + 24)) % (COLS + 24) - 12;
+          const cy = yMin + (i % 3) * 12;
+          fillBorderedRect(cx, cy, 18, 5, '#ffffff', '#cbd5e1');
+          fillRect(cx + 4, cy - 3, 10, 4, '#ffffff');
+        }
+      }
+
+      function drawFire(x, y, w = 16, h = 14, localFrame = 0) {
+        for (let c = 0; c < w; c += 2) {
+          const fh = Math.max(4, Math.round(h * (0.5 + 0.5 * Math.abs(Math.sin(localFrame * 0.35 + c)))));
+          fillRect(x + c, y - fh, 2, fh, '#dc2626');
+          fillRect(x + c, y - Math.floor(fh * 0.65), 2, Math.floor(fh * 0.65), '#f97316');
+          fillRect(x + c, y - Math.floor(fh * 0.35), 2, Math.floor(fh * 0.35), '#fde047');
+        }
+      }
+
+      // DIBUJAR SPRITE DESDE MATRIZ DE STRINGS (SI LA IA DEFINE UN MAPA DE PÍXELES A MEDIDA)
+      function drawSpriteMap(rowsArray, centerX, centerY, paletteMap, scale = 1, flipX = false) {
+        if (!Array.isArray(rowsArray) || rowsArray.length === 0) return;
+        const h = rowsArray.length;
+        const w = String(rowsArray[0]).length;
+        const destH = Math.round(h * scale);
+        const destW = Math.round(w * scale);
+        const startX = Math.round(centerX - destW / 2);
+        const startY = Math.round(centerY - destH / 2);
+
+        for (let dy = 0; dy < destH; dy++) {
+          const srcY = Math.min(h - 1, Math.floor((dy / destH) * h));
+          const rowStr = String(rowsArray[srcY]);
+          for (let dx = 0; dx < destW; dx++) {
+            const rawX = Math.min(w - 1, Math.floor((dx / destW) * w));
+            const srcX = flipX ? (w - 1 - rawX) : rawX;
+            const ch = rowStr[srcX];
+            if (ch && ch !== '0' && ch !== '.' && ch !== ' ') {
+              const col = (paletteMap && paletteMap[ch]) || '#ffd166';
+              setPx(startX + dx, startY + dy, col);
+            }
+          }
+        }
+      }
+
+      // DIBUJAR AVIÓN CAZA / COMERCIAL PARAMÉTRICO (MUY ÚTIL PARA ESCENAS DE AVIACIÓN)
+      function drawJet(cx, cy, color = '#94a3b8', scale = 1.0, angleTilt = 0, afterburner = true, localFrame = 0) {
+        const s = scale;
+        // Fuego de turbina
+        if (afterburner) {
+          const fl = Math.round((6 + (localFrame % 5)) * s);
+          fillTriangle(cx - Math.round(14 * s) - fl, cy + angleTilt, cx - Math.round(12 * s), cy - Math.round(3 * s), cx - Math.round(12 * s), cy + Math.round(3 * s), '#f97316', null);
+          fillTriangle(cx - Math.round(14 * s) - Math.floor(fl * 0.6), cy + angleTilt, cx - Math.round(12 * s), cy - Math.round(2 * s), cx - Math.round(12 * s), cy + Math.round(2 * s), '#fde047', null);
+        }
+        // Fuselaje delta furtivo
+        fillTriangle(cx + Math.round(16 * s), cy - angleTilt, cx - Math.round(14 * s), cy - Math.round(4 * s), cx - Math.round(14 * s), cy + Math.round(4 * s), color, '#0b0c10');
+        // Alas delta
+        fillTriangle(cx + Math.round(2 * s), cy, cx - Math.round(12 * s), cy - Math.round(12 * s), cx - Math.round(6 * s), cy, '#64748b', '#0b0c10');
+        fillTriangle(cx + Math.round(2 * s), cy, cx - Math.round(12 * s), cy + Math.round(12 * s), cx - Math.round(6 * s), cy, '#475569', '#0b0c10');
+        // Cabina de cristal
+        fillBorderedRect(cx + Math.round(2 * s), cy - Math.round(2 * s), Math.round(7 * s), Math.round(4 * s), '#38bdf8', '#0b0c10');
+      }
+
+      // BUSTO EXPRESIVO CONFIGURABLE (ESTILO ESTAFADOR / PILOTO / CIENTÍFICO)
+      function drawBusto(cx, headY, opts = {}, localFrame = 0) {
+        const s = opts.scale || 0.85;
+        const suitCol = opts.suitColor || '#334155';
+        const tieCol = opts.tieColor || '#e63946';
+        const hatCol = opts.hatColor !== undefined ? opts.hatColor : '#eab308';
+        const hairCol = opts.hairColor || '#2b1d14';
+        const skinCol = opts.skinColor || '#e6ad86';
+        const expr = opts.expression || 'normal';
+        const isTalking = opts.isTalking !== undefined ? opts.isTalking : true;
+
+        const bobY = headY + Math.round(Math.sin(localFrame * 0.15) * 1);
+        const bodyW = Math.round(58 * s), bodyH = Math.round(36 * s);
+        fillBorderedRect(cx - Math.floor(bodyW / 2), bobY + Math.round(18 * s), bodyW, bodyH, suitCol, '#0b0c10');
+        fillRect(cx - Math.round(6 * s), bobY + Math.round(19 * s), Math.round(12 * s), Math.round(14 * s), '#ffffff');
+        fillRect(cx - Math.round(2 * s), bobY + Math.round(22 * s), Math.round(4 * s), Math.round(16 * s), tieCol);
+
+        const headW = Math.round(32 * s), headH = Math.round(30 * s);
+        const hx = cx - Math.floor(headW / 2), hy = bobY - Math.floor(headH / 2);
+        fillBorderedRect(cx - Math.round(7 * s), hy + headH - 2, Math.round(14 * s), Math.round(8 * s), skinCol, '#0b0c10');
+        fillBorderedRect(hx, hy, headW, headH, skinCol, '#0b0c10');
+        fillRect(hx, hy, headW, Math.round(5 * s), hairCol);
+
+        if (hatCol) {
+          fillBorderedRect(cx - Math.round(24 * s), hy - Math.round(2 * s), Math.round(48 * s), Math.round(5 * s), hatCol, '#0b0c10');
+          fillBorderedRect(cx - Math.round(16 * s), hy - Math.round(10 * s), Math.round(32 * s), Math.round(9 * s), hatCol, '#0b0c10');
         }
 
-        // Nariz y Boca
-        fillRect(cx - 2, bobY + 1, Math.round(4 * s), Math.round(4 * s), '#c6865e');
+        // Ojos
+        const blink = (localFrame % 55 < 3);
+        if (expr === 'visor') {
+          // Casco / Visor de piloto de caza
+          fillBorderedRect(cx - Math.round(12 * s), bobY - Math.round(6 * s), Math.round(24 * s), Math.round(8 * s), '#0284c7', '#0b0c10');
+          fillRect(cx - Math.round(9 * s), bobY - Math.round(4 * s), Math.round(6 * s), 2, '#bae6fd');
+        } else if (blink) {
+          fillRect(cx - Math.round(9 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
+          fillRect(cx + Math.round(4 * s), bobY - 2, Math.round(5 * s), 2, '#0b0c10');
+        } else {
+          fillRect(cx - Math.round(9 * s), bobY - Math.round(4 * s), Math.round(5 * s), Math.round(4 * s), '#ffffff');
+          fillRect(cx - Math.round(7 * s), bobY - Math.round(4 * s), Math.round(3 * s), Math.round(4 * s), '#0b0c10');
+          fillRect(cx + Math.round(4 * s), bobY - Math.round(4 * s), Math.round(5 * s), Math.round(4 * s), '#ffffff');
+          fillRect(cx + Math.round(6 * s), bobY - Math.round(4 * s), Math.round(3 * s), Math.round(4 * s), '#0b0c10');
+        }
+
         const mouthOpen = isTalking && (Math.floor(localFrame / 3) % 2 === 0);
         if (mouthOpen) {
-          fillBorderedRect(cx - Math.round(6 * s), bobY + Math.round(7 * s), Math.round(12 * s), Math.round(5 * s), '#ffffff', '#2b1d14');
-          fillRect(cx - Math.round(4 * s), bobY + Math.round(9 * s), Math.round(8 * s), 2, '#991b1b');
+          fillBorderedRect(cx - Math.round(5 * s), bobY + Math.round(6 * s), Math.round(10 * s), Math.round(5 * s), '#ffffff', '#0b0c10');
         } else {
-          fillRect(cx - Math.round(5 * s), bobY + Math.round(8 * s), Math.round(10 * s), 2, '#2b1d14');
+          fillRect(cx - Math.round(5 * s), bobY + Math.round(7 * s), Math.round(10 * s), 2, '#0b0c10');
         }
       }
 
-      // ======================================================================
-      // LAS 8 ESCENAS DE ESTUDIO (TODAS CON LA CONSISTENCIA DEL ESTAFADOR)
-      // ======================================================================
-
-      // 1. PRIMER PLANO DEL PROTAGONISTA CON OBJETO CONTEXTUAL EN MANO
-      function renderProtagonistCloseup(esc, progress, localFrame) {
-        fillRect(0, 0, COLS, ROWS, '#4a3222');
-        for (let c = 0; c < COLS; c += 12) fillRect(c, 0, 1, ROWS, '#362317');
-        fillBorderedRect(10, 42, 30, 22, '#e2e8f0', '#2b1d14');
-        for (let r = 47; r < 59; r += 3) fillRect(14, r, 22, 1, '#94a3b8');
-
-        // Cuadro derecho en pared
-        fillBorderedRect(82, 40, 28, 24, '#1e293b', '#eab308');
-        fillRect(86, 45, 20, 14, '#38bdf8');
-
-        drawExpressiveCharacter(58, 84, esc.character_role, esc.expression, true, localFrame, 1.0, false);
-
-        // Mano detallada sosteniendo el objeto exacto de la escena
-        const handY = 114 - Math.round(Math.sin(progress * Math.PI) * 5);
-        drawDetailedProp(esc.hand_prop, 66, handY);
-        fillBorderedRect(46, handY - 2, 18, 14, '#e6ad86', '#0b0c10');
-        fillRect(50, handY - 2, 1, 9, '#0b0c10');
-        fillRect(54, handY - 2, 1, 9, '#0b0c10');
-        fillRect(58, handY - 2, 1, 9, '#0b0c10');
+      // HUMANO DE CUERPO COMPLETO ARTICULADO
+      function drawHuman(x, y, color = '#38bdf8', hatColor = null, isMoving = true, localFrame = 0, facingLeft = false) {
+        const step = isMoving ? (Math.floor(localFrame / 4) % 2) : 0;
+        fillRect(x - 4, y + 1, 9, 2, 'rgba(0,0,0,0.4)');
+        fillBorderedRect(x - 3, y - 7 + (step ? -2 : 0), 3, 8, '#1e293b', '#0b0c10');
+        fillBorderedRect(x + 1, y - 7 + (step ? 0 : -2), 3, 8, '#1e293b', '#0b0c10');
+        fillBorderedRect(x - 4, y - 18, 9, 12, color, '#0b0c10');
+        fillBorderedRect(x - 3, y - 26, 7, 9, '#e6ad86', '#0b0c10');
+        setPx(facingLeft ? x - 2 : x + 2, y - 22, '#0b0c10');
+        if (hatColor) fillBorderedRect(x - 5, y - 28, 11, 4, hatColor, '#0b0c10');
       }
 
-      // 2. NEGOCIACIÓN / REUNIÓN EN SUITE PRIVADA ENTRE DOS PERSONAJES GRANDES
-      function renderTwoCharactersDeal(esc, progress, localFrame) {
-        // Suite de lujo en el Hotel Crillon (paredes burdeos, cortinas doradas y lámpara)
-        fillRect(0, 0, COLS, ROWS, '#3b1d2e');
-        for (let c = 0; c < COLS; c += 14) fillRect(c, 0, 2, ROWS, '#2a1220');
-        // Ventanal central de la suite
-        fillBorderedRect(38, 36, 44, 46, '#1e293b', '#eab308');
-        fillRect(59, 36, 2, 46, '#eab308');
-        fillRect(38, 58, 44, 2, '#eab308');
+      // TEXTO PIXELADO 3x5 DENTRO DEL LIENZO (PARA MONITORES, RADARES Y PIZARRAS)
+      const FONT_3X5 = {
+        'A': ['010','101','111','101','101'], 'B': ['110','101','110','101','110'],
+        'C': ['111','100','100','100','111'], 'D': ['110','101','101','101','110'],
+        'E': ['111','100','110','100','111'], 'F': ['111','100','110','100','100'],
+        'G': ['111','100','101','101','111'], 'H': ['101','101','111','101','101'],
+        'I': ['111','010','010','010','111'], 'J': ['001','001','001','101','111'],
+        'K': ['101','101','110','101','101'], 'L': ['100','100','100','100','111'],
+        'M': ['101','111','101','101','101'], 'N': ['111','101','101','101','101'],
+        'O': ['111','101','101','101','111'], 'P': ['111','101','111','100','100'],
+        'Q': ['111','101','101','111','001'], 'R': ['111','101','110','101','101'],
+        'S': ['111','100','111','001','111'], 'T': ['111','010','010','010','010'],
+        'U': ['101','101','101','101','111'], 'V': ['101','101','101','101','010'],
+        'W': ['101','101','101','111','101'], 'X': ['101','101','010','101','101'],
+        'Y': ['101','101','010','010','010'], 'Z': ['111','001','010','100','111'],
+        '0': ['111','101','101','101','111'], '1': ['010','110','010','010','111'],
+        '2': ['111','001','111','100','111'], '3': ['111','001','111','001','111'],
+        '4': ['101','101','111','001','001'], '5': ['111','100','111','001','111'],
+        '6': ['111','100','111','101','111'], '7': ['111','001','001','001','001'],
+        '8': ['111','101','111','101','111'], '9': ['111','101','111','001','111'],
+        '$': ['010','111','010','111','010'], '%': ['101','001','010','100','101'],
+        '!': ['010','010','010','000','010'], '?': ['111','001','011','000','010'],
+        '+': ['000','010','111','010','000'], '-': ['000','000','111','000','000'],
+        ':': ['000','010','000','010','000']
+      };
 
-        // Personaje Izquierdo (Estafador/Líder) y Personaje Derecho (Magnate/Objetivo) con el mismo estilo
-        const leftTalks = progress < 0.55;
-        drawExpressiveCharacter(28, 86, 'con_artist', 'scheming_evil', leftTalks, localFrame, 0.78, false);
-        drawExpressiveCharacter(92, 86, 'merchant_rich', 'greedy_dollar', !leftTalks, localFrame + 9, 0.78, true);
-
-        // Mesa de caoba en primer plano donde se desliza el maletín/contrato de izquierda a derecha
-        fillBorderedRect(8, 126, 104, 18, '#78350f', '#0b0c10');
-        fillRect(10, 128, 100, 3, '#b45309');
-
-        const propX = Math.round(38 + progress * 44);
-        drawDetailedProp(esc.hand_prop, propX, 120);
-      }
-
-      // 3. LA TORRE EIFFEL / MONUMENTO DE HIERRO Y BÁSCULA DE 7.000 TONELADAS
-      function renderLandmarkMonument(esc, progress, localFrame) {
-        // Cielo de París al atardecer con dithering
-        const bands = ['#1e1b4b', '#312e81', '#6d28d9', '#f97316'];
-        for (let r = 0; r < GROUND_Y; r++) {
-          const bIdx = Math.min(3, Math.floor(r / 35));
-          fillRect(0, r, COLS, 1, bands[bIdx]);
-        }
-        fillRect(0, GROUND_Y, COLS, ROWS - GROUND_Y, '#1e293b');
-
-        // Silueta detallada de la Torre Eiffel / Monumento de Hierro en el centro-derecha (X=76)
-        const tx = 76;
-        // Base en arco de la Torre Eiffel
-        fillBorderedRect(tx - 22, GROUND_Y - 18, 12, 18, '#b45309', '#0b0c10');
-        fillBorderedRect(tx + 10, GROUND_Y - 18, 12, 18, '#b45309', '#0b0c10');
-        fillBorderedRect(tx - 20, GROUND_Y - 22, 40, 5, '#d97706', '#0b0c10');
-        // Segundo cuerpo
-        fillBorderedRect(tx - 13, GROUND_Y - 48, 26, 26, '#b45309', '#0b0c10');
-        fillBorderedRect(tx - 15, GROUND_Y - 52, 30, 4, '#d97706', '#0b0c10');
-        // Aguja superior y antena
-        fillBorderedRect(tx - 6, GROUND_Y - 86, 12, 34, '#b45309', '#0b0c10');
-        fillRect(tx - 1, GROUND_Y - 98, 2, 12, '#fde047');
-        // Entramado de vigas de hierro
-        for (let y = GROUND_Y - 82; y < GROUND_Y - 22; y += 8) {
-          fillRect(tx - 5, y, 10, 2, '#451a03');
-        }
-
-        // Nuestro protagonista en primer plano a la izquierda mostrando el lingote/acero
-        drawExpressiveCharacter(30, 92, esc.character_role, 'proud_confident', true, localFrame, 0.78, false);
-        drawDetailedProp('iron_ingot', 42, 118);
-      }
-
-      // 4. ENTREGA DEL BOTÍN ($70,000) CON FAJOS DE BILLETES APILÁNDOSE EN LA MESA
-      function renderCashHeistTally(esc, progress, localFrame) {
-        fillRect(0, 0, COLS, ROWS, '#0f172a');
-        // Bóveda dorada abierta al fondo
-        fillCircle(60, 74, 34, '#334155');
-        fillCircle(60, 74, 28, '#eab308');
-        fillCircle(60, 74, 22, '#090d16');
-
-        // Protagonista con ojos de '$' en el centro
-        drawExpressiveCharacter(34, 88, esc.character_role, 'greedy_dollar', true, localFrame, 0.82, false);
-
-        // Mesa en primer plano donde crecen 3 columnas de fajos de billetes verdes según progress
-        fillBorderedRect(8, 128, 104, 16, '#451a03', '#0b0c10');
-        const numStacks = Math.max(2, Math.floor(progress * 18));
-        for (let i = 0; i < numStacks; i++) {
-          const col = i % 3;
-          const row = Math.floor(i / 3);
-          const sx = 62 + col * 16;
-          const sy = 122 - row * 7;
-          fillBorderedRect(sx, sy, 14, 6, '#80ed99', '#064e3b');
-          fillRect(sx + 5, sy, 3, 6, '#eab308');
-        }
-      }
-
-      // 5. ESCRITORIO DE FALSIFICACIÓN DE CREDENCIALES Y SELLO OFICIAL ROJO
-      function renderDocumentForgeryDesk(esc, progress, localFrame) {
-        fillRect(0, 0, COLS, ROWS, '#362317');
-        // Pergamino / Credencial oficial sobre el escritorio
-        fillBorderedRect(18, 42, 84, 90, '#fef3c7', '#0b0c10');
-        fillBorderedRect(22, 46, 76, 82, '#fffbeb', '#d97706');
-
-        // Cabecera oficial dorada
-        fillBorderedRect(42, 52, 36, 12, '#eab308', '#0b0c10');
-
-        // Líneas de texto escribiéndose en tiempo real con una mano y pluma estilográfica
-        const lines = Math.min(5, Math.floor(progress * 6) + 1);
-        for (let i = 0; i < lines; i++) {
-          const ly = 72 + i * 9;
-          const lw = (i === lines - 1) ? Math.round((progress * 6 % 1) * 54) : 54;
-          fillRect(32, ly, Math.max(8, lw), 3, '#1e293b');
-        }
-
-        // Mano del falsificador con pluma y Sello Oficial Rojo estampándose en progress > 0.45
-        if (progress > 0.45) {
-          fillCircle(74, 110, 11, '#dc2626');
-          fillCircle(74, 110, 7, '#991b1b');
-          fillRect(71, 107, 6, 6, '#fde047');
-        }
-      }
-
-      // 6. HUIDA EN EL TREN NOCTURNO A VIENA (LOCOMOTORA EXPRESO CON VENTANAS ILUMINADAS)
-      function renderNightTrainEscape(esc, progress, localFrame) {
-        // Cielo nocturno estrellado con luna llena
-        fillRect(0, 0, COLS, GROUND_Y, '#090d16');
-        fillCircle(94, 48, 10, '#fef08a');
-        fillCircle(90, 46, 8, '#090d16'); // Luna creciente
-        for (let s = 0; s < 20; s++) {
-          setPx((s * 19) % COLS, 36 + (s * 7) % 45, '#ffffff');
-        }
-
-        // Vías del tren con traviesas desplazándose a toda velocidad
-        fillRect(0, GROUND_Y - 12, COLS, 24, '#1e293b');
-        fillRect(0, GROUND_Y - 10, COLS, 3, '#94a3b8');
-        const railShift = localFrame * 3;
-        for (let c = 0; c < COLS; c += 8) {
-          const rx = ((c - railShift) % COLS + COLS) % COLS;
-          fillRect(rx, GROUND_Y - 7, 4, 4, '#78350f');
-        }
-
-        // Vagón Expreso Nocturno detallado cruzando la escena con humo blanco
-        const trainX = 14 + Math.round(progress * 18);
-        const trainY = GROUND_Y - 46;
-        // Humo de la locomotora
-        for (let p = 0; p < 5; p++) {
-          const px = trainX + 70 - ((localFrame * 2 + p * 12) % 55);
-          const py = trainY - 8 - p * 4;
-          fillCircle(px, py, 4 + (p % 3), '#cbd5e1');
-        }
-        // Chasis del vagón y techo
-        fillBorderedRect(trainX, trainY, 82, 34, '#1e3a8a', '#0b0c10');
-        fillBorderedRect(trainX - 2, trainY - 4, 86, 6, '#eab308', '#0b0c10');
-        fillRect(trainX + 2, trainY + 22, 78, 3, '#eab308');
-
-        // 3 Grandes ventanillas iluminadas mostrando al estafador con su sombrero dentro
-        [trainX + 8, trainX + 32, trainX + 56].forEach((wx, idx) => {
-          fillBorderedRect(wx, trainY + 6, 18, 14, '#fef08a', '#0b0c10');
-          if (idx === 1) {
-            // Silueta de Lustig con su sombrero amarillo dentro del tren
-            fillRect(wx + 4, trainY + 9, 10, 3, '#eab308');
-            fillRect(wx + 6, trainY + 12, 6, 5, '#e6ad86');
-            fillRect(wx + 5, trainY + 17, 8, 3, '#334155');
+      function drawTinyText(str, centerX, startY, color = '#ffffff', scale = 2) {
+        const clean = String(str || '').toUpperCase().replace(/[^A-Z0-9$%!?+: -]/g, '').slice(0, 14);
+        if (!clean) return;
+        const charW = 3 * scale, gap = 1 * scale;
+        const totalW = clean.length * (charW + gap) - gap;
+        let cx = Math.max(2, Math.floor(centerX - totalW / 2));
+        for (let i = 0; i < clean.length; i++) {
+          const glyph = FONT_3X5[clean[i]];
+          if (glyph) {
+            for (let r = 0; r < 5; r++) {
+              for (let c = 0; c < 3; c++) {
+                if (glyph[r][c] === '1') fillRect(cx + c * scale, startY + r * scale, scale, scale, color);
+              }
+            }
           }
-        });
-
-        // Ruedas del tren girando
-        [trainX + 12, trainX + 30, trainX + 52, trainX + 70].forEach(whlX => {
-          fillCircle(whlX, GROUND_Y - 12, 6, '#0b0c10');
-          fillCircle(whlX, GROUND_Y - 12, 3, '#ef4444');
-        });
+          cx += charW + gap;
+        }
       }
 
-      // 7. PORTADA DE PRENSA / PERIÓDICO CON RETRATO Y LUPA
-      function renderPressHeadline(esc, progress, localFrame) {
-        fillRect(0, 0, COLS, ROWS, '#1e293b');
-        // Página de periódico
-        fillBorderedRect(14, 38, 92, 96, '#e2e8f0', '#0b0c10');
-        fillRect(18, 42, 84, 10, '#0f172a'); // Cabecera del diario
+      // Objeto API unificado inyectado en las funciones generadas por la IA
+      const sandboxApi = {
+        COLS, ROWS, GROUND_Y,
+        setPx, px: setPx,
+        fillRect, rect: fillRect,
+        fillBorderedRect, borderedRect: fillBorderedRect, box: fillBorderedRect,
+        fillCircle, circle: fillCircle,
+        fillBorderedCircle, borderedCircle: fillBorderedCircle,
+        drawRing, ring: drawRing,
+        drawPixelLine, line: drawPixelLine,
+        fillPolygon, polygon: fillPolygon,
+        fillTriangle, triangle: fillTriangle,
+        drawSky, sky: drawSky,
+        drawRoom, room: drawRoom,
+        drawStars, stars: drawStars,
+        drawClouds, clouds: drawClouds,
+        drawFire, fire: drawFire,
+        drawSpriteMap, spriteMap: drawSpriteMap,
+        drawJet, jet: drawJet,
+        drawBusto, busto: drawBusto,
+        drawHuman, human: drawHuman,
+        drawTinyText, text: drawTinyText,
+        sin: Math.sin, cos: Math.cos, abs: Math.abs, floor: Math.floor,
+        round: Math.round, min: Math.min, max: Math.max, PI: Math.PI
+      };
 
-        // Foto del protagonista dentro del periódico
-        fillBorderedRect(22, 58, 38, 42, '#94a3b8', '#0b0c10');
-        drawExpressiveCharacter(41, 78, esc.character_role, 'smirk_wink', false, localFrame, 0.45, false);
-
-        // Columnas de noticias al lado de la foto
-        for (let r = 60; r < 124; r += 7) {
-          fillRect(66, r, 32, 3, '#334155');
-          if (r > 102) fillRect(22, r, 40, 3, '#334155');
+      // Compilar las funciones personalizadas que diseñó el Nodo Programador de IA
+      const compiledRenderers = escenas.map((esc, idx) => {
+        if (esc.js_code && typeof esc.js_code === 'string' && esc.js_code.trim().length > 10) {
+          try {
+            return new Function('api', 'progress', 'localFrame', \`with (api) { \${esc.js_code} }\`);
+          } catch (e) {
+            console.warn('⚠️ Error compilando escena ' + idx + ':', e.message);
+            return null;
+          }
         }
+        return null;
+      });
 
-        // Lupa escaneando la noticia suavemente
-        const lx = Math.round(45 + Math.sin(progress * Math.PI * 2) * 20);
-        const ly = Math.round(85 + Math.cos(progress * Math.PI * 2) * 14);
-        drawDetailedProp('magnifying_glass', lx, ly);
+      function renderFallbackScene(esc, progress, localFrame) {
+        drawSky('#0f172a', '#1e293b', '#334155', '#090d16', GROUND_Y);
+        drawStars(18, localFrame);
+        drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', hatColor: null, isTalking: true }, localFrame);
       }
 
       function flushGridToCanvas() {
@@ -1052,17 +900,8 @@ async function main() {
       }
 
       const subBox = document.getElementById('sub-box');
-      const hudFrame = document.getElementById('hud-frame');
       const labelTop = document.getElementById('label-top');
       const labelBot = document.getElementById('label-bot');
-      const rpgModal = document.getElementById('rpg-modal');
-      const rpgOptA = document.getElementById('rpg-opt-a');
-      const rpgOptB = document.getElementById('rpg-opt-b');
-      const curA = document.getElementById('cur-a');
-      const curB = document.getElementById('cur-b');
-      const txtOptA = document.getElementById('txt-opt-a');
-      const txtOptB = document.getElementById('txt-opt-b');
-
       let lastChunkIdx = -2;
       let lastSceneIdx = -2;
 
@@ -1076,43 +915,29 @@ async function main() {
         });
         if (activeIdx === -1 && escenas.length > 0) activeIdx = 0;
 
-        hudFrame.textContent = 'ESC:' + String(activeIdx + 1).padStart(2, '0') + '/' + String(escenas.length).padStart(2, '0');
-
         const esc = escenas[activeIdx] || {};
         const localT = Math.max(0, t - (esc.inicio || 0));
         const durEsc = Math.max(0.5, (esc.fin || 4) - (esc.inicio || 0));
         const progress = Math.max(0, Math.min(1, localT / durEsc));
         const localFrame = Math.floor(localT * 30);
 
-        const shot = esc.shot_type || 'protagonist_closeup';
-
-        // Actualizar rótulos superiores/inferiores con soporte completo de Ñ y tildes
         if (activeIdx !== lastSceneIdx) {
           lastSceneIdx = activeIdx;
           labelTop.textContent = esc.texto_1 || 'HISTORIA';
           labelBot.textContent = esc.texto_2 || 'CASO REAL';
-          txtOptA.textContent = esc.choice_a || 'SI, CAERIA EN LA TRAMPA';
-          txtOptB.textContent = esc.choice_b || 'NO, DESCONFIARIA AL INSTANTE';
         }
 
-        // Mostrar u ocultar el modal RPG interactivo con texto real en la escena final
-        if (shot === 'final_rpg_decision') {
-          rpgModal.style.display = 'block';
-          const selectB = (Math.floor(localFrame / 18) % 2 === 1);
-          rpgOptA.classList.toggle('selected', !selectB);
-          rpgOptB.classList.toggle('selected', selectB);
-          curA.style.visibility = selectB ? 'hidden' : 'visible';
-          curB.style.visibility = selectB ? 'visible' : 'hidden';
-          renderProtagonistCloseup(esc, progress, localFrame);
+        // Limpiar lienzo y ejecutar el código gráfico hecho a medida para esta escena
+        drawSky('#0f172a', '#1e293b', '#334155', '#090d16', GROUND_Y);
+        const customFn = compiledRenderers[activeIdx];
+        if (customFn) {
+          try {
+            customFn(sandboxApi, progress, localFrame);
+          } catch (err) {
+            renderFallbackScene(esc, progress, localFrame);
+          }
         } else {
-          rpgModal.style.display = 'none';
-          if (shot === 'two_characters_deal') renderTwoCharactersDeal(esc, progress, localFrame);
-          else if (shot === 'landmark_monument') renderLandmarkMonument(esc, progress, localFrame);
-          else if (shot === 'cash_heist_tally') renderCashHeistTally(esc, progress, localFrame);
-          else if (shot === 'document_forgery_desk') renderDocumentForgeryDesk(esc, progress, localFrame);
-          else if (shot === 'night_train_escape') renderNightTrainEscape(esc, progress, localFrame);
-          else if (shot === 'press_headline') renderPressHeadline(esc, progress, localFrame);
-          else renderProtagonistCloseup(esc, progress, localFrame);
+          renderFallbackScene(esc, progress, localFrame);
         }
 
         flushGridToCanvas();
@@ -1161,7 +986,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v8.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Generativo Libre v9.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1174,13 +999,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final Pixel-Art Studio v8.0...');
+  console.log('🔊 Ensamblando MP4 final v9.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v8.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Generativo Libre v9.0 generado con éxito!');
   process.exit(0);
 }
 
