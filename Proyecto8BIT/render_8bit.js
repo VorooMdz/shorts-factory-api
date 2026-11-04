@@ -38,10 +38,11 @@ function fixSpanishN(str) {
     .replace(/\bsenal(es)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
     .replace(/\bdiseno(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
     .replace(/\bsueno(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
-    .replace(/\bnino(s|a|as)?\b/gi, (m) => m.replace(/n(?=o|a)/i, (n) => n === 'N' ? 'Ñ' : 'ñ'));
+    .replace(/\bano(s)?\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+    .replace(/\bcanaveral\b/gi, 'CAÑAVERAL');
 }
 
-function cleanArcadeLabel(str) {
+function cleanArcadeText(str) {
   return fixSpanishN(str)
     .toUpperCase()
     .replace(/[ÁÀÄÂ]/g, 'A')
@@ -297,7 +298,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 }
 
 // ============================================================================
-// 2. SINTETIZADOR CHIPTUNE 8-BIT PROCEDURAL
+// 2. SINTETIZADOR CHIPTUNE SINCRONIZADO CON CADA SUB-ESCENA (BEAT CUTS)
 // ============================================================================
 function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   const allTypes = [
@@ -308,40 +309,49 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   function get8BitRecipe(type, pitchMod) {
     const p = pitchMod.toFixed(3);
     const catalog = {
-      coin_8bit: { expr: `0.18*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`, dur: 0.42 },
-      laser_8bit: { expr: `0.16*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.32 },
-      explosion_8bit: { expr: `0.25*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.65 },
-      powerup_8bit: { expr: `0.16*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`, dur: 0.45 },
-      alarm_8bit: { expr: `0.16*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`, dur: 0.55 },
-      glitch_8bit: { expr: `0.16*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`, dur: 0.35 },
-      jump_8bit: { expr: `0.17*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`, dur: 0.30 },
-      error_8bit: { expr: `0.20*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`, dur: 0.45 },
-      typing_8bit: { expr: `0.15*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`, dur: 0.30 },
-      level_clear_8bit: { expr: `0.16*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`, dur: 0.65 }
+      coin_8bit: { expr: `0.17*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`, dur: 0.38 },
+      laser_8bit: { expr: `0.15*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.30 },
+      explosion_8bit: { expr: `0.24*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.60 },
+      powerup_8bit: { expr: `0.15*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`, dur: 0.42 },
+      alarm_8bit: { expr: `0.15*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`, dur: 0.50 },
+      glitch_8bit: { expr: `0.15*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`, dur: 0.32 },
+      jump_8bit: { expr: `0.16*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`, dur: 0.28 },
+      error_8bit: { expr: `0.19*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`, dur: 0.42 },
+      typing_8bit: { expr: `0.14*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`, dur: 0.28 },
+      level_clear_8bit: { expr: `0.15*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`, dur: 0.55 }
     };
     return catalog[type] || catalog.coin_8bit;
   }
 
   const inputs = [];
   const filterParts = [];
+  let sfxIndex = 0;
 
   escenas.forEach((esc, idx) => {
-    let rawType = String(esc.sfx || '').toLowerCase().trim();
-    if (!allTypes.includes(rawType)) {
-      rawType = allTypes[(videoHash + idx * 3) % allTypes.length];
-    }
-    const pitchMod = 0.90 + (((videoHash + idx * 13) % 21) / 100);
-    const recipe = get8BitRecipe(rawType, pitchMod);
-    const startSec = idx === 0 ? 0.04 : Math.max(0.05, Number(esc.inicio) || 0);
-    const delayMs = Math.round(startSec * 1000);
+    const startEsc = Number(esc.inicio) || 0;
+    const endEsc = Number(esc.fin) || (startEsc + 4);
+    const durEsc = Math.max(0.4, endEsc - startEsc);
+    const beats = Array.isArray(esc.sub_escenas) && esc.sub_escenas.length > 0 ? esc.sub_escenas : [esc];
 
-    inputs.push(`-f lavfi -i "aevalsrc='${recipe.expr}':s=44100:d=${recipe.dur}"`);
-    filterParts.push(`[${idx}:a]adelay=${delayMs}|${delayMs},apad=whole_dur=${totalDuration.toFixed(3)}[s${idx}]`);
+    beats.forEach((beat, bIdx) => {
+      let rawType = String(beat.sfx || esc.sfx || '').toLowerCase().trim();
+      if (!allTypes.includes(rawType)) {
+        rawType = allTypes[(videoHash + sfxIndex * 3) % allTypes.length];
+      }
+      const pitchMod = 0.90 + (((videoHash + sfxIndex * 13) % 21) / 100);
+      const recipe = get8BitRecipe(rawType, pitchMod);
+      const beatStartSec = (idx === 0 && bIdx === 0) ? 0.04 : Math.max(0.05, startEsc + (bIdx / beats.length) * durEsc);
+      const delayMs = Math.round(beatStartSec * 1000);
+
+      inputs.push(`-f lavfi -i "aevalsrc='${recipe.expr}':s=44100:d=${recipe.dur}"`);
+      filterParts.push(`[${sfxIndex}:a]adelay=${delayMs}|${delayMs},apad=whole_dur=${totalDuration.toFixed(3)}[s${sfxIndex}]`);
+      sfxIndex++;
+    });
   });
 
   if (inputs.length === 0) return false;
-  const mixLabels = escenas.map((_, idx) => `[s${idx}]`).join('');
-  const filterComplex = `${filterParts.join(';')};${mixLabels}amix=inputs=${escenas.length}:duration=longest:dropout_transition=0:normalize=0[sfxout]`;
+  const mixLabels = Array.from({ length: sfxIndex }, (_, i) => `[s${i}]`).join('');
+  const filterComplex = `${filterParts.join(';')};${mixLabels}amix=inputs=${sfxIndex}:duration=longest:dropout_transition=0:normalize=0[sfxout]`;
 
   try {
     execSync(`ffmpeg -y ${inputs.join(' ')} -filter_complex "${filterComplex}" -map "[sfxout]" -ar 44100 -ac 2 -t ${totalDuration.toFixed(3)} -c:a pcm_s16le hook_sfx.wav`, { stdio: 'ignore' });
@@ -352,12 +362,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR GENERATIVO 100% LIBRE v12.0
+// 3. MOTOR MULTI-PLANO DINÁMICO v13.0
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v12.0 desde URL...');
+    console.log('📥 Descargando payload Multi-Plano v13.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -393,12 +403,25 @@ async function main() {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
 
-  const escenas = (payload.escenas || []).map((esc, idx) => ({
-    ...esc,
-    subtitulo: fixSpanishN(esc.subtitulo || ''),
-    texto_1: cleanArcadeLabel(esc.texto_1 || `ACTO 0${idx + 1}`).slice(0, 15),
-    texto_2: cleanArcadeLabel(esc.texto_2 || 'HISTORIA REAL').slice(0, 15)
-  }));
+  const escenas = (payload.escenas || []).map((esc, idx) => {
+    const rawBeats = Array.isArray(esc.sub_escenas) && esc.sub_escenas.length > 0
+      ? esc.sub_escenas
+      : [{ texto_1: esc.texto_1, texto_2: esc.texto_2, bg_code: esc.bg_code, fg_code: esc.fg_code, sfx: esc.sfx }];
+
+    const cleanBeats = rawBeats.map((b, bIdx) => ({
+      ...b,
+      texto_1: cleanArcadeText(b.texto_1 || esc.texto_1 || `PLANO 0${idx + 1}`).slice(0, 16),
+      texto_2: cleanArcadeText(b.texto_2 || esc.texto_2 || 'HISTORIA REAL').slice(0, 16)
+    }));
+
+    return {
+      ...esc,
+      subtitulo: fixSpanishN(esc.subtitulo || ''),
+      texto_1: cleanBeats[0].texto_1,
+      texto_2: cleanBeats[0].texto_2,
+      sub_escenas: cleanBeats
+    };
+  });
 
   const customSpritesDict = payload.custom_sprites || {};
   const subtitleChunks = buildSubtitleChunks(escenas, payload.alignment, duracionExactaVideo);
@@ -430,7 +453,7 @@ async function main() {
   const safeEscenasJson = JSON.stringify(escenas).replace(/<\/script>/gi, '<\\/script>');
   const safeSpritesJson = JSON.stringify(customSpritesDict).replace(/<\/script>/gi, '<\\/script>');
   const safeChunksJson = JSON.stringify(subtitleChunks).replace(/<\/script>/gi, '<\\/script>');
-  const safeSubrama = cleanArcadeLabel(payload.subrama || 'HISTORIA 8-BIT').slice(0, 36);
+  const safeSubrama = cleanArcadeText(payload.subrama || 'HISTORIA 8-BIT').slice(0, 36);
 
   const htmlContent = `
   <!DOCTYPE html>
@@ -444,7 +467,7 @@ async function main() {
         width: 720px; height: 1280px;
         background: #05050a;
         overflow: hidden; position: relative;
-        font-family: 'Press Start 2P', 'Montserrat', monospace;
+        font-family: 'Press Start 2P', monospace;
         -webkit-font-smoothing: none;
       }
       #pixel-canvas {
@@ -478,7 +501,7 @@ async function main() {
         position: absolute; top: 106px; left: 50%; transform: translateX(-50%);
         background: #080a14; border: 4px solid #000000;
         box-shadow: inset 0 0 0 2px #2b3248, 0 8px 0 rgba(0,0,0,0.75);
-        padding: 13px 24px; color: #ffd166; font-size: 25px;
+        padding: 13px 24px; color: #ffd166; font-size: 24px;
         text-transform: uppercase; white-space: nowrap; letter-spacing: 2px;
         text-shadow: 4px 4px 0 #000000; z-index: 18;
       }
@@ -486,9 +509,24 @@ async function main() {
         position: absolute; top: 884px; left: 50%; transform: translateX(-50%);
         background: #080a14; border: 4px solid #000000;
         box-shadow: inset 0 0 0 2px #2b3248, 0 8px 0 rgba(0,0,0,0.75);
-        padding: 13px 24px; color: #00f5d4; font-size: 25px;
+        padding: 13px 24px; color: #00f5d4; font-size: 24px;
         text-transform: uppercase; white-space: nowrap; letter-spacing: 2px;
         text-shadow: 4px 4px 0 #000000; z-index: 18;
+      }
+      /* GLIFO "Ñ" 100% PIXEL-ART CON LA "N" NATIVA DE PRESS START 2P + VIRGULILLA PIXELADA */
+      .retro-enie {
+        position: relative;
+        display: inline-block;
+      }
+      .retro-enie::after {
+        content: '';
+        position: absolute;
+        top: -0.26em;
+        left: 8%;
+        width: 76%;
+        height: 0.13em;
+        background: currentColor;
+        box-shadow: 3px 3px 0 #000000;
       }
       .subtitle-container {
         position: absolute; bottom: 78px; left: 26px; right: 26px;
@@ -515,7 +553,7 @@ async function main() {
   <body>
     <div class="progress-bar" id="pbar"></div>
     <div class="arcade-hud">
-      <div class="hud-tag">${safeSubrama}</div>
+      <div class="hud-tag" id="hud-tag-el">${safeSubrama}</div>
     </div>
 
     <div class="label-box-top" id="label-top">HISTORIA</div>
@@ -546,6 +584,17 @@ async function main() {
       let crispTextQueue = [];
       let actorPrevX = {};
 
+      // Convierte cualquier string con Ñ en HTML con glifo pixelado nativo Press Start 2P
+      function toRetroHtml(str) {
+        const clean = String(str || '').toUpperCase()
+          .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E')
+          .replace(/[ÍÌÏÎ]/g, 'I').replace(/[ÓÒÖÔ]/g, 'O')
+          .replace(/[ÚÙÜÛ]/g, 'U');
+        return clean.replace(/Ñ/g, '<span class="retro-enie">N</span>');
+      }
+
+      document.getElementById('hud-tag-el').innerHTML = toRetroHtml(${JSON.stringify(safeSubrama)});
+
       function setPx(x, y, color) {
         const cx = Math.round(x);
         const cy = Math.round(y);
@@ -556,14 +605,14 @@ async function main() {
 
       function fillRect(x, y, w, h, color) {
         const x0 = Math.round(x), y0 = Math.round(y);
-        const rw = Math.min(96, Math.round(w)), rh = Math.min(90, Math.round(h));
+        const rw = Math.min(120, Math.round(w)), rh = Math.min(115, Math.round(h));
         for (let r = 0; r < rh; r++) {
           for (let c = 0; c < rw; c++) setPx(x0 + c, y0 + r, color);
         }
       }
 
       function fillBorderedRect(x, y, w, h, fillColor, borderColor = '#0b0c10') {
-        const rw = Math.min(96, Math.round(w)), rh = Math.min(86, Math.round(h));
+        const rw = Math.min(116, Math.round(w)), rh = Math.min(100, Math.round(h));
         fillRect(x, y, rw, rh, borderColor);
         if (rw > 2 && rh > 2) {
           fillRect(x + 1, y + 1, rw - 2, rh - 2, fillColor);
@@ -604,7 +653,7 @@ async function main() {
       }
 
       function fillCircle(cx, cy, radius, color) {
-        const rInt = Math.min(36, Math.round(radius));
+        const rInt = Math.min(42, Math.round(radius));
         for (let r = -rInt; r <= rInt; r++) {
           for (let c = -rInt; c <= rInt; c++) {
             if (c * c + r * r <= rInt * rInt) setPx(cx + c, cy + r, color);
@@ -613,13 +662,13 @@ async function main() {
       }
 
       function fillBorderedCircle(cx, cy, radius, fillColor, borderColor = '#0b0c10') {
-        const rInt = Math.min(36, Math.round(radius));
+        const rInt = Math.min(42, Math.round(radius));
         fillCircle(cx, cy, rInt, borderColor);
         if (rInt > 1) fillCircle(cx, cy, rInt - 1, fillColor);
       }
 
       function drawRing(cx, cy, radius, thickness = 2, color = '#fde047') {
-        const rOut = Math.min(34, Math.round(radius));
+        const rOut = Math.min(44, Math.round(radius));
         const rIn = Math.max(0, rOut - thickness);
         for (let r = -rOut; r <= rOut; r++) {
           for (let c = -rOut; c <= rOut; c++) {
@@ -687,7 +736,9 @@ async function main() {
         fillPolygon([[x1, y1], [x2, y2], [x3, y3]], fillColor, borderColor);
       }
 
-      // CIELO Y EXTERIORES RICOS CON SILUETA DE HORIZONTE
+      // ======================================================================
+      // 2. ESCENARIOS Y GENERADORES DE ACCIÓN CINEMÁTICA (OCÉANO, EXPLOSIÓN, PLANETAS, RADAR)
+      // ======================================================================
       function drawSky(skyTop = '#0f172a', skyMid = '#1e293b', skyBot = '#334155', groundCol = '#1e293b', horizonY = GROUND_Y) {
         const bands = [skyTop, skyMid, skyBot];
         const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
@@ -709,13 +760,11 @@ async function main() {
         }
       }
 
-      // INTERIORES ENRIQUECIDOS CON ZÓCALO SEÑORIAL, MOLDURAS Y LÁMPARAS (NUNCA VACÍOS)
       function drawRoom(wallCol = '#1e293b', stripeCol = '#0f172a', floorCol = '#334155', groundY = GROUND_Y) {
         fillRect(0, 0, COLS, groundY, wallCol);
         for (let c = 0; c < COLS; c += 10) fillRect(c, 0, 2, groundY, stripeCol);
-        // Zócalo inferior de madera/piedra para dar profundidad arquitectónica
-        fillBorderedRect(0, groundY - 22, COLS, 22, stripeCol, '#0b0c10');
-        fillBorderedRect(0, groundY - 24, COLS, 3, '#64748b', '#0b0c10');
+        fillBorderedRect(0, groundY - 18, COLS, 18, stripeCol, '#0b0c10');
+        fillBorderedRect(0, groundY - 20, COLS, 3, '#64748b', '#0b0c10');
         fillBorderedRect(0, groundY - 3, COLS, 4, '#d97706', '#0b0c10');
         for (let r = groundY + 1; r < ROWS; r++) {
           for (let c = 0; c < COLS; c++) {
@@ -724,15 +773,88 @@ async function main() {
         }
       }
 
-      // SPRITES CUSTOM 16x16 DE 2 FOTOGRAMAS CON MARCO DOSSIER SI ESTÁN EN LA PARED SUPERIOR
-      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.25, flipX = false, localFrame = 0, skipFrameBox = false) {
+      function drawOcean(waterY = 112, waterCol = '#0369a1', foamCol = '#7dd3fc', localFrame = 0) {
+        for (let c = 0; c < COLS; c++) {
+          const waveH = Math.round(Math.sin(c * 0.2 + localFrame * 0.25) * 2);
+          const wy = waterY + waveH;
+          fillRect(c, wy, 1, ROWS - wy, waterCol);
+          setPx(c, wy, foamCol);
+          setPx(c, wy + 1, '#bae6fd');
+          for (let r = wy + 6; r < ROWS; r += 8) {
+            if ((c + r + Math.floor(localFrame / 2)) % 11 === 0) {
+              fillRect(c, r, 3, 1, foamCol);
+            }
+          }
+        }
+      }
+
+      function drawExplosion(cx, cy, maxRadius = 28, progress = 0.5, localFrame = 0) {
+        const p = Math.max(0.1, Math.min(1, progress * 1.4));
+        const rOuter = Math.round(maxRadius * p);
+        const rMid = Math.round(rOuter * 0.72);
+        const rCore = Math.round(rOuter * 0.42);
+
+        // Onda expansiva exterior
+        drawRing(cx, cy, Math.min(44, rOuter + 5), 2, '#fde047');
+        fillBorderedCircle(cx, cy, rOuter, '#dc2626', '#0b0c10');
+        fillCircle(cx, cy, rMid, '#f97316');
+        fillCircle(cx, cy, rCore, (localFrame % 4 < 2) ? '#ffffff' : '#fef08a');
+
+        // Escombros y chispas saliendo disparados radialmente
+        for (let i = 0; i < 12; i++) {
+          const ang = (i / 12) * Math.PI * 2 + localFrame * 0.08;
+          const dist = rOuter + 4 + ((localFrame + i * 3) % 14);
+          const px = cx + Math.cos(ang) * dist;
+          const py = cy + Math.sin(ang) * dist;
+          fillRect(px, py, 2, 2, i % 2 === 0 ? '#fde047' : '#f97316');
+        }
+      }
+
+      function drawPlanet(cx, cy, radius = 16, baseCol = '#e11d48', hasRings = false, localFrame = 0) {
+        if (hasRings) {
+          drawPixelLine(cx - radius - 10, cy + 4, cx + radius + 10, cy - 4, 3, '#fde047');
+        }
+        fillBorderedCircle(cx, cy, radius, baseCol, '#0b0c10');
+        // Cráteres y atmósfera
+        fillCircle(cx - Math.floor(radius * 0.35), cy - Math.floor(radius * 0.25), Math.max(2, Math.floor(radius * 0.25)), 'rgba(255,255,255,0.28)');
+        fillCircle(cx + Math.floor(radius * 0.3), cy + Math.floor(radius * 0.3), Math.max(2, Math.floor(radius * 0.2)), 'rgba(0,0,0,0.28)');
+      }
+
+      function drawLaunchPad(x = 76, groundY = GROUND_Y) {
+        // Plataforma de hormigón y torre metálica de Cabo Cañaveral
+        fillBorderedRect(x - 18, groundY - 8, 36, 8, '#64748b', '#0b0c10');
+        fillBorderedRect(x + 10, groundY - 76, 10, 68, '#dc2626', '#0b0c10');
+        for (let ry = groundY - 72; ry < groundY - 12; ry += 8) {
+          drawPixelLine(x + 10, ry, x + 20, ry + 6, 1, '#f8fafc');
+          drawPixelLine(x + 20, ry, x + 10, ry + 6, 1, '#f8fafc');
+        }
+        // Brazos umbilicales hacia el cohete
+        fillBorderedRect(x - 2, groundY - 58, 12, 3, '#94a3b8', '#0b0c10');
+        fillBorderedRect(x - 2, groundY - 38, 12, 3, '#94a3b8', '#0b0c10');
+      }
+
+      function drawRadar(cx, cy, radius = 22, color = '#10b981', localFrame = 0) {
+        fillBorderedCircle(cx, cy, radius, '#051911', '#0b0c10');
+        drawRing(cx, cy, radius, 2, color);
+        drawRing(cx, cy, Math.floor(radius * 0.55), 1, color);
+        drawPixelLine(cx - radius, cy, cx + radius, cy, 1, '#064e3b');
+        drawPixelLine(cx, cy - radius, cx, cy + radius, 1, '#064e3b');
+        const ang = localFrame * 0.14;
+        drawPixelLine(cx, cy, cx + Math.cos(ang) * (radius - 2), cy + Math.sin(ang) * (radius - 2), 2, color);
+        if (localFrame % 10 < 6) {
+          fillCircle(cx + Math.floor(radius * 0.4), cy - Math.floor(radius * 0.35), 2, '#ef4444');
+        }
+      }
+
+      // SPRITES 16x16 100% TRANSPARENTES (SIN RECUADRO NEGRO NI AMARILLO ALREDEDOR)
+      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.35, flipX = false, localFrame = 0) {
         const key = String(spriteName || '').toLowerCase().trim();
         const def = customSprites[key] || Object.values(customSprites)[0];
         if (!def) {
           fillBorderedCircle(centerX, centerY, Math.round(6 * scale), '#ffd166', '#0b0c10');
           return;
         }
-        const useFrame2 = (Math.floor(localFrame / 6) % 2 === 1) && Array.isArray(def.rows_2) && def.rows_2.length > 0;
+        const useFrame2 = (Math.floor(localFrame / 5) % 2 === 1) && Array.isArray(def.rows_2) && def.rows_2.length > 0;
         const rows = useFrame2 ? def.rows_2 : (def.rows_1 || def.rows || []);
         if (!Array.isArray(rows) || rows.length === 0) return;
 
@@ -743,11 +865,6 @@ async function main() {
         const destW = Math.max(6, Math.round(w * scale));
         const x0 = Math.round(centerX - destW / 2);
         const y0 = Math.round(centerY - destH / 2);
-
-        // Si la IA coloca un sprite suelto en la mitad superior (y < 96), enmarcarlo como un monitor/cuadro retro para que no flote en el vacío
-        if (!skipFrameBox && centerY < 96 && scale >= 1.1) {
-          fillBorderedRect(x0 - 4, y0 - 4, destW + 8, destH + 8, '#090d16', '#eab308');
-        }
 
         const temp = Array.from({ length: destH + 2 }, () => Array(destW + 2).fill(null));
         for (let dy = 0; dy < destH; dy++) {
@@ -781,7 +898,6 @@ async function main() {
         }
       }
 
-      // ACTORES EXPRESIVOS ANCLADOS SIEMPRE AL SUELO FIRME (GROUND_Y = 138)
       function drawActor(x, y, opts = {}, localFrame = 0) {
         const actorId = opts.id || String(opts.suitColor || 'main');
         const curX = Math.max(14, Math.min(106, Math.round(x)));
@@ -789,7 +905,6 @@ async function main() {
         actorPrevX[actorId] = curX;
 
         const isActuallyWalking = (prevX !== undefined && Math.abs(curX - prevX) >= 0.4);
-        // Forzar anclaje al suelo firme salvo que explícitamente esté en un vehículo/balcón alto
         const anchorY = (y === undefined || y === null || y > 95) ? GROUND_Y : y;
         const suitCol = opts.suitColor || '#2563eb';
         const skinCol = opts.skinColor || '#e6ad86';
@@ -868,7 +983,7 @@ async function main() {
         }
 
         if (opts.holdSprite) {
-          drawCustomSprite(opts.holdSprite, handX + dir * 8, handY - 2, opts.spriteScale || 0.85, facingLeft, localFrame, true);
+          drawCustomSprite(opts.holdSprite, handX + dir * 8, handY - 2, opts.spriteScale || 0.85, facingLeft, localFrame);
         }
 
         return { handX: handX + dir * 6, handY: handY - 1, headX: curX, headY };
@@ -919,32 +1034,38 @@ async function main() {
         }
 
         if (opts.holdSprite) {
-          drawCustomSprite(opts.holdSprite, cx + 26, bobY + 20, 1.1, false, localFrame, true);
+          drawCustomSprite(opts.holdSprite, cx + 26, bobY + 20, 1.1, false, localFrame);
         }
       }
 
-      function drawScreenText(str, centerX, y, color = '#ffd166', size = 1) {
-        const clean = String(str || '').toUpperCase().trim().slice(0, 22);
+      // TEXTO EN PANTALLA 100% COMPLETO Y CON AUTO-ESCALADO (NUNCA SE CORTA NI CAMBIA DE FUENTE)
+      function drawScreenText(str, centerX, y, color = '#ffd166', size = 1, maxWidthPx = 620) {
+        const clean = String(str || '').toUpperCase()
+          .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E')
+          .replace(/[ÍÌÏÎ]/g, 'I').replace(/[ÓÒÖÔ]/g, 'O')
+          .replace(/[ÚÙÜÛ]/g, 'U').trim();
         if (!clean) return;
         crispTextQueue.push({
           text: clean,
           x: Math.max(12, Math.min(108, centerX)) * CELL,
           y: Math.max(38, Math.min(134, y)) * CELL,
           color: color || '#ffd166',
-          fontSize: size >= 2 ? 19 : 15
+          fontSize: size >= 2 ? 18 : 14,
+          maxWidthPx: maxWidthPx || 620
         });
       }
 
       function drawTerminal(x, y, w, h, titleStr, bodyStr, borderCol = '#38bdf8') {
-        const bx = Math.max(6, Math.min(80, Math.round(x)));
+        const bx = Math.max(6, Math.min(78, Math.round(x)));
         const by = Math.max(36, Math.min(95, Math.round(y)));
-        const bw = Math.min(108 - bx, Math.max(36, Math.round(w)));
-        const bh = Math.min(48, Math.max(22, Math.round(h)));
+        const bw = Math.min(110 - bx, Math.max(38, Math.round(w)));
+        const bh = Math.min(48, Math.max(24, Math.round(h)));
 
         fillBorderedRect(bx, by, bw, bh, '#090d16', '#0b0c10');
         fillBorderedRect(bx + 1, by + 1, bw - 2, 7, borderCol, '#0b0c10');
-        if (titleStr) drawScreenText(titleStr, bx + bw / 2, by + 12, '#ffd166', 1);
-        if (bodyStr) drawScreenText(bodyStr, bx + bw / 2, by + Math.floor(bh / 2) + 6, '#ffffff', 2);
+        const maxW = (bw - 4) * CELL;
+        if (titleStr) drawScreenText(titleStr, bx + bw / 2, by + 13, '#ffd166', 1, maxW);
+        if (bodyStr) drawScreenText(bodyStr, bx + bw / 2, by + Math.floor(bh / 2) + 7, '#ffffff', 2, maxW);
       }
 
       function drawDetailedBuilding(x, w, h, opts = {}, localFrame = 0) {
@@ -1062,6 +1183,11 @@ async function main() {
         fillTriangle, triangle: fillTriangle,
         drawSky, sky: drawSky,
         drawRoom, room: drawRoom,
+        drawOcean, ocean: drawOcean,
+        drawExplosion, explosion: drawExplosion,
+        drawPlanet, planet: drawPlanet,
+        drawLaunchPad, launchPad: drawLaunchPad,
+        drawRadar, radar: drawRadar,
         drawStars, stars: drawStars,
         drawClouds, clouds: drawClouds,
         drawFire, fire: drawFire,
@@ -1079,19 +1205,20 @@ async function main() {
         round: Math.round, min: Math.min, max: Math.max, PI: Math.PI
       };
 
-      const compiledBgRenderers = escenas.map((esc) => {
-        if (esc.bg_code && typeof esc.bg_code === 'string' && esc.bg_code.trim().length > 5) {
-          try { return new Function('api', 'progress', 'localFrame', \`with (api) { \${esc.bg_code} }\`); } catch (e) {}
-        }
-        return null;
-      });
-
-      const compiledFgRenderers = escenas.map((esc) => {
-        const code = esc.fg_code || esc.js_code || '';
-        if (code && typeof code === 'string' && code.trim().length > 5) {
-          try { return new Function('api', 'progress', 'localFrame', \`with (api) { \${code} }\`); } catch (e) {}
-        }
-        return null;
+      // Precompilar todas las sub-escenas (beats) de cada escena
+      const compiledSceneBeats = escenas.map((esc) => {
+        const beats = Array.isArray(esc.sub_escenas) && esc.sub_escenas.length > 0 ? esc.sub_escenas : [esc];
+        return beats.map((b) => {
+          let bgFn = null, fgFn = null;
+          if (b.bg_code && typeof b.bg_code === 'string' && b.bg_code.trim().length > 5) {
+            try { bgFn = new Function('api', 'progress', 'localFrame', \`with (api) { \${b.bg_code} }\`); } catch (e) {}
+          }
+          const code = b.fg_code || b.js_code || '';
+          if (code && typeof code === 'string' && code.trim().length > 5) {
+            try { fgFn = new Function('api', 'progress', 'localFrame', \`with (api) { \${code} }\`); } catch (e) {}
+          }
+          return { bgFn, fgFn, texto_1: b.texto_1 || esc.texto_1, texto_2: b.texto_2 || esc.texto_2 };
+        });
       });
 
       function flushGridToCanvas() {
@@ -1101,25 +1228,51 @@ async function main() {
             ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
           }
         }
+        // Renderizar textos en pantalla con auto-ajuste de fuente y glifo Ñ 8-bit nativo
         if (crispTextQueue.length > 0) {
           ctx.save();
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           crispTextQueue.forEach(item => {
-            ctx.font = \`\${item.fontSize}px "Press Start 2P", "Montserrat", monospace\`;
-            const metrics = ctx.measureText(item.text);
-            const padX = 12, padY = 8;
-            const bw = metrics.width + padX * 2;
-            const bh = item.fontSize + padY * 2;
-            ctx.fillStyle = 'rgba(8, 10, 20, 0.90)';
-            ctx.fillRect(item.x - bw / 2, item.y - bh / 2, bw, bh);
+            const rawStr = item.text;
+            const displayStr = rawStr.replace(/Ñ/g, 'N');
+            let fSize = item.fontSize;
+            ctx.font = \`\${fSize}px "Press Start 2P", monospace\`;
+            while (ctx.measureText(displayStr).width > (item.maxWidthPx - 20) && fSize > 9) {
+              fSize -= 1;
+              ctx.font = \`\${fSize}px "Press Start 2P", monospace\`;
+            }
+
+            const totalW = ctx.measureText(displayStr).width;
+            const padX = 10, padY = 7;
+            const bw = totalW + padX * 2;
+            const bh = fSize + padY * 2;
+            const safeX = Math.max(bw / 2 + 12, Math.min(720 - bw / 2 - 12, item.x));
+
+            ctx.fillStyle = 'rgba(8, 10, 20, 0.92)';
+            ctx.fillRect(safeX - bw / 2, item.y - bh / 2, bw, bh);
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 4;
-            ctx.strokeRect(item.x - bw / 2, item.y - bh / 2, bw, bh);
+            ctx.strokeRect(safeX - bw / 2, item.y - bh / 2, bw, bh);
+
             ctx.fillStyle = '#000000';
-            ctx.fillText(item.text, item.x + 3, item.y + 3);
+            ctx.fillText(displayStr, safeX + 3, item.y + 3);
             ctx.fillStyle = item.color;
-            ctx.fillText(item.text, item.x, item.y);
+            ctx.fillText(displayStr, safeX, item.y);
+
+            // Si la palabra original tenía Ñ, pintar la virgulilla pixel-art encima de esa N
+            for (let i = 0; i < rawStr.length; i++) {
+              if (rawStr[i] === 'Ñ') {
+                const prefixW = ctx.measureText(displayStr.slice(0, i)).width;
+                const charW = ctx.measureText('N').width;
+                const tildeX = (safeX - totalW / 2) + prefixW + charW * 0.1;
+                const tildeY = item.y - fSize * 0.68;
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(tildeX + 2, tildeY + 2, charW * 0.78, Math.max(2, fSize * 0.16));
+                ctx.fillStyle = item.color;
+                ctx.fillRect(tildeX, tildeY, charW * 0.78, Math.max(2, fSize * 0.16));
+              }
+            }
           });
           ctx.restore();
         }
@@ -1129,7 +1282,7 @@ async function main() {
       const labelTop = document.getElementById('label-top');
       const labelBot = document.getElementById('label-bot');
       let lastChunkIdx = -2;
-      let lastSceneIdx = -2;
+      let lastBeatKey = '';
 
       window.setFrameData = function(frameIdx, t) {
         const linearRatio = (frameIdx + 1) / totalFrames;
@@ -1144,31 +1297,39 @@ async function main() {
         const esc = escenas[activeIdx] || {};
         const localT = Math.max(0, t - (esc.inicio || 0));
         const durEsc = Math.max(0.5, (esc.fin || 4) - (esc.inicio || 0));
-        const progress = Math.max(0, Math.min(1, localT / durEsc));
-        const localFrame = Math.floor(localT * 30);
+        const sceneProgress = Math.max(0, Math.min(0.9999, localT / durEsc));
 
-        if (activeIdx !== lastSceneIdx) {
-          lastSceneIdx = activeIdx;
+        // Seleccionar qué Sub-Escena (Plano Dinámico) toca en este instante de la frase
+        const beats = compiledSceneBeats[activeIdx] || [];
+        const numBeats = Math.max(1, beats.length);
+        const beatIdx = Math.min(numBeats - 1, Math.floor(sceneProgress * numBeats));
+        const beatProgress = Math.max(0, Math.min(1, (sceneProgress * numBeats) - beatIdx));
+        const beatDur = durEsc / numBeats;
+        const beatLocalFrame = Math.floor((localT - beatIdx * beatDur) * 30);
+
+        const activeBeat = beats[beatIdx] || {};
+        const beatKey = activeIdx + '_' + beatIdx;
+
+        if (beatKey !== lastBeatKey) {
+          lastBeatKey = beatKey;
           actorPrevX = {};
-          labelTop.textContent = esc.texto_1 || 'HISTORIA';
-          labelBot.textContent = esc.texto_2 || 'CASO REAL';
+          labelTop.innerHTML = toRetroHtml(activeBeat.texto_1 || esc.texto_1 || 'HISTORIA');
+          labelBot.innerHTML = toRetroHtml(activeBeat.texto_2 || esc.texto_2 || 'CASO REAL');
         }
 
         crispTextQueue = [];
-        drawRoom('#1e293b', '#0f172a', '#334155', GROUND_Y);
+        drawSky('#0f172a', '#1e293b', '#334155', '#1e293b', GROUND_Y);
 
-        const bgFn = compiledBgRenderers[activeIdx];
-        if (bgFn) {
-          try { bgFn(sandboxApi, progress, localFrame); } catch (e) {}
+        if (activeBeat.bgFn) {
+          try { activeBeat.bgFn(sandboxApi, beatProgress, beatLocalFrame); } catch (e) {}
         }
 
-        const fgFn = compiledFgRenderers[activeIdx];
-        if (fgFn) {
-          try { fgFn(sandboxApi, progress, localFrame); } catch (e) {
-            drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, localFrame);
+        if (activeBeat.fgFn) {
+          try { activeBeat.fgFn(sandboxApi, beatProgress, beatLocalFrame); } catch (e) {
+            drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, beatLocalFrame);
           }
         } else {
-          drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, localFrame);
+          drawBusto(60, 86, { suitColor: '#1e3a8a', tieColor: '#facc15', isTalking: true }, beatLocalFrame);
         }
 
         flushGridToCanvas();
@@ -1217,7 +1378,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Generativo v12.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Multi-Plano v13.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1230,13 +1391,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v12.0...');
+  console.log('🔊 Ensamblando MP4 final v13.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Generativo 100% Libre v12.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Multi-Plano Dinámico v13.0 generado con éxito!');
   process.exit(0);
 }
 
