@@ -1,80 +1,97 @@
 import os
+import sys
 import json
-import requests
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import urllib.request
+import urllib.parse
+import uuid
 
-def send_telegram_video(text, video_path="output.mp4"):
-    token = os.environ.get("TELEGRAM_TOKEN", "").strip()
-    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-    if not token or not chat_id:
-        print("⚠️ Advertencia: TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no están configurados en los Secrets.")
-        exit(1)
+def send_video_to_telegram():
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID") or os.environ.get("CHAT_ID") or "326829409"
 
-    if video_path and os.path.exists(video_path):
-        url_video = f"https://api.telegram.org/bot{token}/sendVideo"
+    if not bot_token:
+        print("❌ ERROR: No se encontró TELEGRAM_BOT_TOKEN en las variables de entorno.")
+        sys.exit(1)
+
+    # Localizar output.mp4 y payload.json (en la raíz o dentro de Proyecto8BIT)
+    video_path = "output.mp4" if os.path.exists("output.mp4") else "Proyecto8BIT/output.mp4"
+    payload_path = "payload.json" if os.path.exists("payload.json") else "Proyecto8BIT/payload.json"
+
+    if not os.path.exists(video_path):
+        print(f"❌ ERROR: No existe el archivo de vídeo en {video_path}")
+        sys.exit(1)
+
+    file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
+    print(f"📦 Tamaño de {video_path}: {file_size_mb:.2f} MB")
+
+    titulo = "Short 8-Bit Generado"
+    descripcion = ""
+    subrama = "HISTORIA 8-BIT"
+
+    if os.path.exists(payload_path):
         try:
-            with open(video_path, "rb") as vf:
-                files = {"video": vf}
-                data = {
-                    "chat_id": chat_id,
-                    "caption": text,
-                    "parse_mode": "Markdown",
-                    "supports_streaming": True
-                }
-                res = requests.post(url_video, data=data, files=files, timeout=90)
-                if res.ok:
-                    print("📲 Vídeo 8-BIT MP4 enviado a Telegram correctamente.")
-                    return
-                else:
-                    print(f"⚠️ Falló el adjunto con Markdown ({res.text}), reintentando en texto plano...")
-                    vf.seek(0)
-                    data.pop("parse_mode", None)
-                    res2 = requests.post(url_video, data=data, files={"video": vf}, timeout=90)
-                    if res2.ok:
-                        print("📲 Vídeo 8-BIT MP4 enviado a Telegram sin formato Markdown.")
-                        return
+            with open(payload_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    data = data[0]
+                if isinstance(data, dict) and "json" in data:
+                    data = data["json"]
+                titulo = str(data.get("TituloYT") or data.get("tema_titulo") or titulo)
+                descripcion = str(data.get("DescripcionYT") or "")
+                subrama = str(data.get("subrama") or subrama)
         except Exception as e:
-            print(f"⚠️ Error al adjuntar vídeo a Telegram: {e}")
+            print(f"⚠️ Aviso leyendo payload.json: {e}")
 
-    url_msg = f"https://api.telegram.org/bot{token}/sendMessage"
-    try:
-        requests.post(url_msg, json={"chat_id": chat_id, "text": text}, timeout=15)
-    except Exception as e:
-        print(f"❌ Error al enviar mensaje a Telegram: {e}")
+    # Limpiar símbolos que rompen el parser de Telegram y limitar a 950 caracteres (límite API = 1024)
+    caption_raw = f"👾 {titulo}\n🕹️ Rama: {subrama}\n\n{descripcion}".strip()
+    caption_clean = caption_raw[:950]
 
-def main():
-    payload_path = "payload.json"
-    if not os.path.exists(payload_path):
-        send_telegram_video("❌ Error en Proyecto8BIT: No se encontró payload.json tras el renderizado.")
-        exit(1)
+    url = f"https://api.telegram.org/bot{bot_token}/sendVideo"
+    boundary = uuid.uuid4().hex
 
-    with open(payload_path, "r", encoding="utf-8") as f:
-        payload = json.load(f)
+    def post_multipart(caption_text):
+        body = bytearray()
 
-    title = payload.get("TituloYT", "Glitch en la Matrix 👾 #shorts")
-    if "#shorts" not in title.lower():
-        title = f"{title} #shorts"
-    subrama = payload.get("subrama", "Glitches & Exploits")
-    desc = payload.get("DescripcionYT", "Historias reales de fallos millonarios y exploits en 8-bit.")
+        def add_field(name, value):
+            body.extend(f"--{boundary}\r\n".encode("utf-8"))
+            body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
+            body.extend(f"{value}\r\n".encode("utf-8"))
 
-    madrid_tz = ZoneInfo("Europe/Madrid")
-    now_str = datetime.now(madrid_tz).strftime("%d/%m/%Y a las %H:%M")
+        add_field("chat_id", str(chat_id))
+        add_field("caption", caption_text)
+        add_field("supports_streaming", "true")
 
-    payload["programado_para_madrid"] = now_str
-    with open(payload_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+        body.extend(f"--{boundary}\r\n".encode("utf-8"))
+        body.extend(b'Content-Disposition: form-data; name="video"; filename="short_8bit.mp4"\r\n')
+        body.extend(b"Content-Type: video/mp4\r\n\r\n")
+        with open(video_path, "rb") as vf:
+            body.extend(vf.read())
+        body.extend(f"\r\n--{boundary}--\r\n".encode("utf-8"))
 
-    caption = (
-        f"👾 *¡NUEVO SHORT 8-BIT RENDERIZADO!*\n\n"
-        f"📌 *Título:* {title}\n"
-        f"🕹️ *Categoría:* {subrama}\n"
-        f"📝 *Descripción:* {desc}\n"
-        f"⏱️ *Generado el:* {now_str} (Hora Madrid)"
-    )
+        req = urllib.request.Request(url, data=bytes(body), method="POST")
+        req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
 
-    print("🚀 Enviando vídeo 8-BIT finalizado a Telegram...")
-    send_telegram_video(caption, video_path="output.mp4")
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                return resp.status, json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as err:
+            err_body = err.read().decode("utf-8", errors="replace")
+            return err.code, {"ok": False, "description": err_body}
+
+    print(f"📤 Enviando vídeo a Telegram (chat_id={chat_id})...")
+    status, result = post_multipart(caption_clean)
+
+    # Si falla por cualquier motivo del texto, reintentar con caption mínimo
+    if not result.get("ok"):
+        print(f"⚠️ Primer intento rechazado ({status}): {result.get('description')}. Reintentando con texto corto...")
+        status, result = post_multipart(f"👾 {titulo[:120]}")
+
+    if result.get("ok"):
+        msg_id = result.get("result", {}).get("message_id")
+        print(f"✅ ¡Vídeo entregado en Telegram con éxito! (message_id: {msg_id})")
+    else:
+        print(f"❌ ERROR CRÍTICO de la API de Telegram ({status}): {result}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    main()
+    send_video_to_telegram()
