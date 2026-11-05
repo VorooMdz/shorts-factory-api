@@ -339,5 +339,20 @@
     ],
     "programado_para_madrid": null,
     "fecha_publicacion": "2026-11-05T07:58:54.166Z"
+  },
+  {
+    "id_concepto": "mizuho_fat_finger_2005",
+    "subrama": "Glitches Financieros en Wall Street",
+    "titulo": "El error de teclado que costó 225 millones: El caso Mizuho",
+    "keywords_concepto": [
+      "mizuho securities",
+      "fat finger",
+      "bolsa de tokio",
+      "glitch financiero",
+      "j-com",
+      "error de trading"
+    ],
+    "programado_para_madrid": null,
+    "fecha_publicacion": "2026-11-05T11:59:20.310Z"
   }
 ]
