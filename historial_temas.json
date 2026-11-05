@@ -307,5 +307,19 @@
     ],
     "programado_para_madrid": "05/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-04T12:02:28.097Z"
+  },
+  {
+    "id_concepto": "ceguera_al_cambio",
+    "subrama": "Atención y Foco",
+    "titulo": "La Ceguera al Cambio",
+    "keywords_concepto": [
+      "ceguera al cambio",
+      "atención selectiva",
+      "simons y levin",
+      "foco mental",
+      "experimento de la puerta"
+    ],
+    "programado_para_madrid": "05/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-05T07:24:22.241Z"
   }
 ]
