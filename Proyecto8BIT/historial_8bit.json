@@ -400,5 +400,20 @@
     ],
     "programado_para_madrid": null,
     "fecha_publicacion": "2026-11-05T13:29:17.605Z"
+  },
+  {
+    "id_concepto": "vancouver_stock_exchange_truncation_1983",
+    "subrama": "Glitches Financieros en Wall Street",
+    "titulo": "El bug de redondeo que destruyó la mitad de una bolsa de valores",
+    "keywords_concepto": [
+      "bolsa de vancouver",
+      "vancouver stock exchange index",
+      "error de redondeo",
+      "truncamiento",
+      "glitch financiero",
+      "bug matematico"
+    ],
+    "programado_para_madrid": null,
+    "fecha_publicacion": "2026-11-05T13:37:20.576Z"
   }
 ]
