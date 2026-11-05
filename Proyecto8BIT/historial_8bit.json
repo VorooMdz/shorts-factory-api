@@ -430,5 +430,21 @@
     ],
     "programado_para_madrid": null,
     "fecha_publicacion": "2026-11-05T13:59:29.096Z"
+  },
+  {
+    "id_concepto": "uss_yorktown_division_cero_1997",
+    "subrama": "Bugs Espaciales y Militares",
+    "titulo": "El Crucero de Guerra Paralizado por una División entre Cero",
+    "keywords_concepto": [
+      "USS Yorktown",
+      "división entre cero",
+      "Smart Ship",
+      "Windows NT",
+      "bug militar",
+      "Pentágono",
+      "fallo de software"
+    ],
+    "programado_para_madrid": null,
+    "fecha_publicacion": "2026-11-05T14:57:41.545Z"
   }
 ]
