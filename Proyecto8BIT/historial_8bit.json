@@ -415,5 +415,20 @@
     ],
     "programado_para_madrid": null,
     "fecha_publicacion": "2026-11-05T13:37:20.576Z"
+  },
+  {
+    "id_concepto": "robo_del_siglo_banco_rio_2006",
+    "subrama": "8Bit Heists",
+    "titulo": "El Robo del Siglo: Banco Río de Acassuso",
+    "keywords_concepto": [
+      "robo del siglo",
+      "banco rio",
+      "acassuso 2006",
+      "armas de juguete",
+      "tunel alcantarillado",
+      "fernando araujo"
+    ],
+    "programado_para_madrid": null,
+    "fecha_publicacion": "2026-11-05T13:59:29.096Z"
   }
 ]
