@@ -420,8 +420,16 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR PIXEL-ART v20.1 (BARRA NO LINEAL + ROTACIÓN DE 5 CANCIONES SUNO)
+// 3. MOTOR PIXEL-ART v20.1 (BARRA NO LINEAL + MAPEO CONTEXTUAL 5 PISTAS SUNO)
 // ============================================================================
+const MUSIC_STYLE_TO_INDEX = {
+  HEIST: 1,
+  DISASTER: 2,
+  MYSTERY: 3,
+  UNDERGROUND: 4,
+  CLIMAX: 5
+};
+
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
@@ -484,13 +492,19 @@ async function main() {
   const subtitleChunks = buildSubtitleChunksAndBeatTimings(escenas, payload.alignment, duracionExactaVideo);
 
   // ==========================================================================
-  // SELECCIÓN ALTERNADA ENTRE LAS 5 PISTAS DE MÚSICA (bg_music_1.mp3 .. bg_music_5.mp3)
+  // SELECCIÓN INTELIGENTE DE LAS 5 PISTAS DE MÚSICA (bg_music_1.mp3 .. bg_music_5.mp3)
   // ==========================================================================
   try {
     let hasSfx = false;
     try { hasSfx = buildChiptuneSfxTrack(escenas, duracionExactaVideo, hash); } catch (e) {}
 
-    const trackIdx = Math.max(1, Math.min(5, Number(payload.music_track_index) || ((hash % 5) + 1)));
+    const styleKey = String(payload.music_style || '').toUpperCase().trim();
+    const mappedFromStyle = MUSIC_STYLE_TO_INDEX[styleKey];
+    const trackIdx = Math.max(
+      1,
+      Math.min(5, mappedFromStyle || Number(payload.music_track_index) || ((hash % 5) + 1))
+    );
+
     const candidateFiles = [
       path.resolve(`bg_music_${trackIdx}.mp3`),
       path.resolve(__dirname, `bg_music_${trackIdx}.mp3`),
@@ -504,7 +518,7 @@ async function main() {
     const bgMusicPath = candidateFiles.find(p => fs.existsSync(p) && fs.statSync(p).size > 1000);
 
     if (bgMusicPath) {
-      console.log(`🎵 Usando pista musical (Turno #${trackIdx}): ${path.basename(bgMusicPath)}`);
+      console.log(`🎵 Usando pista musical (#${trackIdx} - ${styleKey || 'AUTO'}): ${path.basename(bgMusicPath)}`);
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
       execSync(`ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.78,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`, { stdio: 'inherit' });
       if (hasSfx) {
