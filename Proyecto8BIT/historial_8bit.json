@@ -370,5 +370,20 @@
     ],
     "programado_para_madrid": null,
     "fecha_publicacion": "2026-11-05T12:27:51.893Z"
+  },
+  {
+    "id_concepto": "stefan_mandel_loteria_14_veces",
+    "subrama": "Hackeos a Concursos y Loterías",
+    "titulo": "Stefan Mandel: El Matemático que Ganó la Lotería 14 Veces",
+    "keywords_concepto": [
+      "Stefan Mandel",
+      "lotería",
+      "matemáticas",
+      "Virginia",
+      "algoritmo",
+      "probabilidad"
+    ],
+    "programado_para_madrid": null,
+    "fecha_publicacion": "2026-11-05T13:01:06.923Z"
   }
 ]
