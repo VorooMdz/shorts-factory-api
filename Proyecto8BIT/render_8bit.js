@@ -309,8 +309,15 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
     const p = pitchMod.toFixed(3);
     const catalog = {
       coin_8bit: { expr: `0.17*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`, dur: 0.38 },
-      laser_8bit: { expr: `0.15*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.30 }, explosion_8bit: { expr: `0.24*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.60 }, powerup_8bit: { expr: `0.15*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`, dur: 0.42 }, alarm_8bit: { expr: `0.15*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`, dur: 0.50 }, glitch_8bit: { expr: `0.15*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`, dur: 0.32 },
-      jump_8bit: { expr: `0.16*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`, dur: 0.28 }, error_8bit: { expr: `0.19*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`, dur: 0.42 }, typing_8bit: { expr: `0.14*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`, dur: 0.28 }, level_clear_8bit: { expr: `0.15*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`, dur: 0.55 }
+      laser_8bit: { expr: `0.15*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.30 },
+      explosion_8bit: { expr: `0.24*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.60 },
+      powerup_8bit: { expr: `0.15*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`, dur: 0.42 },
+      alarm_8bit: { expr: `0.15*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`, dur: 0.50 },
+      glitch_8bit: { expr: `0.15*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`, dur: 0.32 },
+      jump_8bit: { expr: `0.16*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`, dur: 0.28 },
+      error_8bit: { expr: `0.19*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`, dur: 0.42 },
+      typing_8bit: { expr: `0.14*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`, dur: 0.28 },
+      level_clear_8bit: { expr: `0.15*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`, dur: 0.55 }
     };
     return catalog[type] || catalog.coin_8bit;
   }
@@ -336,8 +343,17 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
       const delayMs = Math.round(beatStartSec * 1000);
 
       inputs.push(`-f lavfi -i "aevalsrc='${recipe.expr}':s=44100:d=${recipe.dur}"`);
-      filterParts.push(`[${sfxIndex}:a]adelay=${delayMs}|${delayMs},apad=whole_dur=${totalDuration.toFixed(3)}[s${sfxIndex}]`); sfxIndex++; }); });  if (inputs.length === 0) return false; const mixLabels = Array.from({ length: sfxIndex }, (_, i) => `[s${i}]`).join('');
-  const filterComplex = `${filterParts.join(';')};${mixLabels}amix=inputs=${sfxIndex}:duration=longest:dropout_transition=0:normalize=0[sfxout]`;  try { execSync(`ffmpeg -y ${inputs.join(' ')} -filter_complex "${filterComplex}" -map "[sfxout]" -ar 44100 -ac 2 -t ${totalDuration.toFixed(3)} -c:a pcm_s16le hook_sfx.wav`, { stdio: 'ignore' });
+      filterParts.push(`[${sfxIndex}:a]adelay=${delayMs}|${delayMs},apad=whole_dur=${totalDuration.toFixed(3)}[s${sfxIndex}]`);
+      sfxIndex++;
+    });
+  });
+
+  if (inputs.length === 0) return false;
+  const mixLabels = Array.from({ length: sfxIndex }, (_, i) => `[s${i}]`).join('');
+  const filterComplex = `${filterParts.join(';')};${mixLabels}amix=inputs=${sfxIndex}:duration=longest:dropout_transition=0:normalize=0[sfxout]`;
+
+  try {
+    execSync(`ffmpeg -y ${inputs.join(' ')} -filter_complex "${filterComplex}" -map "[sfxout]" -ar 44100 -ac 2 -t ${totalDuration.toFixed(3)} -c:a pcm_s16le hook_sfx.wav`, { stdio: 'ignore' });
   } catch (err) {
     return false;
   }
@@ -345,12 +361,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR JERÁRQUICO 16-BIT v16.0 (TRANSFORMACIONES LOCALES Y SOMBREADO AUTO)
+// 3. MOTOR PIXEL-ART STUDIO v18.0 (LIENZO 100% LIBRE CON VOLUMETRÍA 16-BIT)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v16.0 desde URL...');
+    console.log('📥 Descargando payload v18.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -404,7 +420,6 @@ async function main() {
     };
   });
 
-  const customEntitiesDict = payload.custom_entities || {};
   const customSpritesDict = payload.custom_sprites || {};
   const subtitleChunks = buildSubtitleChunks(escenas, payload.alignment, duracionExactaVideo);
 
@@ -433,7 +448,6 @@ async function main() {
   }
 
   const safeEscenasJson = JSON.stringify(escenas).replace(/<\/script>/gi, '<\\/script>');
-  const safeEntitiesJson = JSON.stringify(customEntitiesDict).replace(/<\/script>/gi, '<\\/script>');
   const safeSpritesJson = JSON.stringify(customSpritesDict).replace(/<\/script>/gi, '<\\/script>');
   const safeChunksJson = JSON.stringify(subtitleChunks).replace(/<\/script>/gi, '<\\/script>');
 
@@ -529,7 +543,6 @@ async function main() {
 
     <script>
       const escenas = ${safeEscenasJson};
-      const customEntities = ${safeEntitiesJson};
       const customSprites = ${safeSpritesJson};
       const subtitleChunks = ${safeChunksJson};
       const totalFrames = ${totalFrames};
@@ -542,8 +555,6 @@ async function main() {
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1e293b'));
-      let badgeQueue = [];
-      let transformStack = [];
 
       function toRetroHtml(str) {
         const clean = String(str || '').toUpperCase()
@@ -565,101 +576,43 @@ async function main() {
         el.innerHTML = toRetroHtml(clean);
       }
 
-      // ======================================================================
-      // 1. UTILIDADES DE COLOR 16-BIT (ILUMINACIÓN Y SOMBRA AUTOMÁTICA)
-      // ======================================================================
-      function shadeColor(hex, percent) {
-        if (!hex || typeof hex !== 'string' || !hex.startsWith('#') || hex.length < 7) return hex || '#cbd5e1';
-        let r = parseInt(hex.slice(1, 3), 16);
-        let g = parseInt(hex.slice(3, 5), 16);
-        let b = parseInt(hex.slice(5, 7), 16);
-        if (isNaN(r) || isNaN(g) || isNaN(b)) return hex;
-        r = Math.max(0, Math.min(255, Math.round(r + (255 * percent) / 100)));
-        g = Math.max(0, Math.min(255, Math.round(g + (255 * percent) / 100)));
-        b = Math.max(0, Math.min(255, Math.round(b + (255 * percent) / 100)));
-        return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
-      }
-
-      // ======================================================================
-      // 2. PILA DE TRANSFORMACIÓN JERÁRQUICA (COORDENADAS LOCALES SIN DESALINEACIÓN)
-      // ======================================================================
-      function transformPoint(x, y) {
-        let px = x, py = y;
-        for (let i = transformStack.length - 1; i >= 0; i--) {
-          const t = transformStack[i];
-          let lx = px * (t.flipX ? -t.scale : t.scale);
-          let ly = py * (t.flipY ? -t.scale : t.scale);
-          if (t.angleRad) {
-            const cosA = Math.cos(t.angleRad);
-            const sinA = Math.sin(t.angleRad);
-            const rx = lx * cosA - ly * sinA;
-            const ry = lx * sinA + ly * cosA;
-            lx = rx;
-            ly = ry;
-          }
-          px = t.tx + lx;
-          py = t.ty + ly;
-        }
-        return [Math.round(px), Math.round(py)];
-      }
-
-      function withGroup(tx, ty, opts, fn) {
-        if (typeof opts === 'function') {
-          fn = opts;
-          opts = {};
-        }
-        const o = opts || {};
-        transformStack.push({
-          tx: Number(tx) || 0,
-          ty: Number(ty) || 0,
-          scale: o.scale !== undefined ? Number(o.scale) : 1,
-          angleRad: ((Number(o.angle) || 0) * Math.PI) / 180,
-          flipX: !!o.flipX,
-          flipY: !!o.flipY
-        });
-        try {
-          if (typeof fn === 'function') fn();
-        } finally {
-          transformStack.pop();
-        }
-      }
-
       function setPx(x, y, color) {
-        if (!color) return;
-        const [cx, cy] = transformStack.length > 0 ? transformPoint(x, y) : [Math.round(x), Math.round(y)];
-        if (cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS) {
+        const cx = Math.round(x);
+        const cy = Math.round(y);
+        if (cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS && color) {
           grid[cy][cx] = color;
         }
       }
 
       function fillRect(x, y, w, h, color) {
         const x0 = Math.round(x), y0 = Math.round(y);
-        const rw = Math.min(120, Math.round(w)), rh = Math.min(140, Math.round(h));
+        const rw = Math.min(120, Math.round(w)), rh = Math.min(130, Math.round(h));
         for (let r = 0; r < rh; r++) {
           for (let c = 0; c < rw; c++) setPx(x0 + c, y0 + r, color);
         }
       }
 
-      // RECTÁNGULO 16-BIT CON BISEL DE LUZ/SOMBRA AUTOMÁTICO Y CONTORNO NEGRO
       function fillBorderedRect(x, y, w, h, fillColor, borderColor = '#0b0c10') {
-        const rw = Math.min(118, Math.round(w)), rh = Math.min(130, Math.round(h));
-        if (rw <= 0 || rh <= 0) return;
+        const rw = Math.min(116, Math.round(w)), rh = Math.min(115, Math.round(h));
         fillRect(x, y, rw, rh, borderColor);
         if (rw > 2 && rh > 2) {
           fillRect(x + 1, y + 1, rw - 2, rh - 2, fillColor);
-          if (rw >= 6 && rh >= 6 && typeof fillColor === 'string' && fillColor.startsWith('#')) {
-            const hi = shadeColor(fillColor, 18);
-            const sh = shadeColor(fillColor, -18);
-            fillRect(x + 1, y + 1, rw - 3, 1, hi);
-            fillRect(x + 1, y + 1, 1, rh - 3, hi);
-            fillRect(x + 2, y + rh - 2, rw - 3, 1, sh);
-            fillRect(x + rw - 2, y + 2, 1, rh - 3, sh);
-          }
         }
       }
 
+      // PINCEL DE VOLUMETRÍA 16-BIT (DA EFECTO 3D DE RELIEVE Y SOMBRA A CUALQUIER FORMA)
+      function drawVolumetricBox(x, y, w, h, baseColor = '#3b82f6', borderColor = '#0b0c10') {
+        fillBorderedRect(x, y, w, h, baseColor, borderColor);
+        // Brillo superior e izquierdo
+        fillRect(x + 1, y + 1, w - 2, 2, 'rgba(255,255,255,0.35)');
+        fillRect(x + 1, y + 1, 2, h - 2, 'rgba(255,255,255,0.25)');
+        // Sombra inferior y derecha
+        fillRect(x + 1, y + h - 2, w - 2, 1, 'rgba(0,0,0,0.45)');
+        fillRect(x + w - 2, y + 1, 1, h - 2, 'rgba(0,0,0,0.45)');
+      }
+
       function fillCircle(cx, cy, radius, color) {
-        const rInt = Math.min(52, Math.round(radius));
+        const rInt = Math.min(48, Math.round(radius));
         for (let r = -rInt; r <= rInt; r++) {
           for (let c = -rInt; c <= rInt; c++) {
             if (c * c + r * r <= rInt * rInt) setPx(cx + c, cy + r, color);
@@ -667,21 +620,14 @@ async function main() {
         }
       }
 
-      // CÍRCULO 16-BIT CON VOLUMEN ESFÉRICO Y CONTORNO
       function fillBorderedCircle(cx, cy, radius, fillColor, borderColor = '#0b0c10') {
-        const rInt = Math.min(52, Math.round(radius));
-        if (rInt <= 0) return;
+        const rInt = Math.min(48, Math.round(radius));
         fillCircle(cx, cy, rInt, borderColor);
-        if (rInt > 1) {
-          fillCircle(cx, cy, rInt - 1, fillColor);
-          if (rInt >= 5 && typeof fillColor === 'string' && fillColor.startsWith('#')) {
-            fillCircle(cx - Math.max(1, Math.floor(rInt * 0.28)), cy - Math.max(1, Math.floor(rInt * 0.28)), Math.max(1, Math.floor(rInt * 0.32)), shadeColor(fillColor, 24));
-          }
-        }
+        if (rInt > 1) fillCircle(cx, cy, rInt - 1, fillColor);
       }
 
       function drawRing(cx, cy, radius, thickness = 2, color = '#fde047') {
-        const rOut = Math.min(52, Math.round(radius));
+        const rOut = Math.min(48, Math.round(radius));
         const rIn = Math.max(0, rOut - thickness);
         for (let r = -rOut; r <= rOut; r++) {
           for (let c = -rOut; c <= rOut; c++) {
@@ -708,13 +654,13 @@ async function main() {
 
       function fillPolygon(points, fillColor, borderColor = '#0b0c10') {
         if (!Array.isArray(points) || points.length < 3) return;
-        let minY = 500, maxY = -500;
+        let minY = ROWS, maxY = 0;
         points.forEach(p => {
           if (p[1] < minY) minY = Math.floor(p[1]);
           if (p[1] > maxY) maxY = Math.ceil(p[1]);
         });
-        minY = Math.max(-120, minY);
-        maxY = Math.min(220, maxY);
+        minY = Math.max(0, minY);
+        maxY = Math.min(ROWS - 1, maxY);
 
         for (let y = minY; y <= maxY; y++) {
           const nodes = [];
@@ -749,169 +695,26 @@ async function main() {
         fillPolygon([[x1, y1], [x2, y2], [x3, y3]], fillColor, borderColor);
       }
 
-      // ======================================================================
-      // 3. PROPULSORES DIRECCIONALES Y FUEGO (CERO FUEGO DESALINEADO EN COHETES)
-      // ======================================================================
-      function drawThruster(nozzleX, nozzleY, dirX = -1, dirY = 0, length = 14, width = 6, localFrame = 0) {
-        const mag = Math.max(0.01, Math.hypot(dirX, dirY));
-        const ux = dirX / mag;
-        const uy = dirY / mag;
-        const px = -uy;
-        const py = ux;
-
-        const pulse = 0.8 + 0.35 * Math.abs(Math.sin(localFrame * 0.6));
-        const lenOuter = length * pulse;
-        const lenInner = lenOuter * 0.58;
-        const hw = width / 2;
-
-        // Cono exterior rojo/naranja apuntando exactamente en la dirección (ux, uy)
-        fillTriangle(
-          nozzleX + px * hw, nozzleY + py * hw,
-          nozzleX - px * hw, nozzleY - py * hw,
-          nozzleX + ux * lenOuter, nozzleY + uy * lenOuter,
-          '#f97316', '#dc2626'
-        );
-        // Núcleo incandescente amarillo/blanco
-        fillTriangle(
-          nozzleX + px * (hw * 0.5), nozzleY + py * (hw * 0.5),
-          nozzleX - px * (hw * 0.5), nozzleY - py * (hw * 0.5),
-          nozzleX + ux * lenInner, nozzleY + uy * lenInner,
-          '#fef08a', null
-        );
-      }
-
-      function drawFire(x, y, w = 16, h = 14, localFrame = 0) {
-        for (let c = 0; c < w; c += 2) {
-          const fh = Math.max(4, Math.round(h * (0.5 + 0.5 * Math.abs(Math.sin(localFrame * 0.35 + c)))));
-          fillRect(x + c, y - fh, 2, fh, '#dc2626');
-          fillRect(x + c, y - Math.floor(fh * 0.65), 2, Math.floor(fh * 0.65), '#f97316');
-          fillRect(x + c, y - Math.floor(fh * 0.35), 2, Math.floor(fh * 0.35), '#fde047');
-        }
-      }
-
-      // ======================================================================
-      // 4. ESQUELETO ARTICULADO UNIVERSAL (NUNCA MÁS MONOLITOS SIN CARA)
-      // ======================================================================
-      function drawCharacter(x, y, opts = {}, localFrame = 0) {
-        const o = opts || {};
-        const s = o.scale || 1.0;
-        const suitCol = o.suitColor || o.shirtColor || '#2563eb';
-        const pantsCol = o.pantsColor || '#1e293b';
-        const skinCol = o.skinColor || '#e6ad86';
-        const hairCol = o.hairColor || '#2b1d14';
-        const hatCol = o.hatColor || null;
-        const action = String(o.action || (o.isMoving ? 'walk' : 'stand')).toLowerCase();
-        const expr = String(o.expression || 'normal').toLowerCase();
-        const facingLeft = !!o.facingLeft;
-        const dir = facingLeft ? -1 : 1;
-
-        let handR = [x + dir * 10, y - 18];
-        let handL = [x - dir * 8, y - 18];
-
-        withGroup(x, y, { scale: s, flipX: facingLeft }, () => {
-          const isMoving = action === 'walk' || action === 'run' || action === 'bike';
-          const stride = isMoving ? Math.sin(localFrame * (action === 'run' ? 0.45 : 0.28)) * 4 : 0;
-          const bob = isMoving ? Math.abs(Math.cos(localFrame * 0.28)) * 1.5 : 0;
-
-          // Sombra en el suelo
-          fillRect(-7, -1, 15, 2, 'rgba(0,0,0,0.4)');
-
-          // Piernas articuladas
-          fillBorderedRect(-5 + Math.round(stride * 0.5), -11 - Math.max(0, Math.round(stride * 0.4)), 5, 11, pantsCol, '#0b0c10');
-          fillBorderedRect(1 - Math.round(stride * 0.5), -11 - Math.max(0, Math.round(-stride * 0.4)), 5, 11, shadeColor(pantsCol, -12), '#0b0c10');
-
-          // Torso con volumen y cuello
-          const ty = -25 - Math.round(bob);
-          fillBorderedRect(-7, ty, 15, 15, suitCol, '#0b0c10');
-          if (o.tieColor || o.accentColor) {
-            fillRect(-1, ty + 2, 3, 9, o.tieColor || o.accentColor);
-          }
-
-          // Brazo trasero
-          fillBorderedRect(-9, ty + 2 - Math.round(stride * 0.3), 4, 10, shadeColor(suitCol, -15), '#0b0c10');
-          fillRect(-9, ty + 11 - Math.round(stride * 0.3), 3, 3, skinCol);
-
-          // Cabeza con rostro completo (ojos, cejas, boca y pelo/casco)
-          const hy = ty - 14;
-          fillBorderedRect(-7, hy, 15, 14, skinCol, '#0b0c10');
-          fillRect(-7, hy, 15, 4, hairCol);
-          fillRect(-7, hy + 4, 2, 3, hairCol);
-
-          if (hatCol) {
-            fillBorderedRect(-9, hy - 2, 19, 3, hatCol, '#0b0c10');
-            fillBorderedRect(-7, hy - 6, 15, 5, hatCol, '#0b0c10');
-          }
-
-          // Ojos orientados hacia delante y cejas expresivas
-          fillRect(-2, hy + 5, 3, 3, '#ffffff');
-          fillRect(3, hy + 5, 3, 3, '#ffffff');
-          setPx(0, hy + 6, '#0b0c10');
-          setPx(5, hy + 6, '#0b0c10');
-          fillRect(-2, hy + 3, 3, 1, '#2b1d14');
-          fillRect(3, hy + 3, 3, 1, '#2b1d14');
-
-          // Boca
-          if (expr === 'scared' || expr === 'panic') {
-            fillBorderedRect(0, hy + 9, 4, 4, '#991b1b', '#0b0c10');
-          } else if (localFrame % 6 < 3 && o.isTalking !== false) {
-            fillRect(0, hy + 10, 4, 2, '#991b1b');
-          } else {
-            fillRect(0, hy + 10, 4, 1, '#2b1d14');
-          }
-
-          // Brazo delantero articulado
-          const armWave = o.armRaise ? -5 : Math.round(stride * 0.3);
-          fillBorderedRect(6, ty + 2 + armWave, 5, 9, suitCol, '#0b0c10');
-          fillRect(8, ty + 9 + armWave, 3, 3, skinCol);
-
-          handR = [x + dir * Math.round(10 * s), y + Math.round((ty + 10 + armWave) * s)];
-          handL = [x - dir * Math.round(8 * s), y + Math.round((ty + 11) * s)];
-        });
-
-        return {
-          rightHandX: handR[0],
-          rightHandY: handR[1],
-          leftHandX: handL[0],
-          leftHandY: handL[1],
-          headX: x,
-          headY: y - Math.round(35 * s)
-        };
-      }
-
-      // ======================================================================
-      // 5. RENDERIZADOR DE ENTIDADES COMPUESTAS ESCULPIDAS POR EL AGENTE 3
-      // ======================================================================
-      const compiledEntities = {};
-      Object.entries(customEntities).forEach(([key, def]) => {
-        const codeStr = typeof def === 'string' ? def : (def && def.code) || '';
-        if (codeStr.trim().length > 5) {
-          try {
-            compiledEntities[key.toLowerCase().trim()] = new Function('api', 'localFrame', 'progress', \`with (api) { \${codeStr} }\`);
-          } catch (e) {
-            console.warn('⚠️ Error compilando entidad ' + key + ':', e.message);
+      function drawSky(skyTop = '#1d4ed8', skyMid = '#3b82f6', skyBot = '#93c5fd', groundCol = '#334155', horizonY = GROUND_Y) {
+        const bands = [skyTop, skyMid, skyBot];
+        const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
+        for (let r = 0; r < horizonY; r++) {
+          const bIdx = Math.min(bands.length - 1, Math.floor(r / bandH));
+          const nextIdx = Math.min(bands.length - 1, bIdx + 1);
+          const ratio = (r % bandH) / bandH;
+          for (let c = 0; c < COLS; c++) {
+            let col = bands[bIdx];
+            if (ratio > 0.72 && ((r + c) % 2 === 0)) col = bands[nextIdx];
+            grid[r][c] = col;
           }
         }
-      });
-
-      function drawEntity(entityName, cx, cy, opts = {}, localFrame = 0, progress = 0.5) {
-        const key = String(entityName || '').toLowerCase().trim();
-        const fn = compiledEntities[key] || Object.values(compiledEntities)[0];
-        if (fn) {
-          withGroup(cx, cy, opts, () => {
-            try { fn(sandboxApi, localFrame, progress); } catch (e) {}
-          });
-          return;
-        }
-        // Fallback si se llamó con nombre de custom_sprite clásico
-        drawCustomSprite(key, cx, cy, (opts && opts.scale) || 1.35, !!(opts && opts.flipX), localFrame);
+        fillRect(0, horizonY, COLS, 2, '#0b0c10');
+        fillRect(0, horizonY + 2, COLS, 3, '#64748b');
+        fillRect(0, horizonY + 5, COLS, ROWS - horizonY - 5, groundCol);
       }
 
       function drawCustomSprite(spriteName, centerX, centerY, scale = 1.35, flipX = false, localFrame = 0) {
         const key = String(spriteName || '').toLowerCase().trim();
-        if (compiledEntities[key]) {
-          drawEntity(key, centerX, centerY, { scale, flipX }, localFrame);
-          return;
-        }
         const def = customSprites[key] || Object.values(customSprites)[0];
         if (!def) {
           fillBorderedCircle(centerX, centerY, Math.round(6 * scale), '#ffd166', '#0b0c10');
@@ -961,84 +764,6 @@ async function main() {
         }
       }
 
-      // ETIQUETA NÍTIDA PARA INFOGRAFÍAS, PANTALLAS Y GRÁFICAS (CERO BARRAS VACÍAS)
-      function drawBadge(textStr, centerX, centerY, textColor = '#ffd166', bgColor = '#090d16') {
-        const clean = cleanArcadeText(textStr).slice(0, 22);
-        if (!clean) return;
-        const [gx, gy] = transformStack.length > 0 ? transformPoint(centerX, centerY) : [centerX, centerY];
-        badgeQueue.push({
-          text: clean,
-          x: Math.max(14, Math.min(106, gx)) * CELL,
-          y: Math.max(36, Math.min(144, gy)) * CELL,
-          color: textColor || '#ffd166',
-          bg: bgColor || 'rgba(8, 10, 20, 0.92)'
-        });
-      }
-
-      function drawSky(skyTop = '#1d4ed8', skyMid = '#3b82f6', skyBot = '#93c5fd', groundCol = '#334155', horizonY = GROUND_Y) {
-        const bands = [skyTop, skyMid, skyBot];
-        const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
-        for (let r = 0; r < horizonY; r++) {
-          const bIdx = Math.min(bands.length - 1, Math.floor(r / bandH));
-          const nextIdx = Math.min(bands.length - 1, bIdx + 1);
-          const ratio = (r % bandH) / bandH;
-          for (let c = 0; c < COLS; c++) {
-            let col = bands[bIdx];
-            if (ratio > 0.72 && ((r + c) % 2 === 0)) col = bands[nextIdx];
-            grid[r][c] = col;
-          }
-        }
-        fillRect(0, horizonY, COLS, 2, '#0b0c10');
-        fillRect(0, horizonY + 2, COLS, 3, shadeColor(groundCol, 18));
-        fillRect(0, horizonY + 5, COLS, ROWS - horizonY - 5, groundCol);
-      }
-
-      function drawRoom(wallCol = '#334155', panelCol = '#1e293b', floorCol = '#78350f', groundY = GROUND_Y) {
-        fillRect(0, 0, COLS, groundY, wallCol);
-        for (let c = 6; c < COLS - 6; c += 22) {
-          fillBorderedRect(c, 32, 16, groundY - 52, panelCol, 'rgba(0,0,0,0.3)');
-        }
-        fillBorderedRect(0, groundY - 18, COLS, 18, '#451a03', '#0b0c10');
-        fillBorderedRect(0, groundY - 20, COLS, 3, '#d97706', '#0b0c10');
-        fillRect(0, groundY, COLS, ROWS - groundY, floorCol);
-      }
-
-      function drawOcean(waterY = 118, waterCol = '#0284c7', foamCol = '#bae6fd', localFrame = 0) {
-        for (let c = 0; c < COLS; c++) {
-          const waveH = Math.round(Math.sin(c * 0.2 + localFrame * 0.25) * 2);
-          const wy = waterY + waveH;
-          fillRect(c, wy, 1, ROWS - wy, waterCol);
-          setPx(c, wy, foamCol);
-        }
-      }
-
-      function drawExplosion(cx, cy, maxRadius = 28, progress = 0.5, localFrame = 0) {
-        const p = Math.max(0.15, Math.min(1, progress * 1.35));
-        const rOuter = Math.round(maxRadius * p);
-        const rMid = Math.round(rOuter * 0.72);
-        const rCore = Math.round(rOuter * 0.42);
-
-        drawRing(cx, cy, Math.min(46, rOuter + 5), 2, '#fde047');
-        fillBorderedCircle(cx, cy, rOuter, '#dc2626', '#0b0c10');
-        fillCircle(cx, cy, rMid, '#f97316');
-        fillCircle(cx, cy, rCore, (localFrame % 4 < 2) ? '#ffffff' : '#fef08a');
-      }
-
-      function drawPlanet(cx, cy, radius = 16, baseCol = '#e11d48', hasRings = false) {
-        if (hasRings) {
-          drawPixelLine(cx - radius - 10, cy + 4, cx + radius + 10, cy - 4, 3, '#fde047');
-        }
-        fillBorderedCircle(cx, cy, radius, baseCol, '#0b0c10');
-      }
-
-      function drawRadar(cx, cy, radius = 22, color = '#10b981', localFrame = 0) {
-        const safeY = Math.max(54, Math.min(105, cy));
-        fillBorderedCircle(cx, safeY, radius, '#051911', '#0b0c10');
-        drawRing(cx, safeY, radius, 2, color);
-        const ang = localFrame * 0.14;
-        drawPixelLine(cx, safeY, cx + Math.cos(ang) * (radius - 2), safeY + Math.sin(ang) * (radius - 2), 2, color);
-      }
-
       function drawStars(count = 20, localFrame = 0) {
         for (let i = 0; i < count; i++) {
           const sx = (i * 19 + 7) % COLS;
@@ -1049,44 +774,23 @@ async function main() {
         }
       }
 
-      function drawClouds(count = 3, speed = 0.4, localFrame = 0, yMin = 44) {
-        for (let i = 0; i < count; i++) {
-          const cx = ((i * 38 - Math.floor(localFrame * speed)) % (COLS + 24) + (COLS + 24)) % (COLS + 24) - 12;
-          const cy = yMin + (i % 3) * 12;
-          fillBorderedRect(cx, cy, 18, 5, '#ffffff', '#cbd5e1');
-          fillRect(cx + 4, cy - 3, 10, 4, '#ffffff');
-        }
-      }
-
       const sandboxApi = {
         COLS, ROWS, GROUND_Y,
-        withGroup, group: withGroup,
         setPx, px: setPx,
         fillRect, rect: fillRect,
         fillBorderedRect, borderedRect: fillBorderedRect, box: fillBorderedRect,
+        drawVolumetricBox, volumetricBox: drawVolumetricBox,
         fillCircle, circle: fillCircle,
         fillBorderedCircle, borderedCircle: fillBorderedCircle,
         drawRing, ring: drawRing,
         drawPixelLine, line: drawPixelLine,
         fillPolygon, polygon: fillPolygon,
         fillTriangle, triangle: fillTriangle,
-        drawThruster, thruster: drawThruster,
-        drawFire, fire: drawFire,
-        drawCharacter, character: drawCharacter, actor: drawCharacter,
-        drawEntity, entity: drawEntity,
-        drawCustomSprite, customSprite: drawCustomSprite,
-        drawBadge, badge: drawBadge, text: drawBadge,
         drawSky, sky: drawSky,
-        drawRoom, room: drawRoom,
-        drawOcean, ocean: drawOcean,
-        drawExplosion, explosion: drawExplosion,
-        drawPlanet, planet: drawPlanet,
-        drawRadar, radar: drawRadar,
         drawStars, stars: drawStars,
-        drawClouds, clouds: drawClouds,
-        shadeColor,
+        drawCustomSprite, customSprite: drawCustomSprite,
         sin: Math.sin, cos: Math.cos, abs: Math.abs, floor: Math.floor,
-        round: Math.round, min: Math.min, max: Math.max, hypot: Math.hypot, PI: Math.PI
+        round: Math.round, min: Math.min, max: Math.max, PI: Math.PI
       };
 
       const compiledSceneBeats = escenas.map((esc) => {
@@ -1110,35 +814,6 @@ async function main() {
             ctx.fillStyle = grid[r][c];
             ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
           }
-        }
-        if (badgeQueue.length > 0) {
-          ctx.save();
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          badgeQueue.forEach(item => {
-            const rawStr = item.text;
-            const displayStr = rawStr.replace(/Ñ/g, 'N');
-            let fSize = 15;
-            ctx.font = \`\${fSize}px "Press Start 2P", monospace\`;
-            while (ctx.measureText(displayStr).width > 540 && fSize > 10) {
-              fSize -= 1;
-              ctx.font = \`\${fSize}px "Press Start 2P", monospace\`;
-            }
-            const totalW = ctx.measureText(displayStr).width;
-            const bw = totalW + 20;
-            const bh = fSize + 14;
-            const safeX = Math.max(bw / 2 + 10, Math.min(720 - bw / 2 - 10, item.x));
-            ctx.fillStyle = item.bg;
-            ctx.fillRect(safeX - bw / 2, item.y - bh / 2, bw, bh);
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(safeX - bw / 2, item.y - bh / 2, bw, bh);
-            ctx.fillStyle = '#000000';
-            ctx.fillText(displayStr, safeX + 2, item.y + 2);
-            ctx.fillStyle = item.color;
-            ctx.fillText(displayStr, safeX, item.y);
-          });
-          ctx.restore();
         }
       }
 
@@ -1176,15 +851,12 @@ async function main() {
           updateTopBanner(activeBeat.texto_1 || esc.texto_1 || 'HISTORIA');
         }
 
-        transformStack = [];
-        badgeQueue = [];
-        drawSky('#0f172a', '#1e293b', '#334155', '#1e293b', GROUND_Y);
+        drawSky('#1d4ed8', '#3b82f6', '#93c5fd', '#334155', GROUND_Y);
 
         if (activeBeat.bgFn) {
           try { activeBeat.bgFn(sandboxApi, beatProgress, beatLocalFrame); } catch (e) {}
         }
 
-        transformStack = [];
         if (activeBeat.fgFn) {
           try { activeBeat.fgFn(sandboxApi, beatProgress, beatLocalFrame); } catch (e) {}
         }
@@ -1235,7 +907,12 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Jerárquico 16-Bit v16.0 (${duracionExactaVideo.toFixed(2)}s)...`); for (let i = 0; i < totalFrames; i++) { const currentTime = i / fps; await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime); const frameNum = String(i).padStart(5, '0'); await page.screenshot({ path: `frames/frame_${frameNum}.jpg`, type: 'jpeg', quality: 94 });
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v18.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  for (let i = 0; i < totalFrames; i++) {
+    const currentTime = i / fps;
+    await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
+    const frameNum = String(i).padStart(5, '0');
+    await page.screenshot({ path: `frames/frame_${frameNum}.jpg`, type: 'jpeg', quality: 94 });
   }
 
   await browser.close();
@@ -1243,13 +920,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v16.0...');
+  console.log('🔊 Ensamblando MP4 final v18.0...');
   execSync(
-    `ffmpeg -y -framerate ${fps} -i frames/frame_\%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t${duracionExactaVideo.toFixed(3)} output.mp4`,
+    `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Jerárquico 16-Bit v16.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v18.0 generado con éxito!');
   process.exit(0);
 }
 
