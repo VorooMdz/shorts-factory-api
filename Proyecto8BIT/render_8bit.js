@@ -5,7 +5,7 @@ const { execSync } = require('child_process');
 const puppeteer = require('puppeteer');
 
 // ============================================================================
-// 1. UTILIDADES DE RED, CORRECCIÓN DE "Ñ" Y SUBTÍTULOS SINCRONIZADOS
+// 1. UTILIDADES DE RED, CORRECCIÓN DE "Ñ" Y SUBTÍTULOS + MICRO-PLANOS FONÉTICOS
 // ============================================================================
 function downloadFile(url, dest) {
   return new Promise((resolve, reject) => {
@@ -56,7 +56,7 @@ function normalizeForMatch(str) {
   return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 }
 
-function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
+function buildSubtitleChunksAndBeatTimings(escenas, alignmentData, realAudioDuration) {
   const stopWords = new Set([
     'DE', 'LA', 'EL', 'EN', 'Y', 'A', 'LOS', 'SE', 'DEL', 'LAS', 'UN', 'POR',
     'CON', 'NO', 'UNA', 'SU', 'PARA', 'ES', 'AL', 'LO', 'COMO', 'MAS', 'MÁS',
@@ -186,6 +186,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   let cumulativeWeight = 0;
   let flatIdx = 0;
   const allChunks = [];
+  const sceneWordSlices = [];
 
   escenas.forEach((esc, idx) => {
     const tokens = sceneTokensList[idx];
@@ -196,6 +197,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 
     const sceneFlatSlice = flatTokens.slice(flatIdx, flatIdx + tokens.length);
     flatIdx += tokens.length;
+    sceneWordSlices.push(sceneFlatSlice);
 
     let sceneStart = (idx === 0) ? 0 : phoneticStart;
     let sceneEnd = (idx === escenas.length - 1) ? realAudioDuration : phoneticEnd;
@@ -272,6 +274,8 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
           wEnd = (wIdx === g.length - 1) ? gEnd : (wCursor + wDur);
           wCursor = wEnd;
         }
+        item.finalStart = wStart;
+        item.finalEnd = wEnd;
         return { text: item.tk.text, highlight: item.tk.highlight, start: wStart, end: wEnd };
       });
 
@@ -289,6 +293,67 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
     escenas[0].inicio = 0;
     escenas[escenas.length - 1].fin = realAudioDuration;
   }
+
+  // CALCULAR LOS TIEMPOS EXACTOS DE CADA SUB-ESCENA (MICRO-PLANO) SEGÚN SU FRAGMENTO DE VOZ
+  escenas.forEach((esc, idx) => {
+    const sStart = esc.inicio;
+    const sEnd = esc.fin;
+    const sDur = Math.max(0.3, sEnd - sStart);
+    const beats = Array.isArray(esc.sub_escenas) && esc.sub_escenas.length > 0 ? esc.sub_escenas : [esc];
+    const wordSlice = sceneWordSlices[idx] || [];
+
+    // Pesos proporcionales según la longitud de cada fragmento_voz (o equitativo si no viene)
+    const weights = beats.map(b => {
+      const frag = String(b.fragmento_voz || b.texto_1 || '').trim();
+      return Math.max(4, frag.length);
+    });
+    const totalW = weights.reduce((a, b) => a + b, 0);
+
+    let accumW = 0;
+    let wordSearchCursor = 0;
+
+    beats.forEach((b, bIdx) => {
+      const propStart = sStart + (accumW / totalW) * sDur;
+      accumW += weights[bIdx];
+      const propEnd = (bIdx === beats.length - 1) ? sEnd : (sStart + (accumW / totalW) * sDur);
+
+      let bStart = (bIdx === 0) ? sStart : propStart;
+      // Intentar alinear el corte con la primera palabra del fragmento_voz en ElevenLabs
+      if (bIdx > 0 && b.fragmento_voz && wordSlice.length > 0) {
+        const firstFragWords = String(b.fragmento_voz).trim().split(/\s+/).slice(0, 2).map(normalizeForMatch).filter(Boolean);
+        if (firstFragWords.length > 0) {
+          for (let wi = wordSearchCursor + 1; wi < wordSlice.length; wi++) {
+            const wNorm = wordSlice[wi].norm;
+            if (wNorm && (wNorm === firstFragWords[0] || wNorm.startsWith(firstFragWords[0]))) {
+              if (wordSlice[wi].finalStart !== undefined) {
+                const candidateT = wordSlice[wi].finalStart;
+                if (candidateT > sStart + 0.35 && candidateT < sEnd - 0.35) {
+                  bStart = candidateT;
+                  wordSearchCursor = wi;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      b.inicio_beat = bStart;
+      b.fin_beat = propEnd;
+    });
+
+    // Garantizar continuidad matemática entre todos los micro-planos de la escena
+    for (let bi = 0; bi < beats.length - 1; bi++) {
+      if (beats[bi + 1].inicio_beat <= beats[bi].inicio_beat + 0.35) {
+        beats[bi + 1].inicio_beat = sStart + ((bi + 1) / beats.length) * sDur;
+      }
+      beats[bi].fin_beat = beats[bi + 1].inicio_beat;
+    }
+    if (beats.length > 0) {
+      beats[0].inicio_beat = sStart;
+      beats[beats.length - 1].fin_beat = sEnd;
+    }
+  });
+
   for (let i = 0; i < allChunks.length - 1; i++) {
     if (allChunks[i].end > allChunks[i + 1].start) allChunks[i].end = allChunks[i + 1].start;
     else if (allChunks[i + 1].start - allChunks[i].end < 0.12) allChunks[i].end = allChunks[i + 1].start;
@@ -297,7 +362,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
 }
 
 // ============================================================================
-// 2. SINTETIZADOR CHIPTUNE SINCRONIZADO CON CADA PLANO (BEAT CUTS)
+// 2. SINTETIZADOR CHIPTUNE SINCRONIZADO AL MILISEGUNDO CON CADA MICRO-PLANO
 // ============================================================================
 function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   const allTypes = [
@@ -308,16 +373,16 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   function get8BitRecipe(type, pitchMod) {
     const p = pitchMod.toFixed(3);
     const catalog = {
-      coin_8bit: { expr: `0.17*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`, dur: 0.38 },
-      laser_8bit: { expr: `0.15*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.30 },
-      explosion_8bit: { expr: `0.24*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.60 },
-      powerup_8bit: { expr: `0.15*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`, dur: 0.42 },
-      alarm_8bit: { expr: `0.15*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`, dur: 0.50 },
-      glitch_8bit: { expr: `0.15*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`, dur: 0.32 },
-      jump_8bit: { expr: `0.16*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`, dur: 0.28 },
-      error_8bit: { expr: `0.19*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`, dur: 0.42 },
-      typing_8bit: { expr: `0.14*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`, dur: 0.28 },
-      level_clear_8bit: { expr: `0.15*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`, dur: 0.55 }
+      coin_8bit: { expr: `0.16*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`, dur: 0.36 },
+      laser_8bit: { expr: `0.14*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.28 },
+      explosion_8bit: { expr: `0.22*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.55 },
+      powerup_8bit: { expr: `0.14*(lt(t,0.07)*sgn(sin(2*PI*330*${p}*t))+between(t,0.07,0.14)*sgn(sin(2*PI*392*${p}*t))+between(t,0.14,0.21)*sgn(sin(2*PI*659*${p}*t))+gt(t,0.21)*exp(-5*(t-0.21))*sgn(sin(2*PI*523*${p}*t)))`, dur: 0.40 },
+      alarm_8bit: { expr: `0.14*exp(-1.5*t)*sgn(sin(2*PI*(680+220*sgn(sin(2*PI*8*t)))*t))`, dur: 0.45 },
+      glitch_8bit: { expr: `0.14*exp(-6*t)*sgn(sin(2*PI*440*${p}*t)*sin(2*PI*67*t)+sin(2*PI*1120*t)*sin(2*PI*29*t))`, dur: 0.30 },
+      jump_8bit: { expr: `0.15*exp(-4*t)*sgn(sin(2*PI*(180*${p}+520*t)*t))`, dur: 0.26 },
+      error_8bit: { expr: `0.18*exp(-4*t)*(lt(t,0.14)*sgn(sin(2*PI*165*${p}*t))+gt(t,0.14)*sgn(sin(2*PI*130.8*${p}*t)))`, dur: 0.38 },
+      typing_8bit: { expr: `0.13*(exp(-40*t)*sgn(sin(2*PI*1400*t))+gt(t,0.09)*exp(-40*(t-0.09))*sgn(sin(2*PI*1650*t))+gt(t,0.18)*exp(-40*(t-0.18))*sgn(sin(2*PI*1300*t)))`, dur: 0.26 },
+      level_clear_8bit: { expr: `0.14*exp(-2.8*t)*(sgn(sin(2*PI*523.25*${p}*t))+0.7*sgn(sin(2*PI*659.25*${p}*t))+0.5*sgn(sin(2*PI*783.99*${p}*t)))`, dur: 0.50 }
     };
     return catalog[type] || catalog.coin_8bit;
   }
@@ -327,9 +392,6 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   let sfxIndex = 0;
 
   escenas.forEach((esc, idx) => {
-    const startEsc = Number(esc.inicio) || 0;
-    const endEsc = Number(esc.fin) || (startEsc + 4);
-    const durEsc = Math.max(0.4, endEsc - startEsc);
     const beats = Array.isArray(esc.sub_escenas) && esc.sub_escenas.length > 0 ? esc.sub_escenas : [esc];
 
     beats.forEach((beat, bIdx) => {
@@ -339,7 +401,7 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
       }
       const pitchMod = 0.90 + (((videoHash + sfxIndex * 13) % 21) / 100);
       const recipe = get8BitRecipe(rawType, pitchMod);
-      const beatStartSec = (idx === 0 && bIdx === 0) ? 0.04 : Math.max(0.05, startEsc + (bIdx / beats.length) * durEsc);
+      const beatStartSec = (idx === 0 && bIdx === 0) ? 0.04 : Math.max(0.05, Number(beat.inicio_beat ?? esc.inicio) || 0);
       const delayMs = Math.round(beatStartSec * 1000);
 
       inputs.push(`-f lavfi -i "aevalsrc='${recipe.expr}':s=44100:d=${recipe.dur}"`);
@@ -361,12 +423,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR PIXEL-ART v19.0 (JERÁRQUICO, VOLUMÉTRICO Y 100% LIBRE DE PLANTILLAS)
+// 3. MOTOR PIXEL-ART v20.0 (ULTRA-ÁGIL, CORTES FONÉTICOS Y VOLUMETRÍA 16-BIT)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v19.0 desde URL...');
+    console.log('📥 Descargando payload v20.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -422,7 +484,7 @@ async function main() {
 
   const customSpritesDict = payload.custom_sprites || {};
   const customRigsDict = payload.custom_rigs || {};
-  const subtitleChunks = buildSubtitleChunks(escenas, payload.alignment, duracionExactaVideo);
+  const subtitleChunks = buildSubtitleChunksAndBeatTimings(escenas, payload.alignment, duracionExactaVideo);
 
   // Mezcla de Audio con bg_music2.mp3
   try {
@@ -560,12 +622,7 @@ async function main() {
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1e293b'));
       let dataTextOverlayQueue = [];
 
-      // PILA DE TRANSFORMACIÓN JERÁRQUICA LOCAL (PARA QUE NINGUNA PIEZA O FUEGO SE DESALINEE JAMÁS)
       let transformStack = [{ tx: 0, ty: 0, scale: 1, rad: 0, flipX: false }];
-
-      function currentTransform() {
-        return transformStack[transformStack.length - 1];
-      }
 
       function mapPoint(lx, ly) {
         let x = lx, y = ly;
@@ -740,7 +797,6 @@ async function main() {
         }
       }
 
-      // CAJA VOLUMÉTRICA 16-BIT CON BRILLO SUPERIOR Y SOMBRA INFERIOR AUTOMÁTICA
       function drawVolumetricBox(x, y, w, h, baseColor = '#3b82f6', highlightColor = '#60a5fa', shadowColor = '#1d4ed8', borderColor = '#0b0c10') {
         fillBorderedRect(x, y, w, h, baseColor, borderColor);
         if (w > 4 && h > 4) {
@@ -811,9 +867,8 @@ async function main() {
       }
 
       // ======================================================================
-      // 2. FÍSICAS DIRECCIONALES Y EMISORES VECTORIALES (ADIÓS AL FUEGO DESALINEADO)
+      // 2. FÍSICAS DIRECCIONALES Y EMISORES VECTORIALES
       // ======================================================================
-      // Dibuja un chorro de propulsión/fuego en CUALQUIER ángulo (ej: 180 = hacia la izquierda, 90 = hacia abajo)
       function drawExhaust(nozzleX, nozzleY, angleDeg = 180, length = 16, width = 8, localFrame = 0) {
         const rad = (angleDeg * Math.PI) / 180;
         const perpRad = rad + Math.PI / 2;
@@ -832,7 +887,6 @@ async function main() {
         fillPolygon(makeCone(lenMid, width * 0.72), '#f97316', null);
         fillPolygon(makeCone(lenCore, width * 0.45), '#fef08a', null);
 
-        // Partículas de humo/chispas saliendo en la dirección exacta del chorro
         for (let i = 1; i <= 4; i++) {
           const dist = lenOuter + ((localFrame * 2 + i * 5) % 14);
           const spread = Math.sin(localFrame * 0.4 + i * 2) * (width * 0.45);
@@ -856,10 +910,10 @@ async function main() {
       }
 
       // ======================================================================
-      // 3. MICRO-TIPOGRAFÍA DE DATOS EN LIENZO (PARA MONITORES, PIZARRAS Y GRÁFICOS)
+      // 3. MICRO-TIPOGRAFÍA DE DATOS EN LIENZO (PARA MONITORES, NOTAS Y PIZARRAS)
       // ======================================================================
       function drawDataText(textStr, x, y, color = '#fde047', size = 1, bgColor = 'rgba(8,10,20,0.88)') {
-        const clean = cleanArcadeText(textStr).slice(0, 18);
+        const clean = cleanArcadeText(String(textStr ?? '')).slice(0, 20);
         if (!clean) return;
         const [gx, gy] = mapPoint(x, y);
         dataTextOverlayQueue.push({
@@ -994,7 +1048,7 @@ async function main() {
         }
       }
 
-      // COMPILADOR DE RIGS PROCEDURALES (ENTIDADES MULTIPARTE CREADAS DESDE CERO POR EL AGENTE 3)
+      // COMPILADOR DE RIGS PROCEDURALES
       const compiledRigs = {};
       for (const [rigName, rigCode] of Object.entries(customRigsRaw || {})) {
         if (typeof rigCode === 'string' && rigCode.trim().length > 5) {
@@ -1043,6 +1097,7 @@ async function main() {
         drawExhaust, exhaust: drawExhaust, jetFlame: drawExhaust,
         drawFire, fire: drawFire,
         drawDataText, dataText: drawDataText, text: drawDataText, label: drawDataText,
+        drawScreenText: drawDataText, drawTinyText: drawDataText, print: drawDataText,
         drawSky, sky: drawSky,
         drawRoom, room: drawRoom,
         drawOcean, ocean: drawOcean,
@@ -1067,7 +1122,13 @@ async function main() {
           if (code && typeof code === 'string' && code.trim().length > 5) {
             try { fgFn = new Function('api', 'progress', 'localFrame', \`with (api) { \${code} }\`); } catch (e) {}
           }
-          return { bgFn, fgFn, texto_1: b.texto_1 || esc.texto_1 };
+          return {
+            bgFn,
+            fgFn,
+            texto_1: b.texto_1 || esc.texto_1,
+            inicio_beat: b.inicio_beat ?? esc.inicio,
+            fin_beat: b.fin_beat ?? esc.fin
+          };
         });
       });
 
@@ -1078,7 +1139,6 @@ async function main() {
             ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
           }
         }
-        // Pintar etiquetas de datos dentro de pantallas/monitores con nitidez total y soporte Ñ
         if (dataTextOverlayQueue.length > 0) {
           ctx.save();
           ctx.textAlign = 'center';
@@ -1143,18 +1203,24 @@ async function main() {
         if (activeIdx === -1 && escenas.length > 0) activeIdx = 0;
 
         const esc = escenas[activeIdx] || {};
-        const localT = Math.max(0, t - (esc.inicio || 0));
-        const durEsc = Math.max(0.5, (esc.fin || 4) - (esc.inicio || 0));
-        const sceneProgress = Math.max(0, Math.min(0.9999, localT / durEsc));
-
         const beats = compiledSceneBeats[activeIdx] || [];
         const numBeats = Math.max(1, beats.length);
-        const beatIdx = Math.min(numBeats - 1, Math.floor(sceneProgress * numBeats));
-        const beatProgress = Math.max(0, Math.min(1, (sceneProgress * numBeats) - beatIdx));
-        const beatDur = durEsc / numBeats;
-        const beatLocalFrame = Math.floor((localT - beatIdx * beatDur) * 30);
+
+        // Seleccionar el micro-plano exacto según su timestamp fonético (inicio_beat .. fin_beat)
+        let beatIdx = beats.findIndex((b, bi) => {
+          if (bi === numBeats - 1) return t >= b.inicio_beat;
+          return t >= b.inicio_beat && t < b.fin_beat;
+        });
+        if (beatIdx === -1) beatIdx = 0;
 
         const activeBeat = beats[beatIdx] || {};
+        const bStart = Number(activeBeat.inicio_beat ?? esc.inicio) || 0;
+        const bEnd = Number(activeBeat.fin_beat ?? esc.fin) || (bStart + 2);
+        const beatDur = Math.max(0.25, bEnd - bStart);
+        const beatLocalT = Math.max(0, t - bStart);
+        const beatProgress = Math.max(0, Math.min(1, beatLocalT / beatDur));
+        const beatLocalFrame = Math.floor(beatLocalT * 30);
+
         const beatKey = activeIdx + '_' + beatIdx;
 
         if (beatKey !== lastBeatKey) {
@@ -1221,7 +1287,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Jerárquico v19.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Ultra-Ágil v20.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1234,13 +1300,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v19.0...');
+  console.log('🔊 Ensamblando MP4 final v20.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v19.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v20.0 generado con éxito!');
   process.exit(0);
 }
 
