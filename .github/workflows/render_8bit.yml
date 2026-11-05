@@ -39,7 +39,7 @@ jobs:
         run: npm install
 
       - name: Install Python dependencies
-        run: pip install requests
+        run: pip install requests google-api-python-client google-auth google-auth-oauthlib
 
       - name: Download payload and run 8-BIT renderer
         env:
@@ -47,11 +47,14 @@ jobs:
         run: |
           node Proyecto8BIT/render_8bit.js "$PAYLOAD_URL"
 
-      - name: Send rendered 8-BIT Video to Telegram Bot
+      - name: Upload & Schedule on YouTube + Send to Telegram Bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          YOUTUBE_CLIENT_ID_8BIT: ${{ secrets.YOUTUBE_CLIENT_ID_8BIT }}
+          YOUTUBE_CLIENT_SECRET_8BIT: ${{ secrets.YOUTUBE_CLIENT_SECRET_8BIT }}
+          YOUTUBE_REFRESH_TOKEN_8BIT: ${{ secrets.YOUTUBE_REFRESH_TOKEN_8BIT }}
         run: |
           python Proyecto8BIT/upload_8bit.py
 
@@ -59,7 +62,7 @@ jobs:
         if: success()
         run: |
           git pull --rebase origin main || true
-          node -e 'const fs = require("fs"); const histPath = "Proyecto8BIT/historial_8bit.json"; const payload = JSON.parse(fs.readFileSync("payload.json", "utf8")); let hist = []; if (fs.existsSync(histPath)) { try { hist = JSON.parse(fs.readFileSync(histPath, "utf8")); } catch(e) { hist = []; } } if (!Array.isArray(hist)) hist = []; const existingIdx = hist.findIndex(item => item.id_concepto === payload.id_concepto); const entry = { id_concepto: payload.id_concepto, subrama: payload.subrama || "8Bit Heists", titulo: payload.tema_titulo || payload.TituloYT, keywords_concepto: payload.keywords_concepto || [], programado_para_madrid: payload.programado_para_madrid || null, fecha_publicacion: new Date().toISOString() }; if (existingIdx === -1) { hist.push(entry); } else { hist[existingIdx] = entry; } fs.writeFileSync(histPath, JSON.stringify(hist, null, 2));'
+          node -e 'const fs = require("fs"); const histPath = "Proyecto8BIT/historial_8bit.json"; const payload = JSON.parse(fs.readFileSync("payload.json", "utf8")); let hist = []; if (fs.existsSync(histPath)) { try { hist = JSON.parse(fs.readFileSync(histPath, "utf8")); } catch(e) { hist = []; } } if (!Array.isArray(hist)) hist = []; const existingIdx = hist.findIndex(item => item.id_concepto === payload.id_concepto); const entry = { id_concepto: payload.id_concepto, subrama: payload.subrama || "8Bit Heists", titulo: payload.tema_titulo || payload.TituloYT, keywords_concepto: payload.keywords_concepto || [], programado_para_madrid: payload.programado_para_madrid || null, youtube_video_id: payload.youtube_video_id || null, fecha_publicacion: new Date().toISOString() }; if (existingIdx === -1) { hist.push(entry); } else { hist[existingIdx] = entry; } fs.writeFileSync(histPath, JSON.stringify(hist, null, 2));'
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Proyecto8BIT/historial_8bit.json
