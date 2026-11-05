@@ -295,5 +295,20 @@
     ],
     "programado_para_madrid": "04/11/2026 a las 17:49",
     "fecha_publicacion": "2026-11-04T16:49:03.051Z"
+  },
+  {
+    "id_concepto": "mars_polar_lander_1999_bug",
+    "subrama": "Bugs Espaciales y Militares",
+    "titulo": "El bug que apagó los motores a 40 metros de Marte: Mars Polar Lander",
+    "keywords_concepto": [
+      "Mars Polar Lander",
+      "NASA",
+      "bug de software",
+      "Marte",
+      "sensores de aterrizaje",
+      "fallo espacial"
+    ],
+    "programado_para_madrid": null,
+    "fecha_publicacion": "2026-11-05T07:36:36.016Z"
   }
 ]
