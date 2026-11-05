@@ -302,7 +302,6 @@ function buildSubtitleChunksAndBeatTimings(escenas, alignmentData, realAudioDura
     const beats = Array.isArray(esc.sub_escenas) && esc.sub_escenas.length > 0 ? esc.sub_escenas : [esc];
     const wordSlice = sceneWordSlices[idx] || [];
 
-    // Pesos proporcionales según la longitud de cada fragmento_voz (o equitativo si no viene)
     const weights = beats.map(b => {
       const frag = String(b.fragmento_voz || b.texto_1 || '').trim();
       return Math.max(4, frag.length);
@@ -318,7 +317,6 @@ function buildSubtitleChunksAndBeatTimings(escenas, alignmentData, realAudioDura
       const propEnd = (bIdx === beats.length - 1) ? sEnd : (sStart + (accumW / totalW) * sDur);
 
       let bStart = (bIdx === 0) ? sStart : propStart;
-      // Intentar alinear el corte con la primera palabra del fragmento_voz en ElevenLabs
       if (bIdx > 0 && b.fragmento_voz && wordSlice.length > 0) {
         const firstFragWords = String(b.fragmento_voz).trim().split(/\s+/).slice(0, 2).map(normalizeForMatch).filter(Boolean);
         if (firstFragWords.length > 0) {
@@ -341,7 +339,6 @@ function buildSubtitleChunksAndBeatTimings(escenas, alignmentData, realAudioDura
       b.fin_beat = propEnd;
     });
 
-    // Garantizar continuidad matemática entre todos los micro-planos de la escena
     for (let bi = 0; bi < beats.length - 1; bi++) {
       if (beats[bi + 1].inicio_beat <= beats[bi].inicio_beat + 0.35) {
         beats[bi + 1].inicio_beat = sStart + ((bi + 1) / beats.length) * sDur;
@@ -423,12 +420,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR PIXEL-ART v20.0 (ULTRA-ÁGIL, CORTES FONÉTICOS Y VOLUMETRÍA 16-BIT)
+// 3. MOTOR PIXEL-ART v20.1 (BARRA NO LINEAL + ROTACIÓN DE 5 CANCIONES SUNO)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v20.0 desde URL...');
+    console.log('📥 Descargando payload v20.1 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -486,16 +483,28 @@ async function main() {
   const customRigsDict = payload.custom_rigs || {};
   const subtitleChunks = buildSubtitleChunksAndBeatTimings(escenas, payload.alignment, duracionExactaVideo);
 
-  // Mezcla de Audio con bg_music2.mp3
+  // ==========================================================================
+  // SELECCIÓN ALTERNADA ENTRE LAS 5 PISTAS DE MÚSICA (bg_music_1.mp3 .. bg_music_5.mp3)
+  // ==========================================================================
   try {
     let hasSfx = false;
     try { hasSfx = buildChiptuneSfxTrack(escenas, duracionExactaVideo, hash); } catch (e) {}
 
-    let bgMusicPath = path.resolve(__dirname, '../bg_music2.mp3');
-    if (!fs.existsSync(bgMusicPath)) bgMusicPath = path.resolve('bg_music2.mp3');
-    if (!fs.existsSync(bgMusicPath)) bgMusicPath = path.resolve(__dirname, '../bg_music.mp3');
+    const trackIdx = Math.max(1, Math.min(5, Number(payload.music_track_index) || ((hash % 5) + 1)));
+    const candidateFiles = [
+      path.resolve(`bg_music_${trackIdx}.mp3`),
+      path.resolve(__dirname, `bg_music_${trackIdx}.mp3`),
+      path.resolve(__dirname, `../bg_music_${trackIdx}.mp3`),
+      path.resolve(__dirname, '../bg_music2.mp3'),
+      path.resolve('bg_music2.mp3'),
+      path.resolve(__dirname, '../bg_music.mp3'),
+      path.resolve('bg_music.mp3')
+    ];
 
-    if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
+    const bgMusicPath = candidateFiles.find(p => fs.existsSync(p) && fs.statSync(p).size > 1000);
+
+    if (bgMusicPath) {
+      console.log(`🎵 Usando pista musical (Turno #${trackIdx}): ${path.basename(bgMusicPath)}`);
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
       execSync(`ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.78,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`, { stdio: 'inherit' });
       if (hasSfx) {
@@ -913,7 +922,7 @@ async function main() {
       // 3. MICRO-TIPOGRAFÍA DE DATOS EN LIENZO (PARA MONITORES, NOTAS Y PIZARRAS)
       // ======================================================================
       function drawDataText(textStr, x, y, color = '#fde047', size = 1, bgColor = 'rgba(8,10,20,0.88)') {
-        const clean = cleanArcadeText(String(textStr ?? '')).slice(0, 20);
+        const clean = cleanArcadeText(String(textStr ?? '')).slice(0, 22);
         if (!clean) return;
         const [gx, gy] = mapPoint(x, y);
         dataTextOverlayQueue.push({
@@ -1097,7 +1106,7 @@ async function main() {
         drawExhaust, exhaust: drawExhaust, jetFlame: drawExhaust,
         drawFire, fire: drawFire,
         drawDataText, dataText: drawDataText, text: drawDataText, label: drawDataText,
-        drawScreenText: drawDataText, drawTinyText: drawDataText, print: drawDataText,
+        drawText: drawDataText, fillText: drawDataText, drawScreenText: drawDataText, drawTinyText: drawDataText, print: drawDataText,
         drawSky, sky: drawSky,
         drawRoom, room: drawRoom,
         drawOcean, ocean: drawOcean,
@@ -1194,7 +1203,9 @@ async function main() {
 
       window.setFrameData = function(frameIdx, t) {
         const linearRatio = (frameIdx + 1) / totalFrames;
-        document.getElementById('pbar').style.width = Math.min(100, linearRatio * 100) + '%';
+        // CURVA DE RETENCIÓN NO LINEAL: Avanza rápido al principio y desacelera hacia el final
+        const curvedRatio = 1 - Math.pow(1 - linearRatio, 2.35);
+        document.getElementById('pbar').style.width = Math.min(100, curvedRatio * 100) + '%';
 
         let activeIdx = escenas.findIndex((e, idx) => {
           if (idx === escenas.length - 1) return t >= e.inicio;
@@ -1206,7 +1217,6 @@ async function main() {
         const beats = compiledSceneBeats[activeIdx] || [];
         const numBeats = Math.max(1, beats.length);
 
-        // Seleccionar el micro-plano exacto según su timestamp fonético (inicio_beat .. fin_beat)
         let beatIdx = beats.findIndex((b, bi) => {
           if (bi === numBeats - 1) return t >= b.inicio_beat;
           return t >= b.inicio_beat && t < b.fin_beat;
@@ -1287,7 +1297,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Ultra-Ágil v20.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Ultra-Ágil v20.1 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1300,13 +1310,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v20.0...');
+  console.log('🔊 Ensamblando MP4 final v20.1...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v20.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v20.1 generado con éxito!');
   process.exit(0);
 }
 
