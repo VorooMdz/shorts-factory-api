@@ -1,7 +1,6 @@
 import os
-import sys
 import json
-import argparse
+import requests
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from google.oauth2.credentials import Credentials
@@ -12,18 +11,20 @@ from googleapiclient.errors import HttpError
 
 MADRID_TZ = ZoneInfo("Europe/Madrid")
 DAILY_SLOTS_HOURS = [14, 18, 21]
-SLOTS_CACHE_FILE = os.path.join(os.path.dirname(__file__), "scheduled_slots_8bit.json")
+PAYLOAD_PATH = "payload.json"
+VIDEO_PATH = "output.mp4"
+HISTORIAL_PATH = os.path.join("Proyecto8BIT", "historial_8bit.json")
 
 
-def get_authenticated_service():
+def get_authenticated_youtube():
     client_id = os.environ.get("YOUTUBE_CLIENT_ID_8BIT")
     client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET_8BIT")
     refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN_8BIT")
 
     if not all([client_id, client_secret, refresh_token]):
         raise RuntimeError(
-            "Faltan credenciales en las variables de entorno: "
-            "YOUTUBE_CLIENT_ID_8BIT, YOUTUBE_CLIENT_SECRET_8BIT o YOUTUBE_REFRESH_TOKEN_8BIT."
+            "❌ Faltan secretos de YouTube: verifica YOUTUBE_CLIENT_ID_8BIT, "
+            "YOUTUBE_CLIENT_SECRET_8BIT y YOUTUBE_REFRESH_TOKEN_8BIT en GitHub Secrets."
         )
 
     creds = Credentials(
@@ -37,116 +38,91 @@ def get_authenticated_service():
     return build("youtube", "v3", credentials=creds)
 
 
-def load_local_cached_slots():
-    if not os.path.exists(SLOTS_CACHE_FILE):
-        return set()
+def load_historial_slots():
+    occupied = set()
+    if not os.path.exists(HISTORIAL_PATH):
+        return occupied
     try:
-        with open(SLOTS_CACHE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return set(data.get("occupied_slots", []))
+        with open(HISTORIAL_PATH, "r", encoding="utf-8") as f:
+            hist = json.load(f)
+            if isinstance(hist, list):
+                for item in hist:
+                    slot = item.get("programado_para_madrid")
+                    if slot and isinstance(slot, str):
+                        occupied.add(slot.strip())
     except Exception as e:
-        print(f"[WARN] No se pudo leer la caché local de slots: {e}")
-        return set()
-
-
-def save_local_cached_slot(slot_key, occupied_set):
-    occupied_set.add(slot_key)
-    # Limpiamos fechas pasadas para mantener ligero el fichero
-    today_str = datetime.now(MADRID_TZ).strftime("%Y-%m-%d")
-    filtered = sorted([s for s in occupied_set if s >= today_str])
-    try:
-        with open(SLOTS_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"occupied_slots": filtered}, f, indent=2)
-    except Exception as e:
-        print(f"[WARN] No se pudo guardar la caché local de slots: {e}")
+        print(f"⚠️ Aviso leyendo historial_8bit.json: {e}")
+    return occupied
 
 
 def fetch_youtube_scheduled_slots(youtube):
-    """
-    Consulta en tiempo real los vídeos subidos al canal que están en estado
-    'private' con fecha 'publishAt' programada, y devuelve un conjunto de
-    claves 'YYYY-MM-DD HH:00' en hora de Madrid.
-    """
     occupied = set()
     try:
-        ch_response = youtube.channels().list(
-            part="contentDetails", mine=True
-        ).execute()
-
-        items = ch_response.get("items", [])
+        ch_resp = youtube.channels().list(part="contentDetails", mine=True).execute()
+        items = ch_resp.get("items", [])
         if not items:
             return occupied
 
         uploads_playlist_id = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
-
         video_ids = []
         next_page_token = None
-        # Inspeccionamos hasta los últimos 100 vídeos subidos al canal
-        for _ in range(2):
-            pl_response = youtube.playlistItems().list(
+
+        for _ in range(3):
+            pl_resp = youtube.playlistItems().list(
                 part="contentDetails",
                 playlistId=uploads_playlist_id,
                 maxResults=50,
                 pageToken=next_page_token
             ).execute()
 
-            for item in pl_response.get("items", []):
+            for item in pl_resp.get("items", []):
                 video_ids.append(item["contentDetails"]["videoId"])
 
-            next_page_token = pl_response.get("nextPageToken")
+            next_page_token = pl_resp.get("nextPageToken")
             if not next_page_token:
                 break
 
-        # Consultamos el estado de programación en lotes de 50 IDs
         for i in range(0, len(video_ids), 50):
-            batch_ids = video_ids[i:i + 50]
-            vid_response = youtube.videos().list(
+            batch = video_ids[i:i + 50]
+            vid_resp = youtube.videos().list(
                 part="status,snippet",
-                id=",".join(batch_ids)
+                id=",".join(batch)
             ).execute()
 
-            for vid in vid_response.get("items", []):
+            for vid in vid_resp.get("items", []):
                 status = vid.get("status", {})
                 publish_at_str = status.get("publishAt")
                 if publish_at_str:
-                    # Ejemplo de formato: 2026-11-06T13:00:00Z
                     dt_utc = datetime.fromisoformat(publish_at_str.replace("Z", "+00:00"))
                     dt_madrid = dt_utc.astimezone(MADRID_TZ)
 
-                    # Si el vídeo está programado cerca de las 14, 18 o 21h (±45 min),
-                    # marcamos ese slot oficial como ocupado
                     for slot_hour in DAILY_SLOTS_HOURS:
                         slot_candidate = dt_madrid.replace(
                             hour=slot_hour, minute=0, second=0, microsecond=0
                         )
-                        diff_minutes = abs((dt_madrid - slot_candidate).total_seconds()) / 60.0
-                        if diff_minutes <= 45:
+                        diff_min = abs((dt_madrid - slot_candidate).total_seconds()) / 60.0
+                        if diff_min <= 45:
                             slot_key = slot_candidate.strftime("%Y-%m-%d %H:00")
                             occupied.add(slot_key)
-                            print(f"[INFO] Slot detectado ocupado en YouTube: {slot_key} ({vid['snippet']['title'][:30]}...)")
-
+                            title_preview = vid.get("snippet", {}).get("title", "")[:35]
+                            print(f"📌 Slot ocupado detectado en YouTube: {slot_key} ({title_preview})")
     except HttpError as e:
-        print(f"[WARN] No se pudo consultar la lista de vídeos en la API (verifica el scope youtube.readonly): {e}")
+        print(f"⚠️ Aviso consultando vídeos programados en YouTube API: {e}")
     except Exception as e:
-        print(f"[WARN] Error al inspeccionar vídeos programados: {e}")
+        print(f"⚠️ Error al inspeccionar slots en YouTube: {e}")
 
     return occupied
 
 
 def get_next_available_slot(youtube):
-    """
-    Calcula el siguiente slot disponible a las 14:00, 18:00 o 21:00 (hora de Madrid).
-    Deja un margen mínimo de 20 minutos respecto a la hora actual.
-    """
-    occupied_api = fetch_youtube_scheduled_slots(youtube)
-    occupied_cache = load_local_cached_slots()
-    all_occupied = occupied_api.union(occupied_cache)
+    occupied_yt = fetch_youtube_scheduled_slots(youtube)
+    occupied_hist = load_historial_slots()
+    all_occupied = occupied_yt.union(occupied_hist)
 
     now_madrid = datetime.now(MADRID_TZ)
-    min_valid_time = now_madrid + timedelta(minutes=20)
+    min_valid_time = now_madrid + timedelta(minutes=15)
 
-    # Buscamos hueco desde hoy hasta 60 días en adelante
-    for day_offset in range(60):
+    for day_offset in range(90):
         target_date = (now_madrid + timedelta(days=day_offset)).date()
         for hour in DAILY_SLOTS_HOURS:
             candidate_madrid = datetime(
@@ -164,34 +140,53 @@ def get_next_available_slot(youtube):
 
             slot_key = candidate_madrid.strftime("%Y-%m-%d %H:00")
             if slot_key not in all_occupied:
-                save_local_cached_slot(slot_key, all_occupied)
                 candidate_utc = candidate_madrid.astimezone(timezone.utc)
                 publish_at_iso = candidate_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
                 return slot_key, publish_at_iso
 
-    raise RuntimeError("No se encontraron slots libres en los próximos 60 días.")
+    raise RuntimeError("❌ No se encontraron slots disponibles en los próximos 90 días.")
 
 
-def upload_scheduled_video(video_path, title, description, tags):
-    youtube = get_authenticated_service()
+def upload_to_youtube(payload):
+    youtube = get_authenticated_youtube()
     slot_madrid_str, publish_at_iso = get_next_available_slot(youtube)
 
-    print(f"[INFO] Programando vídeo para el slot: {slot_madrid_str} (Hora Madrid) -> UTC: {publish_at_iso}")
+    raw_title = (
+        payload.get("TituloYT")
+        or payload.get("tema_titulo")
+        or "Expediente Clasificado 👾 #Shorts"
+    ).strip()
 
-    # Aseguramos que #Shorts esté presente
-    clean_title = title.strip()
-    if "#shorts" not in clean_title.lower():
-        if len(clean_title) <= 91:
-            clean_title = f"{clean_title} #Shorts"
+    if "#shorts" not in raw_title.lower():
+        if len(raw_title) <= 91:
+            raw_title = f"{raw_title} #Shorts"
         else:
-            clean_title = clean_title[:91].rstrip() + " #Shorts"
+            raw_title = raw_title[:91].rstrip() + " #Shorts"
+
+    raw_desc = (
+        payload.get("DescripcionYT")
+        or f"{payload.get('tema_titulo', 'Caso real reconstruido en Archivo 8-Bit.')}\n\n#Shorts #Archivo8Bit #Hacking #Bugs #Gaming #Historia"
+    ).strip()
+
+    if "#shorts" not in raw_desc.lower():
+        raw_desc += "\n\n#Shorts #Archivo8Bit #PixelArt"
+
+    kw_list = payload.get("keywords_concepto")
+    default_tags = ["Archivo 8-Bit", "Shorts", "Hacking", "Bugs", "Gaming", "PixelArt", "Historia", "Ciberseguridad"]
+    if isinstance(kw_list, list) and len(kw_list) > 0:
+        tags = list(dict.fromkeys([str(k) for k in kw_list if k] + default_tags))[:20]
+    else:
+        tags = default_tags
+
+    print(f"🚀 Subiendo a YouTube: '{raw_title[:60]}'")
+    print(f"🕒 Slot asignado: {slot_madrid_str} (Hora de España) -> UTC: {publish_at_iso}")
 
     body = {
         "snippet": {
-            "title": clean_title[:100],
-            "description": description,
+            "title": raw_title[:100],
+            "description": raw_desc[:4900],
             "tags": tags,
-            "categoryId": "28",  # Science & Technology / Gaming
+            "categoryId": "28",
             "defaultLanguage": "es",
             "defaultAudioLanguage": "es"
         },
@@ -203,7 +198,7 @@ def upload_scheduled_video(video_path, title, description, tags):
     }
 
     media = MediaFileUpload(
-        video_path,
+        VIDEO_PATH,
         mimetype="video/mp4",
         resumable=True,
         chunksize=1024 * 1024 * 5
@@ -219,36 +214,79 @@ def upload_scheduled_video(video_path, title, description, tags):
     while response is None:
         status, response = request.next_chunk()
         if status:
-            print(f"[UPLOAD] Subiendo: {int(status.progress() * 100)}%")
+            print(f"⬆️ Progreso subida YouTube: {int(status.progress() * 100)}%")
 
     video_id = response.get("id")
-    print("=" * 60)
-    print(f"¡VÍDEO SUBIDO Y PROGRAMADO CON ÉXITO!")
-    print(f"ID de YouTube : {video_id}")
-    print(f"Slot asignado : {slot_madrid_str} (Hora de España)")
-    print(f"URL           : https://youtu.be/{video_id}")
-    print("=" * 60)
-    return video_id, slot_madrid_str
+    print(f"✅ ¡Subido y programado en YouTube! ID: {video_id} | Slot: {slot_madrid_str}")
+    return video_id, slot_madrid_str, raw_title
+
+
+def send_telegram_notification(payload, video_id, slot_madrid_str, final_title):
+    token = os.environ.get("TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+
+    if not token or not chat_id:
+        print("⚠️ Variables TELEGRAM_TOKEN o TELEGRAM_CHAT_ID no definidas. Saltando envío a Telegram.")
+        return
+
+    music_idx = payload.get("music_track_index", 1)
+    music_style = payload.get("music_style", "MYSTERY")
+    subrama = payload.get("subrama", "Archivo 8-Bit")
+
+    caption = (
+        f"✅ *SHORT 8-BIT RENDERIZADO Y PROGRAMADO*\n\n"
+        f"🎬 *Título:* {final_title}\n"
+        f"🕹️ *Rama:* {subrama}\n"
+        f"🎵 *Pista:* bg_music_{music_idx}.mp3 ({music_style})\n"
+        f"📅 *Slot Madrid:* `{slot_madrid_str}`\n"
+        f"🔗 *YouTube:* https://youtu.be/{video_id}"
+    )
+
+    url = f"https://api.telegram.org/bot{token}/sendVideo"
+    try:
+        with open(VIDEO_PATH, "rb") as video_file:
+            resp = requests.post(
+                url,
+                data={
+                    "chat_id": chat_id,
+                    "caption": caption,
+                    "parse_mode": "Markdown"
+                },
+                files={"video": video_file},
+                timeout=120
+            )
+        if resp.status_code == 200:
+            print("📲 Vídeo y confirmación enviados a Telegram correctamente.")
+        else:
+            print(f"⚠️ Respuesta de Telegram ({resp.status_code}): {resp.text}")
+    except Exception as e:
+        print(f"⚠️ Error enviando vídeo a Telegram: {e}")
+
+
+def main():
+    if not os.path.exists(VIDEO_PATH):
+        raise FileNotFoundError(f"❌ No existe el archivo renderizado '{VIDEO_PATH}'.")
+
+    payload = {}
+    if os.path.exists(PAYLOAD_PATH):
+        with open(PAYLOAD_PATH, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+            if isinstance(raw, list) and len(raw) > 0:
+                raw = raw[0]
+            if isinstance(raw, dict) and "json" in raw:
+                raw = raw["json"]
+            payload = raw if isinstance(raw, dict) else {}
+
+    video_id, slot_madrid_str, final_title = upload_to_youtube(payload)
+
+    # Actualizamos payload.json para que el siguiente paso del workflow lo guarde en historial_8bit.json
+    payload["programado_para_madrid"] = slot_madrid_str
+    payload["youtube_video_id"] = video_id
+    with open(PAYLOAD_PATH, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    send_telegram_notification(payload, video_id, slot_madrid_str, final_title)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Subida y programación automática por slots para Archivo 8-Bit")
-    parser.add_argument("--video", required=True, help="Ruta al archivo MP4")
-    parser.add_argument("--meta", required=False, help="Ruta al archivo JSON de metadatos o guion")
-    parser.add_argument("--title", required=False, help="Título del vídeo (opcional si va en --meta)")
-    parser.add_argument("--desc", required=False, help="Descripción del vídeo (opcional si va en --meta)")
-    args = parser.parse_args()
-
-    title = args.title or "Expediente Clasificado #Shorts"
-    description = args.desc or "Nuevo caso real reconstruido en Archivo 8-Bit.\n\n#Shorts #Archivo8Bit #Hacking #Historia #Gaming"
-    tags = ["Archivo 8-Bit", "Shorts", "Hacking", "Bugs", "Videojuegos", "PixelArt", "Ciberseguridad", "Curiosidades"]
-
-    if args.meta and os.path.exists(args.meta):
-        with open(args.meta, "r", encoding="utf-8") as f:
-            meta_data = json.load(f)
-            title = meta_data.get("title") or meta_data.get("youtube_title") or title
-            description = meta_data.get("description") or meta_data.get("youtube_description") or description
-            if "tags" in meta_data and isinstance(meta_data["tags"], list):
-                tags = meta_data["tags"]
-
-    upload_scheduled_video(args.video, title, description, tags)
+    main()
