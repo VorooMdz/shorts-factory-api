@@ -361,12 +361,12 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR PIXEL-ART STUDIO v18.0 (LIENZO 100% LIBRE CON VOLUMETRÍA 16-BIT)
+// 3. MOTOR PIXEL-ART v19.0 (JERÁRQUICO, VOLUMÉTRICO Y 100% LIBRE DE PLANTILLAS)
 // ============================================================================
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v18.0 desde URL...');
+    console.log('📥 Descargando payload v19.0 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -421,6 +421,7 @@ async function main() {
   });
 
   const customSpritesDict = payload.custom_sprites || {};
+  const customRigsDict = payload.custom_rigs || {};
   const subtitleChunks = buildSubtitleChunks(escenas, payload.alignment, duracionExactaVideo);
 
   // Mezcla de Audio con bg_music2.mp3
@@ -449,6 +450,7 @@ async function main() {
 
   const safeEscenasJson = JSON.stringify(escenas).replace(/<\/script>/gi, '<\\/script>');
   const safeSpritesJson = JSON.stringify(customSpritesDict).replace(/<\/script>/gi, '<\\/script>');
+  const safeRigsJson = JSON.stringify(customRigsDict).replace(/<\/script>/gi, '<\\/script>');
   const safeChunksJson = JSON.stringify(subtitleChunks).replace(/<\/script>/gi, '<\\/script>');
 
   const htmlContent = `
@@ -544,6 +546,7 @@ async function main() {
     <script>
       const escenas = ${safeEscenasJson};
       const customSprites = ${safeSpritesJson};
+      const customRigsRaw = ${safeRigsJson};
       const subtitleChunks = ${safeChunksJson};
       const totalFrames = ${totalFrames};
 
@@ -555,6 +558,55 @@ async function main() {
       const canvas = document.getElementById('pixel-canvas');
       const ctx = canvas.getContext('2d');
       let grid = Array.from({ length: ROWS }, () => Array(COLS).fill('#1e293b'));
+      let dataTextOverlayQueue = [];
+
+      // PILA DE TRANSFORMACIÓN JERÁRQUICA LOCAL (PARA QUE NINGUNA PIEZA O FUEGO SE DESALINEE JAMÁS)
+      let transformStack = [{ tx: 0, ty: 0, scale: 1, rad: 0, flipX: false }];
+
+      function currentTransform() {
+        return transformStack[transformStack.length - 1];
+      }
+
+      function mapPoint(lx, ly) {
+        let x = lx, y = ly;
+        for (let i = transformStack.length - 1; i >= 1; i--) {
+          const t = transformStack[i];
+          const fx = t.flipX ? -x : x;
+          const sx = fx * t.scale;
+          const sy = y * t.scale;
+          const cosA = Math.cos(t.rad), sinA = Math.sin(t.rad);
+          const rx = sx * cosA - sy * sinA;
+          const ry = sx * sinA + sy * cosA;
+          x = rx + t.tx;
+          y = ry + t.ty;
+        }
+        return [Math.round(x), Math.round(y)];
+      }
+
+      function withGroup(cx, cy, scale = 1.0, angleDeg = 0, flipX = false, drawCallback) {
+        if (typeof scale === 'function') {
+          drawCallback = scale;
+          scale = 1.0; angleDeg = 0; flipX = false;
+        } else if (typeof angleDeg === 'function') {
+          drawCallback = angleDeg;
+          angleDeg = 0; flipX = false;
+        } else if (typeof flipX === 'function') {
+          drawCallback = flipX;
+          flipX = false;
+        }
+        transformStack.push({
+          tx: Number(cx) || 0,
+          ty: Number(cy) || 0,
+          scale: Math.max(0.15, Math.min(4.0, Number(scale) || 1.0)),
+          rad: ((Number(angleDeg) || 0) * Math.PI) / 180,
+          flipX: !!flipX
+        });
+        try {
+          if (typeof drawCallback === 'function') drawCallback();
+        } finally {
+          transformStack.pop();
+        }
+      }
 
       function toRetroHtml(str) {
         const clean = String(str || '').toUpperCase()
@@ -576,86 +628,31 @@ async function main() {
         el.innerHTML = toRetroHtml(clean);
       }
 
-      function setPx(x, y, color) {
-        const cx = Math.round(x);
-        const cy = Math.round(y);
+      // ======================================================================
+      // 1. PRIMITIVAS CON SOPORTE DE TRANSFORMACIÓN LOCAL Y VOLUMETRÍA 16-BIT
+      // ======================================================================
+      function setPxRaw(gx, gy, color) {
+        const cx = Math.round(gx);
+        const cy = Math.round(gy);
         if (cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS && color) {
           grid[cy][cx] = color;
         }
       }
 
-      function fillRect(x, y, w, h, color) {
-        const x0 = Math.round(x), y0 = Math.round(y);
-        const rw = Math.min(120, Math.round(w)), rh = Math.min(130, Math.round(h));
-        for (let r = 0; r < rh; r++) {
-          for (let c = 0; c < rw; c++) setPx(x0 + c, y0 + r, color);
+      function setPx(x, y, color) {
+        if (!color) return;
+        if (transformStack.length === 1) {
+          setPxRaw(x, y, color);
+        } else {
+          const [gx, gy] = mapPoint(x, y);
+          setPxRaw(gx, gy, color);
         }
       }
 
-      function fillBorderedRect(x, y, w, h, fillColor, borderColor = '#0b0c10') {
-        const rw = Math.min(116, Math.round(w)), rh = Math.min(115, Math.round(h));
-        fillRect(x, y, rw, rh, borderColor);
-        if (rw > 2 && rh > 2) {
-          fillRect(x + 1, y + 1, rw - 2, rh - 2, fillColor);
-        }
-      }
-
-      // PINCEL DE VOLUMETRÍA 16-BIT (DA EFECTO 3D DE RELIEVE Y SOMBRA A CUALQUIER FORMA)
-      function drawVolumetricBox(x, y, w, h, baseColor = '#3b82f6', borderColor = '#0b0c10') {
-        fillBorderedRect(x, y, w, h, baseColor, borderColor);
-        // Brillo superior e izquierdo
-        fillRect(x + 1, y + 1, w - 2, 2, 'rgba(255,255,255,0.35)');
-        fillRect(x + 1, y + 1, 2, h - 2, 'rgba(255,255,255,0.25)');
-        // Sombra inferior y derecha
-        fillRect(x + 1, y + h - 2, w - 2, 1, 'rgba(0,0,0,0.45)');
-        fillRect(x + w - 2, y + 1, 1, h - 2, 'rgba(0,0,0,0.45)');
-      }
-
-      function fillCircle(cx, cy, radius, color) {
-        const rInt = Math.min(48, Math.round(radius));
-        for (let r = -rInt; r <= rInt; r++) {
-          for (let c = -rInt; c <= rInt; c++) {
-            if (c * c + r * r <= rInt * rInt) setPx(cx + c, cy + r, color);
-          }
-        }
-      }
-
-      function fillBorderedCircle(cx, cy, radius, fillColor, borderColor = '#0b0c10') {
-        const rInt = Math.min(48, Math.round(radius));
-        fillCircle(cx, cy, rInt, borderColor);
-        if (rInt > 1) fillCircle(cx, cy, rInt - 1, fillColor);
-      }
-
-      function drawRing(cx, cy, radius, thickness = 2, color = '#fde047') {
-        const rOut = Math.min(48, Math.round(radius));
-        const rIn = Math.max(0, rOut - thickness);
-        for (let r = -rOut; r <= rOut; r++) {
-          for (let c = -rOut; c <= rOut; c++) {
-            const d2 = c * c + r * r;
-            if (d2 <= rOut * rOut && d2 >= rIn * rIn) setPx(cx + c, cy + r, color);
-          }
-        }
-      }
-
-      function drawPixelLine(x0, y0, x1, y1, thickness = 2, color = '#ffffff') {
-        let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-        let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-        let err = dx + dy;
-        let cx = Math.round(x0), cy = Math.round(y0);
-        const ex = Math.round(x1), ey = Math.round(y1);
-        for (let i = 0; i < 300; i++) {
-          fillRect(cx - Math.floor(thickness / 2), cy - Math.floor(thickness / 2), thickness, thickness, color);
-          if (cx === ex && cy === ey) break;
-          let e2 = 2 * err;
-          if (e2 >= dy) { err += dy; cx += sx; }
-          if (e2 <= dx) { err += dx; cy += sy; }
-        }
-      }
-
-      function fillPolygon(points, fillColor, borderColor = '#0b0c10') {
-        if (!Array.isArray(points) || points.length < 3) return;
+      function fillPolygonRaw(pts, fillColor, borderColor = '#0b0c10') {
+        if (!Array.isArray(pts) || pts.length < 3) return;
         let minY = ROWS, maxY = 0;
-        points.forEach(p => {
+        pts.forEach(p => {
           if (p[1] < minY) minY = Math.floor(p[1]);
           if (p[1] > maxY) maxY = Math.ceil(p[1]);
         });
@@ -664,10 +661,10 @@ async function main() {
 
         for (let y = minY; y <= maxY; y++) {
           const nodes = [];
-          let j = points.length - 1;
-          for (let i = 0; i < points.length; i++) {
-            const yi = points[i][1], yj = points[j][1];
-            const xi = points[i][0], xj = points[j][0];
+          let j = pts.length - 1;
+          for (let i = 0; i < pts.length; i++) {
+            const yi = pts[i][1], yj = pts[j][1];
+            const xi = pts[i][0], xj = pts[j][0];
             if ((yi < y && yj >= y) || (yj < y && yi >= y)) {
               nodes.push(xi + (y - yi) / (yj - yi) * (xj - xi));
             }
@@ -677,28 +674,212 @@ async function main() {
           for (let i = 0; i < nodes.length; i += 2) {
             if (nodes[i + 1] !== undefined) {
               for (let x = Math.round(nodes[i]); x <= Math.round(nodes[i + 1]); x++) {
-                setPx(x, y, fillColor);
+                setPxRaw(x, y, fillColor);
               }
             }
           }
         }
         if (borderColor) {
-          for (let i = 0; i < points.length; i++) {
-            const p1 = points[i];
-            const p2 = points[(i + 1) % points.length];
-            drawPixelLine(p1[0], p1[1], p2[0], p2[1], 1, borderColor);
+          for (let i = 0; i < pts.length; i++) {
+            const p1 = pts[i];
+            const p2 = pts[(i + 1) % pts.length];
+            drawLineRaw(p1[0], p1[1], p2[0], p2[1], 1, borderColor);
           }
         }
+      }
+
+      function drawLineRaw(x0, y0, x1, y1, thickness = 1, color = '#ffffff') {
+        let dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        let dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        let err = dx + dy;
+        let cx = Math.round(x0), cy = Math.round(y0);
+        const ex = Math.round(x1), ey = Math.round(y1);
+        const t = Math.max(1, Math.round(thickness));
+        for (let i = 0; i < 300; i++) {
+          for (let r = 0; r < t; r++) {
+            for (let c = 0; c < t; c++) {
+              setPxRaw(cx - Math.floor(t / 2) + c, cy - Math.floor(t / 2) + r, color);
+            }
+          }
+          if (cx === ex && cy === ey) break;
+          let e2 = 2 * err;
+          if (e2 >= dy) { err += dy; cx += sx; }
+          if (e2 <= dx) { err += dx; cy += sy; }
+        }
+      }
+
+      function fillRect(x, y, w, h, color) {
+        if (transformStack.length === 1) {
+          const x0 = Math.round(x), y0 = Math.round(y);
+          const rw = Math.min(120, Math.round(w)), rh = Math.min(140, Math.round(h));
+          for (let r = 0; r < rh; r++) {
+            for (let c = 0; c < rw; c++) setPxRaw(x0 + c, y0 + r, color);
+          }
+        } else {
+          const p1 = mapPoint(x, y);
+          const p2 = mapPoint(x + w, y);
+          const p3 = mapPoint(x + w, y + h);
+          const p4 = mapPoint(x, y + h);
+          fillPolygonRaw([p1, p2, p3, p4], color, null);
+        }
+      }
+
+      function fillBorderedRect(x, y, w, h, fillColor, borderColor = '#0b0c10') {
+        if (transformStack.length === 1) {
+          const rw = Math.min(118, Math.round(w)), rh = Math.min(130, Math.round(h));
+          fillRect(x, y, rw, rh, borderColor);
+          if (rw > 2 && rh > 2) {
+            fillRect(x + 1, y + 1, rw - 2, rh - 2, fillColor);
+          }
+        } else {
+          const p1 = mapPoint(x, y);
+          const p2 = mapPoint(x + w, y);
+          const p3 = mapPoint(x + w, y + h);
+          const p4 = mapPoint(x, y + h);
+          fillPolygonRaw([p1, p2, p3, p4], fillColor, borderColor);
+        }
+      }
+
+      // CAJA VOLUMÉTRICA 16-BIT CON BRILLO SUPERIOR Y SOMBRA INFERIOR AUTOMÁTICA
+      function drawVolumetricBox(x, y, w, h, baseColor = '#3b82f6', highlightColor = '#60a5fa', shadowColor = '#1d4ed8', borderColor = '#0b0c10') {
+        fillBorderedRect(x, y, w, h, baseColor, borderColor);
+        if (w > 4 && h > 4) {
+          fillRect(x + 1, y + 1, w - 2, 2, highlightColor);
+          fillRect(x + 1, y + 1, 2, h - 2, highlightColor);
+          fillRect(x + 1, y + h - 3, w - 2, 2, shadowColor);
+          fillRect(x + w - 3, y + 1, 2, h - 2, shadowColor);
+        }
+      }
+
+      function fillCircle(cx, cy, radius, color) {
+        const [gx, gy] = mapPoint(cx, cy);
+        const effScale = transformStack.reduce((acc, t) => acc * t.scale, 1);
+        const rInt = Math.min(54, Math.max(1, Math.round(radius * effScale)));
+        for (let r = -rInt; r <= rInt; r++) {
+          for (let c = -rInt; c <= rInt; c++) {
+            if (c * c + r * r <= rInt * rInt) setPxRaw(gx + c, gy + r, color);
+          }
+        }
+      }
+
+      function fillBorderedCircle(cx, cy, radius, fillColor, borderColor = '#0b0c10') {
+        const [gx, gy] = mapPoint(cx, cy);
+        const effScale = transformStack.reduce((acc, t) => acc * t.scale, 1);
+        const rInt = Math.min(54, Math.max(1, Math.round(radius * effScale)));
+        for (let r = -rInt; r <= rInt; r++) {
+          for (let c = -rInt; c <= rInt; c++) {
+            if (c * c + r * r <= rInt * rInt) setPxRaw(gx + c, gy + r, borderColor);
+          }
+        }
+        if (rInt > 1) {
+          const rIn = rInt - 1;
+          for (let r = -rIn; r <= rIn; r++) {
+            for (let c = -rIn; c <= rIn; c++) {
+              if (c * c + r * r <= rIn * rIn) setPxRaw(gx + c, gy + r, fillColor);
+            }
+          }
+        }
+      }
+
+      function drawRing(cx, cy, radius, thickness = 2, color = '#fde047') {
+        const [gx, gy] = mapPoint(cx, cy);
+        const effScale = transformStack.reduce((acc, t) => acc * t.scale, 1);
+        const rOut = Math.min(56, Math.round(radius * effScale));
+        const rIn = Math.max(0, rOut - Math.max(1, Math.round(thickness * effScale)));
+        for (let r = -rOut; r <= rOut; r++) {
+          for (let c = -rOut; c <= rOut; c++) {
+            const d2 = c * c + r * r;
+            if (d2 <= rOut * rOut && d2 >= rIn * rIn) setPxRaw(gx + c, gy + r, color);
+          }
+        }
+      }
+
+      function drawPixelLine(x0, y0, x1, y1, thickness = 2, color = '#ffffff') {
+        const [gx0, gy0] = mapPoint(x0, y0);
+        const [gx1, gy1] = mapPoint(x1, y1);
+        drawLineRaw(gx0, gy0, gx1, gy1, thickness, color);
+      }
+
+      function fillPolygon(points, fillColor, borderColor = '#0b0c10') {
+        if (!Array.isArray(points) || points.length < 3) return;
+        const mapped = points.map(p => mapPoint(p[0], p[1]));
+        fillPolygonRaw(mapped, fillColor, borderColor);
       }
 
       function fillTriangle(x1, y1, x2, y2, x3, y3, fillColor, borderColor = '#0b0c10') {
         fillPolygon([[x1, y1], [x2, y2], [x3, y3]], fillColor, borderColor);
       }
 
+      // ======================================================================
+      // 2. FÍSICAS DIRECCIONALES Y EMISORES VECTORIALES (ADIÓS AL FUEGO DESALINEADO)
+      // ======================================================================
+      // Dibuja un chorro de propulsión/fuego en CUALQUIER ángulo (ej: 180 = hacia la izquierda, 90 = hacia abajo)
+      function drawExhaust(nozzleX, nozzleY, angleDeg = 180, length = 16, width = 8, localFrame = 0) {
+        const rad = (angleDeg * Math.PI) / 180;
+        const perpRad = rad + Math.PI / 2;
+        const pulse = 0.8 + 0.35 * Math.abs(Math.sin(localFrame * 0.6));
+        const lenOuter = length * pulse;
+        const lenMid = lenOuter * 0.68;
+        const lenCore = lenOuter * 0.38;
+
+        const makeCone = (L, W) => [
+          [nozzleX + Math.cos(perpRad) * (W / 2), nozzleY + Math.sin(perpRad) * (W / 2)],
+          [nozzleX - Math.cos(perpRad) * (W / 2), nozzleY - Math.sin(perpRad) * (W / 2)],
+          [nozzleX + Math.cos(rad) * L, nozzleY + Math.sin(rad) * L]
+        ];
+
+        fillPolygon(makeCone(lenOuter, width), '#dc2626', null);
+        fillPolygon(makeCone(lenMid, width * 0.72), '#f97316', null);
+        fillPolygon(makeCone(lenCore, width * 0.45), '#fef08a', null);
+
+        // Partículas de humo/chispas saliendo en la dirección exacta del chorro
+        for (let i = 1; i <= 4; i++) {
+          const dist = lenOuter + ((localFrame * 2 + i * 5) % 14);
+          const spread = Math.sin(localFrame * 0.4 + i * 2) * (width * 0.45);
+          const px = nozzleX + Math.cos(rad) * dist + Math.cos(perpRad) * spread;
+          const py = nozzleY + Math.sin(rad) * dist + Math.sin(perpRad) * spread;
+          fillCircle(px, py, 1.5, i % 2 === 0 ? '#fde047' : '#94a3b8');
+        }
+      }
+
+      function drawFire(x, y, w = 16, h = 14, localFrame = 0, angleDeg = -90) {
+        if (angleDeg !== -90) {
+          drawExhaust(x + w / 2, y, angleDeg, h, w, localFrame);
+          return;
+        }
+        for (let c = 0; c < w; c += 2) {
+          const fh = Math.max(4, Math.round(h * (0.5 + 0.5 * Math.abs(Math.sin(localFrame * 0.35 + c)))));
+          fillRect(x + c, y - fh, 2, fh, '#dc2626');
+          fillRect(x + c, y - Math.floor(fh * 0.65), 2, Math.floor(fh * 0.65), '#f97316');
+          fillRect(x + c, y - Math.floor(fh * 0.35), 2, Math.floor(fh * 0.35), '#fde047');
+        }
+      }
+
+      // ======================================================================
+      // 3. MICRO-TIPOGRAFÍA DE DATOS EN LIENZO (PARA MONITORES, PIZARRAS Y GRÁFICOS)
+      // ======================================================================
+      function drawDataText(textStr, x, y, color = '#fde047', size = 1, bgColor = 'rgba(8,10,20,0.88)') {
+        const clean = cleanArcadeText(textStr).slice(0, 18);
+        if (!clean) return;
+        const [gx, gy] = mapPoint(x, y);
+        dataTextOverlayQueue.push({
+          text: clean,
+          x: Math.max(10, Math.min(110, gx)) * CELL,
+          y: Math.max(28, Math.min(156, gy)) * CELL,
+          color: color || '#fde047',
+          fontSize: size >= 2 ? 17 : (size <= 0.8 ? 11 : 14),
+          bgColor
+        });
+      }
+
+      // ======================================================================
+      // 4. ESCENARIOS BASE Y UTILIDADES MATEMÁTICAS DE ANIMACIÓN
+      // ======================================================================
       function drawSky(skyTop = '#1d4ed8', skyMid = '#3b82f6', skyBot = '#93c5fd', groundCol = '#334155', horizonY = GROUND_Y) {
+        const hY = Math.max(40, Math.min(175, Math.round(horizonY)));
         const bands = [skyTop, skyMid, skyBot];
-        const bandH = Math.max(1, Math.ceil(horizonY / bands.length));
-        for (let r = 0; r < horizonY; r++) {
+        const bandH = Math.max(1, Math.ceil(hY / bands.length));
+        for (let r = 0; r < hY; r++) {
           const bIdx = Math.min(bands.length - 1, Math.floor(r / bandH));
           const nextIdx = Math.min(bands.length - 1, bIdx + 1);
           const ratio = (r % bandH) / bandH;
@@ -708,18 +889,66 @@ async function main() {
             grid[r][c] = col;
           }
         }
-        fillRect(0, horizonY, COLS, 2, '#0b0c10');
-        fillRect(0, horizonY + 2, COLS, 3, '#64748b');
-        fillRect(0, horizonY + 5, COLS, ROWS - horizonY - 5, groundCol);
+        fillRect(0, hY, COLS, 2, '#0b0c10');
+        fillRect(0, hY + 2, COLS, 3, '#64748b');
+        fillRect(0, hY + 5, COLS, ROWS - hY - 5, groundCol);
       }
 
-      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.35, flipX = false, localFrame = 0) {
+      function drawRoom(wallCol = '#334155', panelCol = '#1e293b', floorCol = '#78350f', groundY = GROUND_Y) {
+        const gY = Math.max(60, Math.min(175, Math.round(groundY)));
+        fillRect(0, 0, COLS, gY, wallCol);
+        for (let c = 6; c < COLS - 6; c += 24) {
+          fillBorderedRect(c, 32, 18, gY - 52, panelCol, 'rgba(0,0,0,0.35)');
+        }
+        fillBorderedRect(0, gY - 16, COLS, 16, '#451a03', '#0b0c10');
+        fillBorderedRect(0, gY - 18, COLS, 3, '#d97706', '#0b0c10');
+        fillRect(0, gY, COLS, ROWS - gY, floorCol);
+      }
+
+      function drawOcean(waterY = 118, waterCol = '#0284c7', foamCol = '#bae6fd', localFrame = 0) {
+        for (let c = 0; c < COLS; c++) {
+          const waveH = Math.round(Math.sin(c * 0.2 + localFrame * 0.25) * 2);
+          const wy = waterY + waveH;
+          fillRect(c, wy, 1, ROWS - wy, waterCol);
+          setPxRaw(c, wy, foamCol);
+        }
+      }
+
+      function drawExplosion(cx, cy, maxRadius = 28, progress = 0.5, localFrame = 0) {
+        const p = Math.max(0.15, Math.min(1, progress * 1.35));
+        const rOuter = Math.round(maxRadius * p);
+        const rMid = Math.round(rOuter * 0.72);
+        const rCore = Math.round(rOuter * 0.42);
+
+        drawRing(cx, cy, Math.min(46, rOuter + 5), 2, '#fde047');
+        fillBorderedCircle(cx, cy, rOuter, '#dc2626', '#0b0c10');
+        fillCircle(cx, cy, rMid, '#f97316');
+        fillCircle(cx, cy, rCore, (localFrame % 4 < 2) ? '#ffffff' : '#fef08a');
+      }
+
+      function drawStars(count = 20, localFrame = 0) {
+        for (let i = 0; i < count; i++) {
+          const sx = (i * 19 + 7) % COLS;
+          const sy = 30 + (i * 11) % 75;
+          if ((Math.floor(localFrame / 6) + i) % 3 !== 0) {
+            setPxRaw(sx, sy, i % 4 === 0 ? '#fde047' : '#ffffff');
+          }
+        }
+      }
+
+      function drawClouds(count = 3, speed = 0.4, localFrame = 0, yMin = 42) {
+        for (let i = 0; i < count; i++) {
+          const cx = ((i * 38 - Math.floor(localFrame * speed)) % (COLS + 24) + (COLS + 24)) % (COLS + 24) - 12;
+          const cy = yMin + (i % 3) * 12;
+          fillBorderedRect(cx, cy, 18, 5, '#ffffff', '#cbd5e1');
+          fillRect(cx + 4, cy - 3, 10, 4, '#ffffff');
+        }
+      }
+
+      function drawCustomSprite(spriteName, centerX, centerY, scale = 1.25, flipX = false, localFrame = 0) {
         const key = String(spriteName || '').toLowerCase().trim();
         const def = customSprites[key] || Object.values(customSprites)[0];
-        if (!def) {
-          fillBorderedCircle(centerX, centerY, Math.round(6 * scale), '#ffd166', '#0b0c10');
-          return;
-        }
+        if (!def) return;
         const useFrame2 = (Math.floor(localFrame / 5) % 2 === 1) && Array.isArray(def.rows_2) && def.rows_2.length > 0;
         const rows = useFrame2 ? def.rows_2 : (def.rows_1 || def.rows || []);
         if (!Array.isArray(rows) || rows.length === 0) return;
@@ -729,8 +958,9 @@ async function main() {
         const w = String(rows[0]).length;
         const destH = Math.max(6, Math.round(h * scale));
         const destW = Math.max(6, Math.round(w * scale));
-        const x0 = Math.round(centerX - destW / 2);
-        const y0 = Math.round(centerY - destH / 2);
+        const [gx, gy] = mapPoint(centerX, centerY);
+        const x0 = Math.round(gx - destW / 2);
+        const y0 = Math.round(gy - destH / 2);
 
         const temp = Array.from({ length: destH + 2 }, () => Array(destW + 2).fill(null));
         for (let dy = 0; dy < destH; dy++) {
@@ -750,7 +980,7 @@ async function main() {
           for (let c = 1; c <= destW; c++) {
             if (!temp[r][c]) {
               if (temp[r - 1][c] || temp[r + 1][c] || temp[r][c - 1] || temp[r][c + 1]) {
-                setPx(x0 + c - 1, y0 + r - 1, '#0b0c10');
+                setPxRaw(x0 + c - 1, y0 + r - 1, '#0b0c10');
               }
             }
           }
@@ -758,37 +988,70 @@ async function main() {
         for (let r = 1; r <= destH; r++) {
           for (let c = 1; c <= destW; c++) {
             if (temp[r][c]) {
-              setPx(x0 + c - 1, y0 + r - 1, temp[r][c]);
+              setPxRaw(x0 + c - 1, y0 + r - 1, temp[r][c]);
             }
           }
         }
       }
 
-      function drawStars(count = 20, localFrame = 0) {
-        for (let i = 0; i < count; i++) {
-          const sx = (i * 19 + 7) % COLS;
-          const sy = 36 + (i * 11) % 65;
-          if ((Math.floor(localFrame / 6) + i) % 3 !== 0) {
-            setPx(sx, sy, i % 4 === 0 ? '#fde047' : '#ffffff');
+      // COMPILADOR DE RIGS PROCEDURALES (ENTIDADES MULTIPARTE CREADAS DESDE CERO POR EL AGENTE 3)
+      const compiledRigs = {};
+      for (const [rigName, rigCode] of Object.entries(customRigsRaw || {})) {
+        if (typeof rigCode === 'string' && rigCode.trim().length > 5) {
+          try {
+            compiledRigs[rigName.toLowerCase().trim()] = new Function(
+              'api', 'state', 'progress', 'localFrame',
+              \`with (api) { \${rigCode} }\`
+            );
+          } catch (e) {
+            console.warn('⚠️ Error compilando rig ' + rigName + ':', e.message);
           }
         }
       }
 
+      function drawRig(rigName, cx, cy, scale = 1.0, angleDeg = 0, flipX = false, state = 'idle', progress = 0.5, localFrame = 0) {
+        const key = String(rigName || '').toLowerCase().trim();
+        const fn = compiledRigs[key] || Object.values(compiledRigs)[0];
+        if (!fn) {
+          drawCustomSprite(key, cx, cy, scale, flipX, localFrame);
+          return;
+        }
+        withGroup(cx, cy, scale, angleDeg, flipX, () => {
+          try {
+            fn(sandboxApi, state, progress, localFrame);
+          } catch (e) {}
+        });
+      }
+
+      const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
+      const easeOut = (t) => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+      const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
       const sandboxApi = {
         COLS, ROWS, GROUND_Y,
+        withGroup, group: withGroup,
         setPx, px: setPx,
         fillRect, rect: fillRect,
         fillBorderedRect, borderedRect: fillBorderedRect, box: fillBorderedRect,
-        drawVolumetricBox, volumetricBox: drawVolumetricBox,
+        drawVolumetricBox, volumetricBox: drawVolumetricBox, bevelBox: drawVolumetricBox,
         fillCircle, circle: fillCircle,
         fillBorderedCircle, borderedCircle: fillBorderedCircle,
         drawRing, ring: drawRing,
         drawPixelLine, line: drawPixelLine,
         fillPolygon, polygon: fillPolygon,
         fillTriangle, triangle: fillTriangle,
+        drawExhaust, exhaust: drawExhaust, jetFlame: drawExhaust,
+        drawFire, fire: drawFire,
+        drawDataText, dataText: drawDataText, text: drawDataText, label: drawDataText,
         drawSky, sky: drawSky,
+        drawRoom, room: drawRoom,
+        drawOcean, ocean: drawOcean,
+        drawExplosion, explosion: drawExplosion,
         drawStars, stars: drawStars,
+        drawClouds, clouds: drawClouds,
         drawCustomSprite, customSprite: drawCustomSprite,
+        drawRig, rig: drawRig,
+        lerp, easeOut, easeInOut,
         sin: Math.sin, cos: Math.cos, abs: Math.abs, floor: Math.floor,
         round: Math.round, min: Math.min, max: Math.max, PI: Math.PI
       };
@@ -814,6 +1077,54 @@ async function main() {
             ctx.fillStyle = grid[r][c];
             ctx.fillRect(c * CELL, r * CELL, CELL, CELL);
           }
+        }
+        // Pintar etiquetas de datos dentro de pantallas/monitores con nitidez total y soporte Ñ
+        if (dataTextOverlayQueue.length > 0) {
+          ctx.save();
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          dataTextOverlayQueue.forEach(item => {
+            const rawStr = item.text;
+            const displayStr = rawStr.replace(/Ñ/g, 'N');
+            let fSize = item.fontSize;
+            ctx.font = \`\${fSize}px "Press Start 2P", monospace\`;
+            while (ctx.measureText(displayStr).width > 580 && fSize > 9) {
+              fSize -= 1;
+              ctx.font = \`\${fSize}px "Press Start 2P", monospace\`;
+            }
+            const totalW = ctx.measureText(displayStr).width;
+            const padX = 8, padY = 6;
+            const bw = totalW + padX * 2;
+            const bh = fSize + padY * 2;
+            const safeX = Math.max(bw / 2 + 10, Math.min(720 - bw / 2 - 10, item.x));
+            const safeY = Math.max(130, Math.min(920, item.y));
+
+            if (item.bgColor) {
+              ctx.fillStyle = item.bgColor;
+              ctx.fillRect(safeX - bw / 2, safeY - bh / 2, bw, bh);
+              ctx.strokeStyle = '#000000';
+              ctx.lineWidth = 3;
+              ctx.strokeRect(safeX - bw / 2, safeY - bh / 2, bw, bh);
+            }
+            ctx.fillStyle = '#000000';
+            ctx.fillText(displayStr, safeX + 2, safeY + 2);
+            ctx.fillStyle = item.color;
+            ctx.fillText(displayStr, safeX, safeY);
+
+            for (let i = 0; i < rawStr.length; i++) {
+              if (rawStr[i] === 'Ñ') {
+                const prefixW = ctx.measureText(displayStr.slice(0, i)).width;
+                const charW = ctx.measureText('N').width;
+                const tildeX = (safeX - totalW / 2) + prefixW + charW * 0.1;
+                const tildeY = safeY - fSize * 0.68;
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(tildeX + 2, tildeY + 2, charW * 0.78, Math.max(2, fSize * 0.16));
+                ctx.fillStyle = item.color;
+                ctx.fillRect(tildeX, tildeY, charW * 0.78, Math.max(2, fSize * 0.16));
+              }
+            }
+          });
+          ctx.restore();
         }
       }
 
@@ -851,12 +1162,15 @@ async function main() {
           updateTopBanner(activeBeat.texto_1 || esc.texto_1 || 'HISTORIA');
         }
 
-        drawSky('#1d4ed8', '#3b82f6', '#93c5fd', '#334155', GROUND_Y);
+        transformStack = [{ tx: 0, ty: 0, scale: 1, rad: 0, flipX: false }];
+        dataTextOverlayQueue = [];
+        drawSky('#0f172a', '#1e293b', '#334155', '#1e293b', GROUND_Y);
 
         if (activeBeat.bgFn) {
           try { activeBeat.bgFn(sandboxApi, beatProgress, beatLocalFrame); } catch (e) {}
         }
 
+        transformStack = [{ tx: 0, ty: 0, scale: 1, rad: 0, flipX: false }];
         if (activeBeat.fgFn) {
           try { activeBeat.fgFn(sandboxApi, beatProgress, beatLocalFrame); } catch (e) {}
         }
@@ -907,7 +1221,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Pixel-Art Studio v18.0 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Jerárquico v19.0 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -920,13 +1234,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v18.0...');
+  console.log('🔊 Ensamblando MP4 final v19.0...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v18.0 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v19.0 generado con éxito!');
   process.exit(0);
 }
 
