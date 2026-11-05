@@ -385,5 +385,20 @@
     ],
     "programado_para_madrid": null,
     "fecha_publicacion": "2026-11-05T13:01:06.923Z"
+  },
+  {
+    "id_concepto": "stanley_rifkin_robo_banco_1978",
+    "subrama": "8Bit Heists",
+    "titulo": "Stanley Rifkin: El Robo de 10 Millones con una Llamada Telefónica",
+    "keywords_concepto": [
+      "Stanley Rifkin",
+      "Security Pacific Bank",
+      "ingeniería social",
+      "atraco bancario",
+      "fraude telefónico",
+      "diamantes"
+    ],
+    "programado_para_madrid": null,
+    "fecha_publicacion": "2026-11-05T13:29:17.605Z"
   }
 ]
