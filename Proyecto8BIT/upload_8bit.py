@@ -6,14 +6,17 @@ import urllib.parse
 import uuid
 
 def send_video_to_telegram():
-    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get("BOT_TOKEN")
+    bot_token = (
+        os.environ.get("TELEGRAM_TOKEN")
+        or os.environ.get("TELEGRAM_BOT_TOKEN")
+        or os.environ.get("BOT_TOKEN")
+    )
     chat_id = os.environ.get("TELEGRAM_CHAT_ID") or os.environ.get("CHAT_ID") or "326829409"
 
     if not bot_token:
-        print("❌ ERROR: No se encontró TELEGRAM_BOT_TOKEN en las variables de entorno.")
+        print("❌ ERROR: No se encontró TELEGRAM_TOKEN en las variables de entorno.")
         sys.exit(1)
 
-    # Localizar output.mp4 y payload.json (en la raíz o dentro de Proyecto8BIT)
     video_path = "output.mp4" if os.path.exists("output.mp4") else "Proyecto8BIT/output.mp4"
     payload_path = "payload.json" if os.path.exists("payload.json") else "Proyecto8BIT/payload.json"
 
@@ -42,7 +45,6 @@ def send_video_to_telegram():
         except Exception as e:
             print(f"⚠️ Aviso leyendo payload.json: {e}")
 
-    # Limpiar símbolos que rompen el parser de Telegram y limitar a 950 caracteres (límite API = 1024)
     caption_raw = f"👾 {titulo}\n🕹️ Rama: {subrama}\n\n{descripcion}".strip()
     caption_clean = caption_raw[:950]
 
@@ -81,7 +83,6 @@ def send_video_to_telegram():
     print(f"📤 Enviando vídeo a Telegram (chat_id={chat_id})...")
     status, result = post_multipart(caption_clean)
 
-    # Si falla por cualquier motivo del texto, reintentar con caption mínimo
     if not result.get("ok"):
         print(f"⚠️ Primer intento rechazado ({status}): {result.get('description')}. Reintentando con texto corto...")
         status, result = post_multipart(f"👾 {titulo[:120]}")
