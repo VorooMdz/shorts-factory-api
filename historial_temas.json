@@ -349,5 +349,19 @@
     ],
     "programado_para_madrid": "06/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-06T07:28:36.839Z"
+  },
+  {
+    "id_concepto": "sesgo_del_balbuceo",
+    "subrama": "Psicología del Poder",
+    "titulo": "¿Por qué el que más habla siempre parece el líder? 🗣️",
+    "keywords_concepto": [
+      "sesgo del balbuceo",
+      "babble effect",
+      "liderazgo",
+      "psicologia social",
+      "dominancia"
+    ],
+    "programado_para_madrid": "06/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-06T07:42:07.494Z"
   }
 ]
