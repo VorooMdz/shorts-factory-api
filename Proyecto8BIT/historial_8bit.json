@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id_concepto": "clifford_stoll_kgb_hacker_75_cents",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "El error de 75 centavos que cazó a la KGB",
+    "keywords_concepto": [
+      "Clifford Stoll",
+      "Markus Hess",
+      "KGB",
+      "El huevo del cuco",
+      "ciberespionaje",
+      "honeypot",
+      "Unix",
+      "hacking historico"
+    ],
+    "programado_para_madrid": "2026-11-06 18:00",
+    "youtube_video_id": "gYHN01blH-w",
+    "fecha_publicacion": "2026-11-06T09:21:06.880Z"
+  }
+]
