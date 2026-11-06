@@ -350,7 +350,7 @@ function sanitizeSvgTexts(esc, matchesDestacados) {
   ];
 }
 
-// 1.5 Renderizador de Escenas con 5 Layouts Visuales Distintos para que NUNCA se vean iguales
+// 1.5 Renderizador de Escenas con 5 Layouts Visuales Distintos
 function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
   const rawList = [];
   if (Array.isArray(esc.iconos)) rawList.push(...esc.iconos);
@@ -369,7 +369,6 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
 
   const layoutMode = (hash + idx * 3) % 5;
 
-  // Si solo hay 1 icono o toca el Layout Radar/Héroe
   if (!v2 || layoutMode === 0) {
     const styled1 = styleStroke(v1.inner, 'icon-stroke-yellow');
     const styledSat = v2 ? styleStroke(v2.inner, 'icon-stroke-red') : '';
@@ -393,7 +392,6 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
   const styled1 = styleStroke(v1.inner, 'icon-stroke-yellow');
   const styled2 = styleStroke(v2.inner, 'icon-stroke-red');
 
-  // Layout 1: Diagonal Dinámica con Rayo de Energía Central
   if (layoutMode === 1) {
     return `
       <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
@@ -410,7 +408,6 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
     `;
   }
 
-  // Layout 2: Balanza de Contraste Psicológico con los dos iconos encima
   if (layoutMode === 2) {
     return `
       <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
@@ -426,7 +423,6 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
     `;
   }
 
-  // Layout 3: Enfrentamiento VS con Divisor Relámpago
   if (layoutMode === 3) {
     return `
       <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
@@ -442,7 +438,6 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
     `;
   }
 
-  // Layout 4: Tarjetas Duales con Flecha de Transformación
   return `
     <text x="100" y="24" text-anchor="middle" fill="#ffd000" font-size="13">${t1}</text>
     <rect x="10" y="64" width="78" height="104" rx="14" class="stroke-white draw" opacity="0.25" />
@@ -458,7 +453,7 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
   `;
 }
 
-// 1.6 Visualización de Datos Ampliada (8 Gráficos Distintos para no repetir nunca el mismo círculo)
+// 1.6 Visualización de Datos Ampliada (8 Gráficos Distintos)
 function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   const dv = esc.data_viz || {};
   const sub = String(esc.subtitulo || '');
@@ -1132,6 +1127,47 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
   return fs.existsSync('hook_sfx.wav') && fs.statSync('hook_sfx.wav').size > 1000;
 }
 
+// Localizador o sintetizador de música de fondo para que NUNCA salga un vídeo en silencio
+function prepareBackgroundMusic(duracionExactaVideo) {
+  const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
+  const candidates = [
+    path.resolve('bg_music.mp3'),
+    path.resolve('music.mp3'),
+    path.resolve('background.mp3'),
+    ...fs.readdirSync('.').filter(f => /\.mp3$/i.test(f) && f !== 'audio_raw.mp3' && f !== 'audio.mp3').map(f => path.resolve(f))
+  ];
+
+  const foundMusic = candidates.find(p => fs.existsSync(p) && fs.statSync(p).size > 1000);
+
+  if (foundMusic) {
+    console.log(`🎵 Música de fondo encontrada en: ${path.basename(foundMusic)}`);
+    try {
+      execSync(
+        `ffmpeg -y -stream_loop -1 -i "${foundMusic}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.16,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        { stdio: 'inherit' }
+      );
+      if (fs.existsSync('music_clean.wav') && fs.statSync('music_clean.wav').size > 1000) {
+        return true;
+      }
+    } catch (e) {
+      console.warn('⚠️ Error decodificando MP3 de música, activando sintetizador ambiental de respaldo:', e.message);
+    }
+  }
+
+  // Fallback infalible: Sintetizar atmósfera musical Dark-Synth / Psicología si no hay archivo o falla
+  console.log('🎹 Generando colchón musical ambiental Dark-Synth de respaldo...');
+  try {
+    const padExpr = `0.045*(sin(2*PI*110*t)+0.6*sin(2*PI*164.81*t)+0.4*sin(2*PI*220*t)+0.25*sin(2*PI*261.63*t)*(0.5+0.5*sin(2*PI*0.25*t)))`;
+    execSync(
+      `ffmpeg -y -f lavfi -i "aevalsrc='${padExpr}':s=44100:d=${duracionExactaVideo.toFixed(3)}" -af "afade=t=in:st=0:d=0.4,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+      { stdio: 'ignore' }
+    );
+    return fs.existsSync('music_clean.wav') && fs.statSync('music_clean.wav').size > 1000;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
@@ -1139,7 +1175,7 @@ async function main() {
     await downloadFile(payloadUrl, 'payload.json');
   }
 
-  console.log('🚀 Iniciando motor de renderizado Viral v9.0 (5 Layouts Iconify + 8 Gráficas + 60 Diagramas Semánticos)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v9.5 (Audio Blindado + 5 Layouts Iconify + 8 Gráficas)...');
 
   const rawCatalogo = fs.existsSync('catalogo.json') ? JSON.parse(fs.readFileSync('catalogo.json', 'utf8')) : {};
   const catalogo = { ...rawCatalogo, ...EXPANDED_SVG_PACK };
@@ -1240,7 +1276,6 @@ async function main() {
     let svgInterno = '';
     let esDiagrama = false;
 
-    // 1. Comprobar si Gemini indicó un diag_id o si el detector semántico encuentra un diagrama artesanal exacto para esta frase
     const explicitDiag = esc.diagrama || esc.diag_id;
     const semanticDiag = matchSemanticCatalogDiagram(esc, catalogo, usedDiags);
     const chosenDiag = (explicitDiag && catalogo[explicitDiag] && !/_[0-9]+$/.test(explicitDiag)) ? explicitDiag : semanticDiag;
@@ -1315,40 +1350,61 @@ async function main() {
 
   const subtitleChunks = buildSubtitleChunks(escenasProcesadas, payload.alignment, duracionExactaVideo);
 
-  // Mezcla de Audio: Voz + Música de fondo (bg_music.mp3) + Sintetizador SFX Contextual
+  // ============================================================================
+  // 4.5 MEZCLA DE AUDIO BLINDADA (VOZ + MÚSICA DE FONDO + PISTA SFX)
+  // ============================================================================
+  let hasHookSfx = false;
   try {
-    let hasHookSfx = false;
-    try {
-      console.log('⚡ Sintetizando pista SFX contextual y procedural...');
-      hasHookSfx = buildSceneSfxTrack(escenasProcesadas, duracionExactaVideo, hash);
-    } catch (sfxErr) {
-      console.warn('⚠️ No se pudo sintetizar la pista SFX:', sfxErr.message);
-    }
+    console.log('⚡ Sintetizando pista SFX contextual y procedural...');
+    hasHookSfx = buildSceneSfxTrack(escenasProcesadas, duracionExactaVideo, hash);
+  } catch (sfxErr) {
+    console.warn('⚠️ No se pudo sintetizar la pista SFX:', sfxErr.message);
+  }
 
-    const bgMusicPath = path.resolve('bg_music.mp3');
-    if (fs.existsSync(bgMusicPath) && fs.statSync(bgMusicPath).size > 1000) {
-      const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
+  const hasBgMusic = prepareBackgroundMusic(duracionExactaVideo);
+
+  let audioMixedSuccess = false;
+  if (hasBgMusic && hasHookSfx) {
+    try {
       execSync(
-        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.10,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
         { stdio: 'inherit' }
       );
-
-      if (hasHookSfx) {
+      audioMixedSuccess = true;
+    } catch (err1) {
+      console.warn('⚠️ Fallback amix 3 entradas sin normalize=0...');
+      try {
         execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=3.1[v];[1:a]volume=3.0[m];[2:a]volume=3.0[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
           { stdio: 'inherit' }
         );
-      } else {
-        execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
-          { stdio: 'inherit' }
-        );
-      }
-    } else {
-      fs.copyFileSync('voice_clean.wav', 'audio.wav');
+        audioMixedSuccess = true;
+      } catch (err2) {}
     }
-  } catch (audioErr) {
-    console.warn('⚠️ Fallback a voz limpia:', audioErr.message);
+  }
+
+  if (!audioMixedSuccess && hasBgMusic) {
+    try {
+      execSync(
+        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+        { stdio: 'inherit' }
+      );
+      audioMixedSuccess = true;
+    } catch (err3) {}
+  }
+
+  if (!audioMixedSuccess && hasHookSfx) {
+    try {
+      execSync(
+        `ffmpeg -y -i voice_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[s];[v][s]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+        { stdio: 'inherit' }
+      );
+      audioMixedSuccess = true;
+    } catch (err4) {}
+  }
+
+  if (!audioMixedSuccess) {
+    console.warn('⚠️ Usando voz limpia como último recurso.');
     fs.copyFileSync('voice_clean.wav', 'audio.wav');
   }
 
@@ -1439,7 +1495,7 @@ async function main() {
       .stroke-red { stroke: var(--accent-alt); stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px var(--accent-alt-glow)); }
       .stroke-yellow { stroke: var(--accent-color); stroke-width: 5.5; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 15px var(--accent-glow)); }
 
-      /* TRAZOS NEÓN NATIVOS PARA ICONIFY ANIDADO (24x24) -> 100% CONTINUOS Y SIN CORTES */
+      /* TRAZOS NEÓN NATIVOS PARA ICONIFY ANIDADO (24x24) */
       .icon-stroke-white { stroke: #ffffff; stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 6px rgba(255,255,255,0.45)); }
       .icon-stroke-red { stroke: var(--accent-alt); stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 10px var(--accent-alt-glow)); }
       .icon-stroke-yellow { stroke: var(--accent-color); stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; fill: none; filter: drop-shadow(0 0 10px var(--accent-glow)); }
@@ -1953,7 +2009,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 v9.0 generado con éxito!');
+  console.log('✅ ¡Vídeo output.mp4 v9.5 generado con éxito!');
 }
 
 main().catch(err => {
