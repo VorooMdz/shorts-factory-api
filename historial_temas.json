@@ -352,5 +352,20 @@
     "paleta_color": "Cian Eléctrico",
     "programado_para_madrid": "06/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-06T08:25:12.243Z"
+  },
+  {
+    "id_concepto": "efecto_desinformacion_loftus",
+    "subrama": "Memoria y Olvido",
+    "titulo": "¿Pueden implantarte un recuerdo que nunca viviste? 🧠",
+    "keywords_concepto": [
+      "falsos recuerdos",
+      "efecto de desinformacion",
+      "elizabeth loftus",
+      "memoria maleable",
+      "psicologia cognitiva"
+    ],
+    "paleta_color": "Naranja Fuego",
+    "programado_para_madrid": "06/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-06T08:46:57.245Z"
   }
 ]
