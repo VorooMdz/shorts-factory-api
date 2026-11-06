@@ -398,5 +398,20 @@
     "paleta_color": "Verde Neón",
     "programado_para_madrid": "07/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-06T10:10:52.175Z"
+  },
+  {
+    "id_concepto": "congelamiento_gestual_mentira",
+    "subrama": "Detección de Mentiras",
+    "titulo": "¿Por qué la gente se congela cuando te miente? 🥶",
+    "keywords_concepto": [
+      "detección de mentiras",
+      "carga cognitiva",
+      "lenguaje no verbal",
+      "gestos ilustradores",
+      "psicología forense"
+    ],
+    "paleta_color": "Magenta Vibrante",
+    "programado_para_madrid": "07/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-06T12:34:06.966Z"
   }
 ]
