@@ -383,5 +383,20 @@
     "paleta_color": "Rojo Carmesí",
     "programado_para_madrid": "07/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-06T09:00:02.774Z"
+  },
+  {
+    "id_concepto": "reactancia_psicologica",
+    "subrama": "Efectos Paradójicos",
+    "titulo": "¿Por qué deseas más algo en cuanto te lo prohíben? 🚫",
+    "keywords_concepto": [
+      "reactancia psicológica",
+      "prohibición",
+      "libertad",
+      "Jack Brehm",
+      "efecto Romeo y Julieta"
+    ],
+    "paleta_color": "Verde Neón",
+    "programado_para_madrid": "07/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-06T10:10:52.175Z"
   }
 ]
