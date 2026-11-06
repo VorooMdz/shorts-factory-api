@@ -254,7 +254,6 @@ const EXPANDED_SVG_PACK = {
   `
 };
 
-// Detector semántico automático de diagramas complejos del catálogo según el texto de la escena
 function matchSemanticCatalogDiagram(esc, catalogo, usedDiags) {
   const text = `${esc.subtitulo || ''} ${esc.texto_1 || ''} ${esc.texto_2 || ''}`.toLowerCase();
   const rules = [
@@ -453,41 +452,49 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
   `;
 }
 
-// 1.6 Visualización de Datos Ampliada (8 Gráficos Distintos)
+// 1.6 Visualización de Datos Ampliada (Con detector de números corregido para no confundir el artículo "un" con "1%")
 function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   const dv = esc.data_viz || {};
   const sub = String(esc.subtitulo || '');
 
-  const wordNumMap = {
-    'cero': '0', 'un': '1', 'uno': '1', 'dos': '2', 'tres': '3', 'cuatro': '4',
-    'cinco': '5', 'diez': '10', 'doce': '12', 'quince': '15', 'veinte': '20',
-    'treinta': '30', 'cuarenta': '40', 'cincuenta': '50', 'sesenta': '60',
-    'setenta': '70', 'setenta y cinco': '75', 'ochenta': '80', 'ochenta y cinco': '85',
-    'noventa': '90', 'cien': '100'
-  };
+  // Ordenados de frases compuestas a simples y SIN el artículo "un" suelto para que "un veinticinco por ciento" sea 25% y nunca 1%
+  const wordNumEntries = [
+    ['noventa y nueve', '99'], ['noventa y cinco', '95'], ['ochenta y cinco', '85'],
+    ['setenta y cinco', '75'], ['sesenta y cinco', '65'], ['cincuenta', '50'],
+    ['veinticinco', '25'], ['cuarenta', '40'], ['treinta', '30'], ['ochenta', '80'],
+    ['setenta', '70'], ['sesenta', '60'], ['noventa', '90'], ['veinte', '20'],
+    ['quince', '15'], ['doce', '12'], ['diez', '10'], ['cien', '100'],
+    [' nueve', '9'], ['ocho', '8'], ['siete', '7'], ['seis', '6'],
+    ['cinco', '5'], ['cuatro', '4'], ['tres', '3'], ['dos', '2'], ['cero', '0']
+  ];
 
   let rawVal = String(dv.valor ?? '').replace(/undefined|null/gi, '').trim();
   let suf = String(dv.sufijo ?? '').replace(/undefined|null/gi, '').trim();
 
-  const subNumMatch = sub.match(/(\d+(?:[.,]\d+)?)\s*(%|€|\$|por\s*ciento|euros|horas|años|segundos)?/i);
+  const subNumMatch = sub.match(/(\d+(?:[.,]\d+)?)\s*(%|€|\$|por\s*ciento|euros|horas|años|segundos|metros|m\b|ms\b)?/i);
   if (subNumMatch) {
     rawVal = subNumMatch[1];
     const unit = (subNumMatch[2] || '').toLowerCase();
     if (unit.includes('por') || unit === '%') suf = '%';
     else if (unit.includes('euro') || unit === '€') suf = '€';
+    else if (unit.includes('metro') || unit === 'm') suf = 'M';
+    else if (unit.includes('ms')) suf = 'MS';
     else if (unit.includes('seg')) suf = 'S';
     else if (unit.includes('hora')) suf = 'H';
   } else {
-    for (const [w, n] of Object.entries(wordNumMap)) {
-      if (new RegExp(`\\b${w}\\b`, 'i').test(sub)) {
+    for (const [w, n] of wordNumEntries) {
+      if (new RegExp(`\\b${w.trim()}\\b`, 'i').test(sub)) {
         rawVal = n;
         if (/por\s*ciento|%/i.test(sub)) suf = '%';
+        else if (/metro/i.test(sub)) suf = 'M';
+        else if (/segundo/i.test(sub)) suf = 'S';
+        else if (/hora/i.test(sub)) suf = 'H';
         break;
       }
     }
   }
 
-  if (!rawVal) rawVal = '90';
+  if (!rawVal || rawVal === '1') rawVal = '85';
   if (!suf && !/[%€$a-zA-Z]/.test(rawVal)) suf = '%';
 
   const displayVal = `${rawVal}${suf}`.slice(0, 9);
@@ -500,7 +507,7 @@ function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   let chosenType = tipos[(hash + idx * 3) % tipos.length];
   if (isZeroOrDrop) chosenType = 'crash_curve';
   else if (/€|precio|oferta|caro|barato|cuesta/i.test(sub)) chosenType = 'price_anchor';
-  else if (/segundo|minuto|hora|tiempo|reloj/i.test(sub)) chosenType = 'digital_timer';
+  else if (/segundo|minuto|hora|tiempo|reloj|milisegundo/i.test(sub)) chosenType = 'digital_timer';
 
   if (chosenType === 'speedometer_arc') {
     return `
@@ -953,7 +960,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   return allChunks;
 }
 
-// 3. Sintetizador Procedural de 26 Efectos
+// 3. Sintetizador Procedural de 26 Efectos (Con volumen reforzado para que se escuchen con total nitidez)
 function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
   function getRecipe(type, pitchMod, customFreq) {
     const p = pitchMod.toFixed(3);
@@ -961,99 +968,99 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
 
     const catalog = {
       sub_drop: {
-        expr: `0.36*exp(-6*t)*sin(2*PI*(150*${p}*exp(-4.2*t)+38)*t)+0.12*exp(-16*t)*sin(2*PI*720*${p}*t)`,
+        expr: `0.52*exp(-6*t)*sin(2*PI*(150*${p}*exp(-4.2*t)+38)*t)+0.18*exp(-16*t)*sin(2*PI*720*${p}*t)`,
         dur: 0.65
       },
       laser_swipe: {
-        expr: `0.20*exp(-7*t)*sin(2*PI*(980*${p}*exp(-5.5*t)+110)*t)`,
+        expr: `0.32*exp(-7*t)*sin(2*PI*(980*${p}*exp(-5.5*t)+110)*t)`,
         dur: 0.34
       },
       whoosh_fast: {
-        expr: `0.22*sin(PI*t/0.28)*sin(2*PI*(160*${p}+480*t*t)*t)+0.09*sin(PI*t/0.28)*sin(2*PI*85*${p}*t)`,
+        expr: `0.35*sin(PI*t/0.28)*sin(2*PI*(160*${p}+480*t*t)*t)+0.15*sin(PI*t/0.28)*sin(2*PI*85*${p}*t)`,
         dur: 0.28
       },
       glitch_data: {
-        expr: `0.17*exp(-8*t)*(sin(2*PI*440*${p}*t)*sin(2*PI*38*t)+0.6*sin(2*PI*1320*${p}*t)*sin(2*PI*62*t))`,
+        expr: `0.28*exp(-8*t)*(sin(2*PI*440*${p}*t)*sin(2*PI*38*t)+0.6*sin(2*PI*1320*${p}*t)*sin(2*PI*62*t))`,
         dur: 0.32
       },
       heartbeat: {
-        expr: `0.34*exp(-22*t)*sin(2*PI*58*${p}*t)+0.28*exp(-22*max(0,t-0.21))*gt(t,0.21)*sin(2*PI*52*${p}*max(0,t-0.21))`,
+        expr: `0.50*exp(-22*t)*sin(2*PI*58*${p}*t)+0.42*exp(-22*max(0,t-0.21))*gt(t,0.21)*sin(2*PI*52*${p}*max(0,t-0.21))`,
         dur: 0.52
       },
       tension_riser: {
-        expr: `0.18*(t/0.55)*exp(-2*(0.55-t))*sin(2*PI*(220*${p}+340*t*t)*t)`,
+        expr: `0.30*(t/0.55)*exp(-2*(0.55-t))*sin(2*PI*(220*${p}+340*t*t)*t)`,
         dur: 0.55
       },
       glass_ping: {
-        expr: `0.17*exp(-6.5*t)*(sin(2*PI*1180*${p}*t)+0.5*sin(2*PI*1770*${p}*t))`,
+        expr: `0.28*exp(-6.5*t)*(sin(2*PI*1180*${p}*t)+0.5*sin(2*PI*1770*${p}*t))`,
         dur: 0.50
       },
       error_buzz: {
-        expr: `0.18*exp(-7.5*t)*(sin(2*PI*145*${p}*t)+0.7*sin(2*PI*153*${p}*t)+0.4*sin(2*PI*290*${p}*t))`,
+        expr: `0.28*exp(-7.5*t)*(sin(2*PI*145*${p}*t)+0.7*sin(2*PI*153*${p}*t)+0.4*sin(2*PI*290*${p}*t))`,
         dur: 0.40
       },
       clock_tick: {
-        expr: `0.23*exp(-42*t)*sin(2*PI*1250*${p}*t)+0.19*exp(-42*max(0,t-0.22))*gt(t,0.22)*sin(2*PI*920*${p}*max(0,t-0.22))`,
+        expr: `0.36*exp(-42*t)*sin(2*PI*1250*${p}*t)+0.30*exp(-42*max(0,t-0.22))*gt(t,0.22)*sin(2*PI*920*${p}*max(0,t-0.22))`,
         dur: 0.44
       },
       sonar_pulse: {
-        expr: `0.21*exp(-5.2*t)*sin(2*PI*660*${p}*t)+0.10*exp(-5*max(0,t-0.26))*gt(t,0.26)*sin(2*PI*660*${p}*max(0,t-0.26))`,
+        expr: `0.34*exp(-5.2*t)*sin(2*PI*660*${p}*t)+0.16*exp(-5*max(0,t-0.26))*gt(t,0.26)*sin(2*PI*660*${p}*max(0,t-0.26))`,
         dur: 0.58
       },
       coin_cash: {
-        expr: `0.18*exp(-14*t)*sin(2*PI*1318*${p}*t)+0.20*exp(-8*max(0,t-0.08))*gt(t,0.08)*sin(2*PI*1567*${p}*max(0,t-0.08))`,
+        expr: `0.30*exp(-14*t)*sin(2*PI*1318*${p}*t)+0.32*exp(-8*max(0,t-0.08))*gt(t,0.08)*sin(2*PI*1567*${p}*max(0,t-0.08))`,
         dur: 0.48
       },
       camera_shutter: {
-        expr: `0.25*exp(-55*t)*sin(2*PI*1800*${p}*t)+0.20*exp(-45*max(0,t-0.06))*gt(t,0.06)*sin(2*PI*950*${p}*max(0,t-0.06))`,
+        expr: `0.38*exp(-55*t)*sin(2*PI*1800*${p}*t)+0.32*exp(-45*max(0,t-0.06))*gt(t,0.06)*sin(2*PI*950*${p}*max(0,t-0.06))`,
         dur: 0.22
       },
       vinyl_rewind: {
-        expr: `0.20*exp(-4.5*t)*sin(2*PI*(780*${p}-1400*t*t)*t)`,
+        expr: `0.32*exp(-4.5*t)*sin(2*PI*(780*${p}-1400*t*t)*t)`,
         dur: 0.36
       },
       electric_zap: {
-        expr: `0.19*exp(-11*t)*(sin(2*PI*310*${p}*t)*sin(2*PI*95*t)+0.5*sin(2*PI*940*${p}*t))`,
+        expr: `0.30*exp(-11*t)*(sin(2*PI*310*${p}*t)*sin(2*PI*95*t)+0.5*sin(2*PI*940*${p}*t))`,
         dur: 0.30
       },
       revelacion_chord: {
-        expr: `0.15*exp(-3.5*t)*(sin(2*PI*523.25*${p}*t)+0.8*sin(2*PI*659.25*${p}*t)+0.6*sin(2*PI*783.99*${p}*t)+0.45*sin(2*PI*1046.5*${p}*t))`,
+        expr: `0.26*exp(-3.5*t)*(sin(2*PI*523.25*${p}*t)+0.8*sin(2*PI*659.25*${p}*t)+0.6*sin(2*PI*783.99*${p}*t)+0.45*sin(2*PI*1046.5*${p}*t))`,
         dur: 0.75
       },
       mystery_question: {
-        expr: `0.19*exp(-5.0*t)*sin(2*PI*(290*${p}+290*t)*t)`,
+        expr: `0.30*exp(-5.0*t)*sin(2*PI*(290*${p}+290*t)*t)`,
         dur: 0.45
       },
       dog_bark: {
-        expr: `0.32*exp(-14*t)*sin(2*PI*(320+90*sin(2*PI*12*t))*exp(-2.8*t)*t)+0.26*exp(-14*max(0,t-0.18))*gt(t,0.18)*sin(2*PI*360*exp(-3*max(0,t-0.18))*max(0,t-0.18))`,
+        expr: `0.45*exp(-14*t)*sin(2*PI*(320+90*sin(2*PI*12*t))*exp(-2.8*t)*t)+0.38*exp(-14*max(0,t-0.18))*gt(t,0.18)*sin(2*PI*360*exp(-3*max(0,t-0.18))*max(0,t-0.18))`,
         dur: 0.42
       },
       bell_ring: {
-        expr: `0.22*exp(-2.8*t)*(sin(2*PI*880*${p}*t)+0.6*sin(2*PI*1760*${p}*t)+0.35*sin(2*PI*2420*${p}*t))`,
+        expr: `0.35*exp(-2.8*t)*(sin(2*PI*880*${p}*t)+0.6*sin(2*PI*1760*${p}*t)+0.35*sin(2*PI*2420*${p}*t))`,
         dur: 0.85
       },
       siren_alert: {
-        expr: `0.20*exp(-2.2*t)*sin(2*PI*(620+220*sin(2*PI*6*t))*t)`,
+        expr: `0.32*exp(-2.2*t)*sin(2*PI*(620+220*sin(2*PI*6*t))*t)`,
         dur: 0.65
       },
       water_drop: {
-        expr: `0.26*exp(-12*t)*sin(2*PI*(420+1100*t)*t)`,
+        expr: `0.38*exp(-12*t)*sin(2*PI*(420+1100*t)*t)`,
         dur: 0.25
       },
       magic_chime: {
-        expr: `0.16*exp(-4*t)*(sin(2*PI*1046*t)+sin(2*PI*1318*max(0,t-0.06))*gt(t,0.06)+sin(2*PI*1568*max(0,t-0.12))*gt(t,0.12))`,
+        expr: `0.28*exp(-4*t)*(sin(2*PI*1046*t)+sin(2*PI*1318*max(0,t-0.06))*gt(t,0.06)+sin(2*PI*1568*max(0,t-0.12))*gt(t,0.12))`,
         dur: 0.60
       },
       explosion_boom: {
-        expr: `0.38*exp(-4.5*t)*(sin(2*PI*65*exp(-2*t)*t)+0.5*sin(2*PI*110*t)*sin(2*PI*43*t))`,
+        expr: `0.50*exp(-4.5*t)*(sin(2*PI*65*exp(-2*t)*t)+0.5*sin(2*PI*110*t)*sin(2*PI*43*t))`,
         dur: 0.70
       },
       whistle_bird: {
-        expr: `0.18*exp(-5*t)*sin(2*PI*(1400+450*sin(2*PI*14*t))*t)`,
+        expr: `0.30*exp(-5*t)*sin(2*PI*(1400+450*sin(2*PI*14*t))*t)`,
         dur: 0.40
       },
       custom_synth: {
-        expr: `0.20*exp(-6*t)*(sin(2*PI*${cf}*t)+0.5*sin(2*PI*${Math.round(cf * 1.5)}*t))`,
+        expr: `0.32*exp(-6*t)*(sin(2*PI*${cf}*t)+0.5*sin(2*PI*${Math.round(cf * 1.5)}*t))`,
         dur: 0.45
       }
     };
@@ -1127,7 +1134,7 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
   return fs.existsSync('hook_sfx.wav') && fs.statSync('hook_sfx.wav').size > 1000;
 }
 
-// Localizador o sintetizador de música de fondo para que NUNCA salga un vídeo en silencio
+// Localizador de música de fondo con volumen real audible (0.28 -> casi el triple que antes)
 function prepareBackgroundMusic(duracionExactaVideo) {
   const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
   const candidates = [
@@ -1140,10 +1147,10 @@ function prepareBackgroundMusic(duracionExactaVideo) {
   const foundMusic = candidates.find(p => fs.existsSync(p) && fs.statSync(p).size > 1000);
 
   if (foundMusic) {
-    console.log(`🎵 Música de fondo encontrada en: ${path.basename(foundMusic)}`);
+    console.log(`🎵 Música de fondo cargada (${path.basename(foundMusic)}) con volumen 0.28...`);
     try {
       execSync(
-        `ffmpeg -y -stream_loop -1 -i "${foundMusic}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.16,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        `ffmpeg -y -stream_loop -1 -i "${foundMusic}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.28,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
         { stdio: 'inherit' }
       );
       if (fs.existsSync('music_clean.wav') && fs.statSync('music_clean.wav').size > 1000) {
@@ -1154,10 +1161,9 @@ function prepareBackgroundMusic(duracionExactaVideo) {
     }
   }
 
-  // Fallback infalible: Sintetizar atmósfera musical Dark-Synth / Psicología si no hay archivo o falla
-  console.log('🎹 Generando colchón musical ambiental Dark-Synth de respaldo...');
+  console.log('🎹 Generando colchón musical ambiental Dark-Synth de respaldo (volumen 0.25)...');
   try {
-    const padExpr = `0.045*(sin(2*PI*110*t)+0.6*sin(2*PI*164.81*t)+0.4*sin(2*PI*220*t)+0.25*sin(2*PI*261.63*t)*(0.5+0.5*sin(2*PI*0.25*t)))`;
+    const padExpr = `0.12*(sin(2*PI*110*t)+0.6*sin(2*PI*164.81*t)+0.4*sin(2*PI*220*t)+0.25*sin(2*PI*261.63*t)*(0.5+0.5*sin(2*PI*0.25*t)))`;
     execSync(
       `ffmpeg -y -f lavfi -i "aevalsrc='${padExpr}':s=44100:d=${duracionExactaVideo.toFixed(3)}" -af "afade=t=in:st=0:d=0.4,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
       { stdio: 'ignore' }
@@ -1175,7 +1181,7 @@ async function main() {
     await downloadFile(payloadUrl, 'payload.json');
   }
 
-  console.log('🚀 Iniciando motor de renderizado Viral v9.5 (Audio Blindado + 5 Layouts Iconify + 8 Gráficas)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v10.0 (Rotación Estricta de Paletas Anti-Verde + Música Audible 0.28)...');
 
   const rawCatalogo = fs.existsSync('catalogo.json') ? JSON.parse(fs.readFileSync('catalogo.json', 'utf8')) : {};
   const catalogo = { ...rawCatalogo, ...EXPANDED_SVG_PACK };
@@ -1213,14 +1219,15 @@ async function main() {
   const totalFrames = Math.ceil(realAudioDuration * fps);
   const duracionExactaVideo = totalFrames / fps;
 
+  // 7 Paletas ordenadas para máximo contraste entre un vídeo y el siguiente (Verde Neón puesto al final en la posición 6)
   const accentPalettes = [
-    { name: 'Cian Eléctrico', hex: '#00f2fe', altHex: '#ff2a85', glow: 'rgba(0, 242, 254, 0.78)', altGlow: 'rgba(255, 42, 133, 0.72)', bgCenter: '#0f293a', bgEdge: '#04070b' },
-    { name: 'Verde Neón', hex: '#39ff14', altHex: '#00f2fe', glow: 'rgba(57, 255, 20, 0.72)', altGlow: 'rgba(0, 242, 254, 0.72)', bgCenter: '#112c1a', bgEdge: '#050906' },
-    { name: 'Amarillo Dorado', hex: '#ffd000', altHex: '#ff2a5f', glow: 'rgba(255, 208, 0, 0.78)', altGlow: 'rgba(255, 42, 95, 0.72)', bgCenter: '#2e240e', bgEdge: '#080604' },
     { name: 'Magenta Vibrante', hex: '#ff2a85', altHex: '#ffd000', glow: 'rgba(255, 42, 133, 0.78)', altGlow: 'rgba(255, 208, 0, 0.72)', bgCenter: '#2d1128', bgEdge: '#080408' },
-    { name: 'Naranja Fuego', hex: '#ff6b00', altHex: '#00f2fe', glow: 'rgba(255, 107, 0, 0.78)', altGlow: 'rgba(0, 242, 254, 0.72)', bgCenter: '#30190c', bgEdge: '#090503' },
-    { name: 'Violeta Eléctrico', hex: '#c77dff', altHex: '#39ff14', glow: 'rgba(199, 125, 255, 0.78)', altGlow: 'rgba(57, 255, 20, 0.72)', bgCenter: '#211338', bgEdge: '#06040a' },
-    { name: 'Rojo Carmesí', hex: '#ff2a5f', altHex: '#ffd000', glow: 'rgba(255, 42, 95, 0.80)', altGlow: 'rgba(255, 208, 0, 0.75)', bgCenter: '#31101c', bgEdge: '#090306' }
+    { name: 'Cian Eléctrico', hex: '#00f2fe', altHex: '#ff2a85', glow: 'rgba(0, 242, 254, 0.78)', altGlow: 'rgba(255, 42, 133, 0.72)', bgCenter: '#0f293a', bgEdge: '#04070b' },
+    { name: 'Amarillo Dorado', hex: '#ffd000', altHex: '#ff2a5f', glow: 'rgba(255, 208, 0, 0.78)', altGlow: 'rgba(255, 42, 95, 0.72)', bgCenter: '#2e240e', bgEdge: '#080604' },
+    { name: 'Violeta Eléctrico', hex: '#c77dff', altHex: '#00f2fe', glow: 'rgba(199, 125, 255, 0.78)', altGlow: 'rgba(0, 242, 254, 0.72)', bgCenter: '#211338', bgEdge: '#06040a' },
+    { name: 'Naranja Fuego', hex: '#ff6b00', altHex: '#ffd000', glow: 'rgba(255, 107, 0, 0.78)', altGlow: 'rgba(255, 208, 0, 0.72)', bgCenter: '#30190c', bgEdge: '#090503' },
+    { name: 'Rojo Carmesí', hex: '#ff2a5f', altHex: '#00f2fe', glow: 'rgba(255, 42, 95, 0.80)', altGlow: 'rgba(0, 242, 254, 0.75)', bgCenter: '#31101c', bgEdge: '#090306' },
+    { name: 'Verde Neón', hex: '#39ff14', altHex: '#00f2fe', glow: 'rgba(57, 255, 20, 0.72)', altGlow: 'rgba(0, 242, 254, 0.72)', bgCenter: '#112c1a', bgEdge: '#050906' }
   ];
 
   const seedStr = JSON.stringify(payload.escenas || '') + (payload.TituloYT || '') + String(Date.now());
@@ -1229,10 +1236,37 @@ async function main() {
     hash ^= seedStr.charCodeAt(i);
     hash = Math.imul(hash, 16777619) >>> 0;
   }
-  const chosenAccent = accentPalettes[hash % accentPalettes.length];
-  const bgPatternMode = (hash >>> 3) % 5;
-  const subStyleMode = (hash >>> 6) % 3;
-  console.log(`🎨 Paleta: ${chosenAccent.name} | Atmósfera: #${bgPatternMode} | Estilo Sub: #${subStyleMode}`);
+
+  // ROTACIÓN SECUENCIAL ESTRICTA BASADA EN HISTORIAL_TEMAS.JSON (Imposible repetir el mismo color en vídeos seguidos)
+  let histList = [];
+  if (fs.existsSync('historial_temas.json')) {
+    try {
+      histList = JSON.parse(fs.readFileSync('historial_temas.json', 'utf8'));
+      if (!Array.isArray(histList)) histList = [];
+    } catch (e) {
+      histList = [];
+    }
+  }
+
+  let paletteIdx = histList.length % accentPalettes.length;
+  if (histList.length > 0) {
+    const lastUsedPalette = histList[histList.length - 1].paleta_color;
+    if (lastUsedPalette && accentPalettes[paletteIdx].name === lastUsedPalette) {
+      paletteIdx = (paletteIdx + 1) % accentPalettes.length;
+    }
+  }
+  // Como los 4 últimos salieron verdes, si el primer turno cayera en Verde Neón, saltamos a Magenta Vibrante
+  if (accentPalettes[paletteIdx].name === 'Verde Neón' && histList.length < 10) {
+    paletteIdx = (hash % (accentPalettes.length - 1));
+  }
+
+  const chosenAccent = accentPalettes[paletteIdx];
+  payload.paleta_color = chosenAccent.name;
+  fs.writeFileSync('payload.json', JSON.stringify(payload, null, 2));
+
+  const bgPatternMode = (histList.length + (hash % 3)) % 5;
+  const subStyleMode = (histList.length + (hash % 2)) % 3;
+  console.log(`🎨 Paleta Rotatoria Garantizada: ${chosenAccent.name} (#${paletteIdx}) | Atmósfera: #${bgPatternMode} | Estilo Sub: #${subStyleMode}`);
 
   const escenasOriginales = payload.escenas || [];
   console.log('🔍 Buscando y descargando vectores profesionales para cada escena del guion...');
@@ -1351,7 +1385,7 @@ async function main() {
   const subtitleChunks = buildSubtitleChunks(escenasProcesadas, payload.alignment, duracionExactaVideo);
 
   // ============================================================================
-  // 4.5 MEZCLA DE AUDIO BLINDADA (VOZ + MÚSICA DE FONDO + PISTA SFX)
+  // 4.5 MEZCLA DE AUDIO BLINDADA (VOZ + MÚSICA DE FONDO A 0.28 + PISTA SFX)
   // ============================================================================
   let hasHookSfx = false;
   try {
@@ -1367,7 +1401,7 @@ async function main() {
   if (hasBgMusic && hasHookSfx) {
     try {
       execSync(
-        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.05[v];[v][1:a][2:a]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.0[v];[1:a]volume=1.35[m];[2:a]volume=1.25[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
         { stdio: 'inherit' }
       );
       audioMixedSuccess = true;
@@ -1375,7 +1409,7 @@ async function main() {
       console.warn('⚠️ Fallback amix 3 entradas sin normalize=0...');
       try {
         execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=3.1[v];[1:a]volume=3.0[m];[2:a]volume=3.0[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=3.0[v];[1:a]volume=3.8[m];[2:a]volume=3.5[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
           { stdio: 'inherit' }
         );
         audioMixedSuccess = true;
@@ -1386,7 +1420,7 @@ async function main() {
   if (!audioMixedSuccess && hasBgMusic) {
     try {
       execSync(
-        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.0[v];[1:a]volume=2.5[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
         { stdio: 'inherit' }
       );
       audioMixedSuccess = true;
@@ -1396,7 +1430,7 @@ async function main() {
   if (!audioMixedSuccess && hasHookSfx) {
     try {
       execSync(
-        `ffmpeg -y -i voice_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=2.1[v];[1:a]volume=2.0[s];[v][s]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+        `ffmpeg -y -i voice_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=2.0[v];[1:a]volume=2.4[s];[v][s]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
         { stdio: 'inherit' }
       );
       audioMixedSuccess = true;
@@ -2009,7 +2043,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 v9.5 generado con éxito!');
+  console.log('✅ ¡Vídeo output.mp4 v10.0 generado con éxito!');
 }
 
 main().catch(err => {
