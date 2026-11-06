@@ -391,5 +391,20 @@
     ],
     "programado_para_madrid": "07/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-06T08:04:10.939Z"
+  },
+  {
+    "id_concepto": "efecto_zeigarnik",
+    "subrama": "Memoria y Olvido",
+    "titulo": "¿Por qué recuerdas más lo que dejas a medias? 🧠",
+    "keywords_concepto": [
+      "efecto zeigarnik",
+      "memoria de trabajo",
+      "tareas pendientes",
+      "procrastinacion",
+      "atencion sostenida"
+    ],
+    "paleta_color": "Magenta Vibrante",
+    "programado_para_madrid": "07/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-06T08:20:41.187Z"
   }
 ]
