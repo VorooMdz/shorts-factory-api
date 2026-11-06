@@ -413,5 +413,20 @@
     "paleta_color": "Magenta Vibrante",
     "programado_para_madrid": "07/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-06T12:34:06.966Z"
+  },
+  {
+    "id_concepto": "aversion_a_la_perdida",
+    "subrama": "Economía Conductual",
+    "titulo": "¿Por qué perder dinero te duele el doble que ganarlo? 💸",
+    "keywords_concepto": [
+      "aversión a la pérdida",
+      "kahneman",
+      "tversky",
+      "toma de decisiones",
+      "sesgo cognitivo"
+    ],
+    "paleta_color": "Cian Eléctrico",
+    "programado_para_madrid": "08/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-06T13:12:28.091Z"
   }
 ]
