@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id_concepto": "larson_press_your_luck_1984",
+    "subrama": "Hackers de la Realidad y Golpes de Ingenio",
+    "titulo": "El hombre que descifró el algoritmo de la televisión",
+    "keywords_concepto": [
+      "Michael Larson",
+      "Press Your Luck",
+      "CBS",
+      "hack televisión",
+      "patrones algorítmicos",
+      "ingeniería inversa"
+    ],
+    "programado_para_madrid": "2026-11-06 18:00",
+    "youtube_video_id": "PyJTByytins",
+    "fecha_publicacion": "2026-11-06T12:52:10.877Z"
+  }
+]
