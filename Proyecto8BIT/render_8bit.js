@@ -420,7 +420,7 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR PIXEL-ART v20.1 (BARRA NO LINEAL + MAPEO CONTEXTUAL 5 PISTAS SUNO)
+// 3. MOTOR PIXEL-ART v20.2 (TEXTOS CANVAS REPARADOS + MASTERIZACIÓN DINÁMICA)
 // ============================================================================
 const MUSIC_STYLE_TO_INDEX = {
   HEIST: 1,
@@ -433,7 +433,7 @@ const MUSIC_STYLE_TO_INDEX = {
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v20.1 desde URL...');
+    console.log('📥 Descargando payload v20.2 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -492,7 +492,7 @@ async function main() {
   const subtitleChunks = buildSubtitleChunksAndBeatTimings(escenas, payload.alignment, duracionExactaVideo);
 
   // ==========================================================================
-  // SELECCIÓN INTELIGENTE DE LAS 5 PISTAS DE MÚSICA (bg_music_1.mp3 .. bg_music_5.mp3)
+  // SELECCIÓN Y NIVELACIÓN DINÁMICA DE LAS 5 PISTAS DE MÚSICA (bg_music_1..5)
   // ==========================================================================
   try {
     let hasSfx = false;
@@ -520,11 +520,15 @@ async function main() {
     if (bgMusicPath) {
       console.log(`🎵 Usando pista musical (#${trackIdx} - ${styleKey || 'AUTO'}): ${path.basename(bgMusicPath)}`);
       const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
-      execSync(`ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.2,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`, { stdio: 'inherit' });
+      // dynaudnorm + acompressor + equalizer: sube la intro floja, sujeta el clímax fuerte y abre hueco en 2.2kHz para la voz
+      execSync(
+        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "dynaudnorm=f=150:g=7:p=0.85:m=4.0,acompressor=threshold=-18dB:ratio=4:attack=10:release=200,equalizer=f=2200:t=q:w=1.2:g=-4,volume=0.16,afade=t=in:st=0:d=0.4,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        { stdio: 'inherit' }
+      );
       if (hasSfx) {
-        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.18[v];[2:a]volume=0.35[sfx];[v][1:a][sfx]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
+        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.22[v];[2:a]volume=0.45[sfx];[v][1:a][sfx]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
       } else {
-        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.18[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
+        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.22[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
       }
     } else {
       fs.copyFileSync('voice_clean.wav', 'audio.wav');
@@ -647,6 +651,37 @@ async function main() {
 
       let transformStack = [{ tx: 0, ty: 0, scale: 1, rad: 0, flipX: false }];
 
+      // UTILIDADES DE TEXTO INCLUIDAS EN EL CONTEXTO DEL NAVEGADOR PARA DRAW_DATA_TEXT
+      function fixSpanishN(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/engann/gi, (m) => m[0] === 'E' ? 'Engañ' : 'engañ')
+          .replace(/espannol/gi, (m) => m[0] === 'E' ? 'Español' : 'español')
+          .replace(/\\bespanol(es|a|as)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bengano(s)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\benganar(on)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bhazana(s)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bpequeno(s|a|as)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bmontana(s)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bcompania(s)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bdano(s)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bsenal(es)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bdiseno(s)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bsueno(s)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'))
+          .replace(/\\bano(s)?\\b/gi, (m) => m.replace(/n/i, (n) => n === 'N' ? 'Ñ' : 'ñ'));
+      }
+
+      function cleanArcadeText(str) {
+        return fixSpanishN(str)
+          .toUpperCase()
+          .replace(/[ÁÀÄÂ]/g, 'A')
+          .replace(/[ÉÈËÊ]/g, 'E')
+          .replace(/[ÍÌÏÎ]/g, 'I')
+          .replace(/[ÓÒÖÔ]/g, 'O')
+          .replace(/[ÚÙÜÛ]/g, 'U')
+          .trim();
+      }
+
       function mapPoint(lx, ly) {
         let x = lx, y = ly;
         for (let i = transformStack.length - 1; i >= 1; i--) {
@@ -689,10 +724,7 @@ async function main() {
       }
 
       function toRetroHtml(str) {
-        const clean = String(str || '').toUpperCase()
-          .replace(/[ÁÀÄÂ]/g, 'A').replace(/[ÉÈËÊ]/g, 'E')
-          .replace(/[ÍÌÏÎ]/g, 'I').replace(/[ÓÒÖÔ]/g, 'O')
-          .replace(/[ÚÙÜÛ]/g, 'U').trim();
+        const clean = cleanArcadeText(str);
         return clean.replace(/Ñ/g, '<span class="retro-enie">N</span>');
       }
 
@@ -833,7 +865,7 @@ async function main() {
       function fillCircle(cx, cy, radius, color) {
         const [gx, gy] = mapPoint(cx, cy);
         const effScale = transformStack.reduce((acc, t) => acc * t.scale, 1);
-        const rInt = Math.min(54, Math.max(1, Math.round(radius * effScale)));
+        const rInt = Math.min(36, Math.max(1, Math.round(radius * effScale)));
         for (let r = -rInt; r <= rInt; r++) {
           for (let c = -rInt; c <= rInt; c++) {
             if (c * c + r * r <= rInt * rInt) setPxRaw(gx + c, gy + r, color);
@@ -844,7 +876,7 @@ async function main() {
       function fillBorderedCircle(cx, cy, radius, fillColor, borderColor = '#0b0c10') {
         const [gx, gy] = mapPoint(cx, cy);
         const effScale = transformStack.reduce((acc, t) => acc * t.scale, 1);
-        const rInt = Math.min(54, Math.max(1, Math.round(radius * effScale)));
+        const rInt = Math.min(36, Math.max(1, Math.round(radius * effScale)));
         for (let r = -rInt; r <= rInt; r++) {
           for (let c = -rInt; c <= rInt; c++) {
             if (c * c + r * r <= rInt * rInt) setPxRaw(gx + c, gy + r, borderColor);
@@ -863,7 +895,7 @@ async function main() {
       function drawRing(cx, cy, radius, thickness = 2, color = '#fde047') {
         const [gx, gy] = mapPoint(cx, cy);
         const effScale = transformStack.reduce((acc, t) => acc * t.scale, 1);
-        const rOut = Math.min(56, Math.round(radius * effScale));
+        const rOut = Math.min(44, Math.round(radius * effScale));
         const rIn = Math.max(0, rOut - Math.max(1, Math.round(thickness * effScale)));
         for (let r = -rOut; r <= rOut; r++) {
           for (let c = -rOut; c <= rOut; c++) {
@@ -935,17 +967,25 @@ async function main() {
       // ======================================================================
       // 3. MICRO-TIPOGRAFÍA DE DATOS EN LIENZO (PARA MONITORES, NOTAS Y PIZARRAS)
       // ======================================================================
-      function drawDataText(textStr, x, y, color = '#fde047', size = 1, bgColor = 'rgba(8,10,20,0.88)') {
-        const clean = cleanArcadeText(String(textStr ?? '')).slice(0, 22);
+      function drawDataText(textStr, x = 60, y = 60, color = '#fde047', size = 1, bgColor = 'rgba(8,10,20,0.92)') {
+        const clean = cleanArcadeText(String(textStr ?? '')).slice(0, 26);
         if (!clean) return;
-        const [gx, gy] = mapPoint(x, y);
+        let finalColor = color;
+        let finalSize = size;
+        if (typeof color === 'number') {
+          finalSize = color;
+          finalColor = (typeof size === 'string' && size.trim().length > 0) ? size : '#fde047';
+        }
+        if (typeof finalColor !== 'string' || !finalColor.trim()) finalColor = '#fde047';
+        const numSize = Number(finalSize) || 1;
+        const [gx, gy] = mapPoint(Number(x) || 60, Number(y) || 60);
         dataTextOverlayQueue.push({
           text: clean,
           x: Math.max(10, Math.min(110, gx)) * CELL,
-          y: Math.max(28, Math.min(156, gy)) * CELL,
-          color: color || '#fde047',
-          fontSize: size >= 2 ? 17 : (size <= 0.8 ? 11 : 14),
-          bgColor
+          y: Math.max(26, Math.min(156, gy)) * CELL,
+          color: finalColor,
+          fontSize: numSize >= 2 ? 18 : (numSize <= 0.8 ? 12 : 15),
+          bgColor: bgColor === undefined ? 'rgba(8,10,20,0.92)' : bgColor
         });
       }
 
@@ -997,7 +1037,7 @@ async function main() {
         const rMid = Math.round(rOuter * 0.72);
         const rCore = Math.round(rOuter * 0.42);
 
-        drawRing(cx, cy, Math.min(46, rOuter + 5), 2, '#fde047');
+        drawRing(cx, cy, Math.min(44, rOuter + 5), 2, '#fde047');
         fillBorderedCircle(cx, cy, rOuter, '#dc2626', '#0b0c10');
         fillCircle(cx, cy, rMid, '#f97316');
         fillCircle(cx, cy, rCore, (localFrame % 4 < 2) ? '#ffffff' : '#fef08a');
@@ -1129,8 +1169,11 @@ async function main() {
         drawClouds, clouds: drawClouds,
         drawCustomSprite, customSprite: drawCustomSprite,
         drawRig, rig: drawRig,
+        cleanArcadeText, fixSpanishN,
         lerp, easeOut, easeInOut,
         sin: Math.sin, cos: Math.cos, abs: Math.abs, floor: Math.floor,
+        ceil: Math.ceil, sqrt: Math.sqrt, pow: Math.pow, atan2: Math.atan2,
+        random: () => 0.5,
         round: Math.round, min: Math.min, max: Math.max, PI: Math.PI
       };
 
@@ -1176,18 +1219,21 @@ async function main() {
               ctx.font = \`\${fSize}px "Press Start 2P", monospace\`;
             }
             const totalW = ctx.measureText(displayStr).width;
-            const padX = 8, padY = 6;
+            const padX = 10, padY = 8;
             const bw = totalW + padX * 2;
             const bh = fSize + padY * 2;
-            const safeX = Math.max(bw / 2 + 10, Math.min(720 - bw / 2 - 10, item.x));
-            const safeY = Math.max(130, Math.min(920, item.y));
+            const safeX = Math.max(bw / 2 + 12, Math.min(720 - bw / 2 - 12, item.x));
+            const safeY = Math.max(125, Math.min(915, item.y));
 
             if (item.bgColor) {
               ctx.fillStyle = item.bgColor;
               ctx.fillRect(safeX - bw / 2, safeY - bh / 2, bw, bh);
-              ctx.strokeStyle = '#000000';
+              ctx.strokeStyle = item.color || '#00f2fe';
               ctx.lineWidth = 3;
               ctx.strokeRect(safeX - bw / 2, safeY - bh / 2, bw, bh);
+              ctx.strokeStyle = '#000000';
+              ctx.lineWidth = 3;
+              ctx.strokeRect(safeX - bw / 2 - 3, safeY - bh / 2 - 3, bw + 6, bh + 6);
             }
             ctx.fillStyle = '#000000';
             ctx.fillText(displayStr, safeX + 2, safeY + 2);
@@ -1311,7 +1357,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Ultra-Ágil v20.1 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Ultra-Ágil v20.2 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1324,13 +1370,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v20.1...');
+  console.log('🔊 Ensamblando MP4 final v20.2...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v20.1 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v20.2 generado con éxito!');
   process.exit(0);
 }
 
