@@ -452,12 +452,11 @@ function buildIllustratedSceneSvg(esc, vectorCache, t1, t2, idx, hash) {
   `;
 }
 
-// 1.6 Visualización de Datos Ampliada (Con detector de números corregido para no confundir el artículo "un" con "1%")
+// 1.6 Visualización de Datos Ampliada
 function buildDynamicDataVizSvg(esc, idx, hash, t1, t2) {
   const dv = esc.data_viz || {};
   const sub = String(esc.subtitulo || '');
 
-  // Ordenados de frases compuestas a simples y SIN el artículo "un" suelto para que "un veinticinco por ciento" sea 25% y nunca 1%
   const wordNumEntries = [
     ['noventa y nueve', '99'], ['noventa y cinco', '95'], ['ochenta y cinco', '85'],
     ['setenta y cinco', '75'], ['sesenta y cinco', '65'], ['cincuenta', '50'],
@@ -960,7 +959,7 @@ function buildSubtitleChunks(escenas, alignmentData, realAudioDuration) {
   return allChunks;
 }
 
-// 3. Sintetizador Procedural de 26 Efectos (Con volumen reforzado para que se escuchen con total nitidez)
+// 3. Sintetizador Procedural de 26 Efectos
 function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
   function getRecipe(type, pitchMod, customFreq) {
     const p = pitchMod.toFixed(3);
@@ -1134,36 +1133,51 @@ function buildSceneSfxTrack(escenas, totalDuration, videoHash) {
   return fs.existsSync('hook_sfx.wav') && fs.statSync('hook_sfx.wav').size > 1000;
 }
 
-// Localizador de música de fondo con volumen real audible (0.28 -> casi el triple que antes)
+// 3.5 Procesador de psico_music.mp3 con eliminación de silencio inicial, normalización dinámica (dynaudnorm) y bucle seguro (aloop)
 function prepareBackgroundMusic(duracionExactaVideo) {
   const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
   const candidates = [
+    path.resolve('psico_music.mp3'),
     path.resolve('bg_music.mp3'),
     path.resolve('music.mp3'),
     path.resolve('background.mp3'),
-    ...fs.readdirSync('.').filter(f => /\.mp3$/i.test(f) && f !== 'audio_raw.mp3' && f !== 'audio.mp3').map(f => path.resolve(f))
+    ...fs.readdirSync('.').filter(f => /\.(mp3|wav|m4a|ogg)$/i.test(f) && !/^(audio_raw|audio|voice_clean|music_clean|hook_sfx)\./i.test(f)).map(f => path.resolve(f))
   ];
 
   const foundMusic = candidates.find(p => fs.existsSync(p) && fs.statSync(p).size > 1000);
 
   if (foundMusic) {
-    console.log(`🎵 Música de fondo cargada (${path.basename(foundMusic)}) con volumen 0.28...`);
+    console.log(`🎵 Música detectada: ${path.basename(foundMusic)} (${fs.statSync(foundMusic).size} bytes). Normalizando volumen...`);
     try {
+      // 1º Normalizar con dynaudnorm, recortar silencios iniciales y hacer loop limpio en memoria con aloop
       execSync(
-        `ffmpeg -y -stream_loop -1 -i "${foundMusic}" -t ${duracionExactaVideo.toFixed(3)} -af "volume=0.28,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        `ffmpeg -y -i "${foundMusic}" -af "silenceremove=start_periods=1:start_threshold=-50dB,aloop=loop=-1:size=2e+09,atrim=0:${duracionExactaVideo.toFixed(3)},dynaudnorm=f=150:g=15:p=0.85,volume=0.32,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
         { stdio: 'inherit' }
       );
       if (fs.existsSync('music_clean.wav') && fs.statSync('music_clean.wav').size > 1000) {
         return true;
       }
-    } catch (e) {
-      console.warn('⚠️ Error decodificando MP3 de música, activando sintetizador ambiental de respaldo:', e.message);
+    } catch (e1) {
+      console.warn('⚠️ Fallback de filtro de música:', e1.message);
+      try {
+        execSync(
+          `ffmpeg -y -stream_loop -1 -i "${foundMusic}" -t ${duracionExactaVideo.toFixed(3)} -af "dynaudnorm=f=150:g=15:p=0.85,volume=0.32,afade=t=in:st=0:d=0.3,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+          { stdio: 'inherit' }
+        );
+        if (fs.existsSync('music_clean.wav') && fs.statSync('music_clean.wav').size > 1000) {
+          return true;
+        }
+      } catch (e2) {
+        console.warn('⚠️ Error decodificando el archivo de música:', e2.message);
+      }
     }
+  } else {
+    console.warn('⚠️ No se encontró psico_music.mp3 ni bg_music.mp3 en la raíz del repositorio.');
   }
 
-  console.log('🎹 Generando colchón musical ambiental Dark-Synth de respaldo (volumen 0.25)...');
+  console.log('🎹 Generando colchón musical ambiental Dark-Synth de respaldo...');
   try {
-    const padExpr = `0.12*(sin(2*PI*110*t)+0.6*sin(2*PI*164.81*t)+0.4*sin(2*PI*220*t)+0.25*sin(2*PI*261.63*t)*(0.5+0.5*sin(2*PI*0.25*t)))`;
+    const padExpr = `0.24*(sin(2*PI*110*t)+0.6*sin(2*PI*164.81*t)+0.4*sin(2*PI*220*t)+0.25*sin(2*PI*261.63*t)*(0.5+0.5*sin(2*PI*0.25*t)))`;
     execSync(
       `ffmpeg -y -f lavfi -i "aevalsrc='${padExpr}':s=44100:d=${duracionExactaVideo.toFixed(3)}" -af "afade=t=in:st=0:d=0.4,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
       { stdio: 'ignore' }
@@ -1181,7 +1195,7 @@ async function main() {
     await downloadFile(payloadUrl, 'payload.json');
   }
 
-  console.log('🚀 Iniciando motor de renderizado Viral v10.0 (Rotación Estricta de Paletas Anti-Verde + Música Audible 0.28)...');
+  console.log('🚀 Iniciando motor de renderizado Viral v10.5 (Soporte psico_music.mp3 + Normalización Dinámica de Música)...');
 
   const rawCatalogo = fs.existsSync('catalogo.json') ? JSON.parse(fs.readFileSync('catalogo.json', 'utf8')) : {};
   const catalogo = { ...rawCatalogo, ...EXPANDED_SVG_PACK };
@@ -1219,7 +1233,6 @@ async function main() {
   const totalFrames = Math.ceil(realAudioDuration * fps);
   const duracionExactaVideo = totalFrames / fps;
 
-  // 7 Paletas ordenadas para máximo contraste entre un vídeo y el siguiente (Verde Neón puesto al final en la posición 6)
   const accentPalettes = [
     { name: 'Magenta Vibrante', hex: '#ff2a85', altHex: '#ffd000', glow: 'rgba(255, 42, 133, 0.78)', altGlow: 'rgba(255, 208, 0, 0.72)', bgCenter: '#2d1128', bgEdge: '#080408' },
     { name: 'Cian Eléctrico', hex: '#00f2fe', altHex: '#ff2a85', glow: 'rgba(0, 242, 254, 0.78)', altGlow: 'rgba(255, 42, 133, 0.72)', bgCenter: '#0f293a', bgEdge: '#04070b' },
@@ -1237,7 +1250,6 @@ async function main() {
     hash = Math.imul(hash, 16777619) >>> 0;
   }
 
-  // ROTACIÓN SECUENCIAL ESTRICTA BASADA EN HISTORIAL_TEMAS.JSON (Imposible repetir el mismo color en vídeos seguidos)
   let histList = [];
   if (fs.existsSync('historial_temas.json')) {
     try {
@@ -1255,7 +1267,6 @@ async function main() {
       paletteIdx = (paletteIdx + 1) % accentPalettes.length;
     }
   }
-  // Como los 4 últimos salieron verdes, si el primer turno cayera en Verde Neón, saltamos a Magenta Vibrante
   if (accentPalettes[paletteIdx].name === 'Verde Neón' && histList.length < 10) {
     paletteIdx = (hash % (accentPalettes.length - 1));
   }
@@ -1385,7 +1396,7 @@ async function main() {
   const subtitleChunks = buildSubtitleChunks(escenasProcesadas, payload.alignment, duracionExactaVideo);
 
   // ============================================================================
-  // 4.5 MEZCLA DE AUDIO BLINDADA (VOZ + MÚSICA DE FONDO A 0.28 + PISTA SFX)
+  // 4.5 MEZCLA DE AUDIO BLINDADA (VOZ + PSICO_MUSIC NORMALIZADA + PISTA SFX)
   // ============================================================================
   let hasHookSfx = false;
   try {
@@ -1401,7 +1412,7 @@ async function main() {
   if (hasBgMusic && hasHookSfx) {
     try {
       execSync(
-        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.0[v];[1:a]volume=1.35[m];[2:a]volume=1.25[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.0[v];[1:a]volume=1.0[m];[2:a]volume=1.15[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=0:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
         { stdio: 'inherit' }
       );
       audioMixedSuccess = true;
@@ -1409,7 +1420,7 @@ async function main() {
       console.warn('⚠️ Fallback amix 3 entradas sin normalize=0...');
       try {
         execSync(
-          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=3.0[v];[1:a]volume=3.8[m];[2:a]volume=3.5[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+          `ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=3.0[v];[1:a]volume=3.0[m];[2:a]volume=3.4[s];[v][m][s]amix=inputs=3:duration=first:dropout_transition=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
           { stdio: 'inherit' }
         );
         audioMixedSuccess = true;
@@ -1420,7 +1431,7 @@ async function main() {
   if (!audioMixedSuccess && hasBgMusic) {
     try {
       execSync(
-        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.0[v];[1:a]volume=2.5[m];[v][m]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+        `ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=2.0[v];[1:a]volume=2.0[m];[v][m]amix=inputs=2:duration=first:dropout_transition=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
         { stdio: 'inherit' }
       );
       audioMixedSuccess = true;
@@ -1430,7 +1441,7 @@ async function main() {
   if (!audioMixedSuccess && hasHookSfx) {
     try {
       execSync(
-        `ffmpeg -y -i voice_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=2.0[v];[1:a]volume=2.4[s];[v][s]amix=inputs=2:duration=first:dropout_transition=2" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
+        `ffmpeg -y -i voice_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=2.0[v];[1:a]volume=2.3[s];[v][s]amix=inputs=2:duration=first:dropout_transition=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`,
         { stdio: 'inherit' }
       );
       audioMixedSuccess = true;
@@ -2043,7 +2054,7 @@ async function main() {
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo output.mp4 v10.0 generado con éxito!');
+  console.log('✅ ¡Vídeo output.mp4 v10.5 generado con éxito!');
 }
 
 main().catch(err => {
