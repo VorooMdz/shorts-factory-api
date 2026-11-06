@@ -335,5 +335,19 @@
     ],
     "programado_para_madrid": "06/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-05T22:04:07.231Z"
+  },
+  {
+    "id_concepto": "caja_espejo_ramachandran",
+    "subrama": "Neuropsicología Clínica",
+    "titulo": "La Caja de Espejos y el Miembro Fantasma",
+    "keywords_concepto": [
+      "miembro fantasma",
+      "caja de espejos",
+      "Vilayanur Ramachandran",
+      "neuroplasticidad",
+      "dolor fantasma"
+    ],
+    "programado_para_madrid": "06/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-06T07:19:31.785Z"
   }
 ]
