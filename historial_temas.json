@@ -367,5 +367,21 @@
     "paleta_color": "Naranja Fuego",
     "programado_para_madrid": "06/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-06T08:46:57.245Z"
+  },
+  {
+    "id_concepto": "falacia_del_jugador",
+    "subrama": "Psicología del Azar",
+    "titulo": "¿Por qué tu cerebro jura que ya toca ganar? 🎰",
+    "keywords_concepto": [
+      "falacia del jugador",
+      "monte carlo",
+      "azar",
+      "probabilidad",
+      "cerebro",
+      "sesgo cognitivo"
+    ],
+    "paleta_color": "Rojo Carmesí",
+    "programado_para_madrid": "07/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-06T09:00:02.774Z"
   }
 ]
