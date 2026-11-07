@@ -46,5 +46,20 @@
     "programado_para_madrid": "2026-11-07 14:00",
     "youtube_video_id": "raNpn6bFXwY",
     "fecha_publicacion": "2026-11-06T13:13:15.634Z"
+  },
+  {
+    "id_concepto": "ariane_5_vuelo_501_overflow_1996",
+    "subrama": "Bugs Letales y Errores de Ingeniería",
+    "titulo": "El bug que destruyó el Ariane 5",
+    "keywords_concepto": [
+      "Ariane 5",
+      "integer overflow",
+      "bug espacial",
+      "vuelo 501",
+      "error de ingeniería"
+    ],
+    "programado_para_madrid": "2026-11-07 18:00",
+    "youtube_video_id": "L9AEn90VS7I",
+    "fecha_publicacion": "2026-11-07T08:08:01.776Z"
   }
 ]
