@@ -428,5 +428,20 @@
     "paleta_color": "Cian Eléctrico",
     "programado_para_madrid": "08/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-06T13:12:28.091Z"
+  },
+  {
+    "id_concepto": "microsuenos_involuntarios",
+    "subrama": "Neurobiología del Sueño",
+    "titulo": "¿Por qué tu cerebro se apaga con los ojos abiertos? 😴",
+    "keywords_concepto": [
+      "microsueños",
+      "privación de sueño",
+      "desconexión talámica",
+      "ceguera atencional",
+      "fatiga al volante"
+    ],
+    "paleta_color": "Amarillo Dorado",
+    "programado_para_madrid": "08/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-07T07:03:47.625Z"
   }
 ]
