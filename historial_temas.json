@@ -473,5 +473,20 @@
     "paleta_color": "Naranja Fuego",
     "programado_para_madrid": "09/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-07T11:31:16.778Z"
+  },
+  {
+    "id_concepto": "error_prediccion_recompensa",
+    "subrama": "Química y Dopamina",
+    "titulo": "¿Por qué te aburres justo después de conseguir lo que querías? 🧠",
+    "keywords_concepto": [
+      "error de prediccion de recompensa",
+      "wolfram schultz",
+      "dopamina",
+      "anticipacion",
+      "adiccion a novedades"
+    ],
+    "paleta_color": "Rojo Carmesí",
+    "programado_para_madrid": "09/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-08T08:23:54.950Z"
   }
 ]
