@@ -488,5 +488,20 @@
     "paleta_color": "Rojo Carmesí",
     "programado_para_madrid": "09/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-08T08:23:54.950Z"
+  },
+  {
+    "id_concepto": "efecto_espectador_humo",
+    "subrama": "Psicología Social",
+    "titulo": "¿Por qué te quedarías sentado en un incendio? 🔥",
+    "keywords_concepto": [
+      "efecto espectador",
+      "conformidad",
+      "experimento del humo",
+      "psicología social",
+      "ignorancia pluralista"
+    ],
+    "paleta_color": "Verde Neón",
+    "programado_para_madrid": "09/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-09T09:09:09.830Z"
   }
 ]
