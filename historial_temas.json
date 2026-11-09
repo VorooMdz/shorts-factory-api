@@ -503,5 +503,19 @@
     "paleta_color": "Verde Neón",
     "programado_para_madrid": "09/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-09T09:09:09.830Z"
+  },
+  {
+    "id_concepto": "curva_del_olvido_ebbinghaus",
+    "subrama": "Memoria y Olvido",
+    "titulo": "¿Por qué olvidas casi todo al día siguiente? 🧠",
+    "keywords_concepto": [
+      "curva del olvido",
+      "ebbinghaus",
+      "memoria a corto plazo",
+      "repeticion espaciada"
+    ],
+    "paleta_color": "Magenta Vibrante",
+    "programado_para_madrid": "10/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-09T11:03:53.862Z"
   }
 ]
