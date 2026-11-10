@@ -228,5 +228,21 @@
     "programado_para_madrid": "2026-11-10 21:00",
     "youtube_video_id": "dveKoSfxFZg",
     "fecha_publicacion": "2026-11-10T10:20:29.835Z"
+  },
+  {
+    "id_concepto": "marcus_hutchins_frena_wannacry_2017",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "El dominio de diez dólares que salvó a Internet de WannaCry",
+    "keywords_concepto": [
+      "WannaCry",
+      "Marcus Hutchins",
+      "ransomware",
+      "kill switch",
+      "ciberseguridad",
+      "NSA exploit"
+    ],
+    "programado_para_madrid": "2026-11-11 14:00",
+    "youtube_video_id": "0vyWd_FVjG4",
+    "fecha_publicacion": "2026-11-10T10:31:25.475Z"
   }
 ]
