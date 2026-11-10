@@ -547,5 +547,20 @@
     "paleta_color": "Amarillo Dorado",
     "programado_para_madrid": "10/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-10T09:18:39.536Z"
+  },
+  {
+    "id_concepto": "efecto_oddball_dilatacion_tiempo",
+    "subrama": "Neurociencia del Tiempo",
+    "titulo": "¿Por qué tu cerebro alarga las cosas nuevas? ⏱️ 🧠",
+    "keywords_concepto": [
+      "efecto oddball",
+      "neurociencia del tiempo",
+      "percepcion temporal",
+      "novedad cognitiva",
+      "ilusion temporal"
+    ],
+    "paleta_color": "Violeta Eléctrico",
+    "programado_para_madrid": "11/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-10T11:03:41.326Z"
   }
 ]
