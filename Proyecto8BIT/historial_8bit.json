@@ -259,5 +259,20 @@
     "programado_para_madrid": "2026-11-11 18:00",
     "youtube_video_id": "Qz8pXB1vzpY",
     "fecha_publicacion": "2026-11-10T10:48:55.910Z"
+  },
+  {
+    "id_concepto": "andres_freund_backdoor_xz_utils_2024",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "El retraso de medio segundo que salvó a Internet de un ciberataque silencioso",
+    "keywords_concepto": [
+      "XZ Utils",
+      "Andres Freund",
+      "backdoor Linux",
+      "ciberespionaje SSH",
+      "puerta trasera XZ"
+    ],
+    "programado_para_madrid": "2026-11-11 21:00",
+    "youtube_video_id": "jxmt2cjxIVE",
+    "fecha_publicacion": "2026-11-10T11:03:16.839Z"
   }
 ]
