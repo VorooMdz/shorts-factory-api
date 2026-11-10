@@ -128,6 +128,15 @@ function buildSubtitleChunksAndBeatTimings(escenas, alignmentData, realAudioDura
     }
   }
 
+  // COMPENSAR EL RECORTE DE SILENCIO INICIAL EN LOS TIMESTAMPS DE ELEVENLABS
+  if (elevenWords.length > 0 && elevenWords[0].start > 0.02) {
+    const offsetShift = Math.max(0, elevenWords[0].start - 0.01);
+    elevenWords.forEach(w => {
+      w.start = Math.max(0, w.start - offsetShift);
+      w.end = Math.max(w.start + 0.04, w.end - offsetShift);
+    });
+  }
+
   function calcTokenWeight(tk) {
     const clean = tk.text.replace(/[.,;!?¡¿"«»()]/g, '');
     let w = Math.max(2, clean.length);
@@ -179,7 +188,7 @@ function buildSubtitleChunksAndBeatTimings(escenas, alignmentData, realAudioDura
     }
   }
 
-  const lastSpokenEnd = elevenWords.length > 0 ? elevenWords[elevenWords.length - 1].end : Math.max(1, realAudioDuration - 0.35);
+  const lastSpokenEnd = elevenWords.length > 0 ? elevenWords[elevenWords.length - 1].end : Math.max(1, realAudioDuration - 0.20);
   const sceneWeights = sceneTokensList.map(tokens => Math.max(3, tokens.reduce((acc, tk) => acc + calcTokenWeight(tk), 0)));
   const totalScriptWeight = sceneWeights.reduce((a, b) => a + b, 0);
 
@@ -288,6 +297,14 @@ function buildSubtitleChunksAndBeatTimings(escenas, alignmentData, realAudioDura
     });
   });
 
+  // GARANTIZAR SUBTÍTULO GRANDE Y ACTIVO EN EL FRAME 0.0
+  if (allChunks.length > 0) {
+    allChunks[0].start = 0;
+    if (allChunks[0].words && allChunks[0].words.length > 0) {
+      allChunks[0].words[0].start = 0;
+    }
+  }
+
   for (let i = 0; i < escenas.length - 1; i++) escenas[i].fin = escenas[i + 1].inicio;
   if (escenas.length > 0) {
     escenas[0].inicio = 0;
@@ -359,7 +376,7 @@ function buildSubtitleChunksAndBeatTimings(escenas, alignmentData, realAudioDura
 }
 
 // ============================================================================
-// 2. SINTETIZADOR CHIPTUNE SINCRONIZADO AL MILISEGUNDO CON CADA MICRO-PLANO
+// 2. SINTETIZADOR CHIPTUNE CON IMPACTO SECO EN EL MILISEGUNDO 0 (STOP-SCROLL)
 // ============================================================================
 function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   const allTypes = [
@@ -370,6 +387,7 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
   function get8BitRecipe(type, pitchMod) {
     const p = pitchMod.toFixed(3);
     const catalog = {
+      hook_impact_8bit: { expr: `0.28*exp(-6*t)*(sgn(sin(2*PI*(980*exp(-12*t)+110)*t))+0.6*sgn(sin(2*PI*540*t)*sin(2*PI*73*t)))`, dur: 0.34 },
       coin_8bit: { expr: `0.16*(lt(t,0.08)*sgn(sin(2*PI*987.77*${p}*t))+gt(t,0.08)*exp(-6*(t-0.08))*sgn(sin(2*PI*1318.51*${p}*t)))`, dur: 0.36 },
       laser_8bit: { expr: `0.14*exp(-5*t)*sgn(sin(2*PI*(1200*${p}*exp(-6*t)+120)*t))`, dur: 0.28 },
       explosion_8bit: { expr: `0.22*exp(-4.5*t)*(sgn(sin(2*PI*75*exp(-2*t)*t))*sin(2*PI*19*t)+0.5*sgn(sin(2*PI*230*t)*sin(2*PI*53*t)))`, dur: 0.55 },
@@ -392,14 +410,15 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
     const beats = Array.isArray(esc.sub_escenas) && esc.sub_escenas.length > 0 ? esc.sub_escenas : [esc];
 
     beats.forEach((beat, bIdx) => {
-      let rawType = String(beat.sfx || esc.sfx || '').toLowerCase().trim();
-      if (!allTypes.includes(rawType)) {
+      const isFrameZero = (idx === 0 && bIdx === 0);
+      let rawType = isFrameZero ? 'hook_impact_8bit' : String(beat.sfx || esc.sfx || '').toLowerCase().trim();
+      if (!isFrameZero && !allTypes.includes(rawType)) {
         rawType = allTypes[(videoHash + sfxIndex * 3) % allTypes.length];
       }
       const pitchMod = 0.90 + (((videoHash + sfxIndex * 13) % 21) / 100);
       const recipe = get8BitRecipe(rawType, pitchMod);
-      const beatStartSec = (idx === 0 && bIdx === 0) ? 0.04 : Math.max(0.05, Number(beat.inicio_beat ?? esc.inicio) || 0);
-      const delayMs = Math.round(beatStartSec * 1000);
+      const beatStartSec = isFrameZero ? 0.001 : Math.max(0.05, Number(beat.inicio_beat ?? esc.inicio) || 0);
+      const delayMs = Math.max(1, Math.round(beatStartSec * 1000));
 
       inputs.push(`-f lavfi -i "aevalsrc='${recipe.expr}':s=44100:d=${recipe.dur}"`);
       filterParts.push(`[${sfxIndex}:a]adelay=${delayMs}|${delayMs},apad=whole_dur=${totalDuration.toFixed(3)}[s${sfxIndex}]`);
@@ -420,7 +439,7 @@ function buildChiptuneSfxTrack(escenas, totalDuration, videoHash) {
 }
 
 // ============================================================================
-// 3. MOTOR PIXEL-ART v20.2 (TEXTOS CANVAS REPARADOS + MASTERIZACIÓN DINÁMICA)
+// 3. MOTOR PIXEL-ART v20.3 (GANCHO FRAME 0 + MASTERIZACIÓN DINÁMICA)
 // ============================================================================
 const MUSIC_STYLE_TO_INDEX = {
   HEIST: 1,
@@ -433,7 +452,7 @@ const MUSIC_STYLE_TO_INDEX = {
 async function main() {
   const payloadUrl = process.argv[2];
   if (payloadUrl && /^https?:\/\//i.test(payloadUrl)) {
-    console.log('📥 Descargando payload v20.2 desde URL...');
+    console.log('📥 Descargando payload v20.3 desde URL...');
     await downloadFile(payloadUrl, 'payload.json');
   }
 
@@ -447,15 +466,16 @@ async function main() {
   }
   fs.writeFileSync('audio_raw.mp3', Buffer.from(rawBase64, 'base64'));
 
-  execSync('ffmpeg -y -i audio_raw.mp3 -af "apad=pad_dur=0.45" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'inherit' });
+  // ELIMINAR SILENCIO INICIAL PARA QUE LA VOZ ARRANQUE EN EL MILISEGUNDO 0
+  execSync('ffmpeg -y -i audio_raw.mp3 -af "silenceremove=start_periods=1:start_duration=0.01:start_threshold=-42dB,apad=pad_dur=0.20" -ar 44100 -ac 2 -c:a pcm_s16le voice_clean.wav', { stdio: 'inherit' });
 
-  let realAudioDuration = 42;
+  let realAudioDuration = 35;
   try {
     const probeOutput = execSync('ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nk=1 voice_clean.wav', { encoding: 'utf8' });
     const parsed = parseFloat(probeOutput.trim());
     if (!isNaN(parsed) && parsed > 0) realAudioDuration = parsed;
   } catch (err) {
-    realAudioDuration = Number(payload.duracion_total) || 42;
+    realAudioDuration = Number(payload.duracion_total) || 35;
   }
 
   const fps = 30;
@@ -519,14 +539,13 @@ async function main() {
 
     if (bgMusicPath) {
       console.log(`🎵 Usando pista musical (#${trackIdx} - ${styleKey || 'AUTO'}): ${path.basename(bgMusicPath)}`);
-      const fadeStart = Math.max(0, duracionExactaVideo - 1.5).toFixed(2);
-      // dynaudnorm + acompressor + equalizer: sube la intro floja, sujeta el clímax fuerte y abre hueco en 2.2kHz para la voz
+      const fadeStart = Math.max(0, duracionExactaVideo - 1.2).toFixed(2);
       execSync(
-        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "dynaudnorm=f=150:g=7:p=0.85:m=4.0,acompressor=threshold=-18dB:ratio=4:attack=10:release=200,equalizer=f=2200:t=q:w=1.2:g=-4,volume=0.16,afade=t=in:st=0:d=0.4,afade=t=out:st=${fadeStart}:d=1.5" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
+        `ffmpeg -y -stream_loop -1 -i "${bgMusicPath}" -t ${duracionExactaVideo.toFixed(3)} -af "dynaudnorm=f=150:g=7:p=0.85:m=4.0,acompressor=threshold=-18dB:ratio=4:attack=10:release=200,equalizer=f=2200:t=q:w=1.2:g=-4,volume=0.16,afade=t=in:st=0:d=0.15,afade=t=out:st=${fadeStart}:d=1.2" -ar 44100 -ac 2 -c:a pcm_s16le music_clean.wav`,
         { stdio: 'inherit' }
       );
       if (hasSfx) {
-        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.22[v];[2:a]volume=0.45[sfx];[v][1:a][sfx]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
+        execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -i hook_sfx.wav -filter_complex "[0:a]volume=1.22[v];[2:a]volume=0.48[sfx];[v][1:a][sfx]amix=inputs=3:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
       } else {
         execSync(`ffmpeg -y -i voice_clean.wav -i music_clean.wav -filter_complex "[0:a]volume=1.22[v];[v][1:a]amix=inputs=2:duration=first:dropout_transition=2:normalize=0" -ar 44100 -ac 2 -c:a pcm_s16le audio.wav`, { stdio: 'inherit' });
       }
@@ -561,6 +580,7 @@ async function main() {
         position: absolute; inset: 0;
         width: 720px; height: 1280px;
         image-rendering: pixelated;
+        transform-origin: center center;
         z-index: 2;
       }
       .crt-scanlines {
@@ -568,6 +588,12 @@ async function main() {
         background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.12) 50%);
         background-size: 100% 8px;
         z-index: 10; pointer-events: none;
+      }
+      .hook-flash {
+        position: absolute; inset: 0;
+        border: 10px solid #00f2fe;
+        background: radial-gradient(circle, rgba(255,208,0,0.18) 0%, rgba(255,42,95,0.22) 100%);
+        opacity: 0; z-index: 18; pointer-events: none;
       }
       .progress-bar {
         position: absolute; top: 0; left: 0; height: 12px;
@@ -627,6 +653,7 @@ async function main() {
 
     <canvas id="pixel-canvas" width="720" height="1280"></canvas>
     <div class="crt-scanlines"></div>
+    <div class="hook-flash" id="hook-flash"></div>
 
     <div class="subtitle-container">
       <div class="subtitle-box" id="sub-box"></div>
@@ -651,7 +678,6 @@ async function main() {
 
       let transformStack = [{ tx: 0, ty: 0, scale: 1, rad: 0, flipX: false }];
 
-      // UTILIDADES DE TEXTO INCLUIDAS EN EL CONTEXTO DEL NAVEGADOR PARA DRAW_DATA_TEXT
       function fixSpanishN(str) {
         if (!str) return '';
         return String(str)
@@ -1258,14 +1284,24 @@ async function main() {
       }
 
       const subBox = document.getElementById('sub-box');
+      const hookFlash = document.getElementById('hook-flash');
       let lastChunkIdx = -2;
       let lastBeatKey = '';
 
       window.setFrameData = function(frameIdx, t) {
         const linearRatio = (frameIdx + 1) / totalFrames;
-        // CURVA DE RETENCIÓN NO LINEAL: Avanza rápido al principio y desacelera hacia el final
         const curvedRatio = 1 - Math.pow(1 - linearRatio, 2.35);
         document.getElementById('pbar').style.width = Math.min(100, curvedRatio * 100) + '%';
+
+        // ESTÍMULO VISUAL EN EL FRAME 0 (PRIMEROS 10 FOTOGRAMAS: ZOOM PUNCH + DESTELLO ARCADE)
+        if (frameIdx < 10) {
+          const punch = 1 + (10 - frameIdx) * 0.008;
+          canvas.style.transform = 'scale(' + punch.toFixed(3) + ')';
+          hookFlash.style.opacity = ((10 - frameIdx) / 14).toFixed(2);
+        } else {
+          canvas.style.transform = 'scale(1)';
+          hookFlash.style.opacity = '0';
+        }
 
         let activeIdx = escenas.findIndex((e, idx) => {
           if (idx === escenas.length - 1) return t >= e.inicio;
@@ -1318,6 +1354,10 @@ async function main() {
           return t >= c.start && t < c.end;
         });
 
+        if (cIdx === -1 && subtitleChunks.length > 0 && t < 0.25) {
+          cIdx = 0;
+        }
+
         if (cIdx === -1) {
           subBox.style.opacity = '0';
           return;
@@ -1337,8 +1377,9 @@ async function main() {
         chunk.words.forEach((w, wIdx) => {
           const el = document.getElementById('sw-' + wIdx);
           if (!el) return;
-          el.classList.toggle('active', t >= w.start && t <= w.end);
-          el.classList.toggle('future', t < w.start);
+          const isForceActiveFrame0 = (cIdx === 0 && wIdx === 0 && t <= w.end);
+          el.classList.toggle('active', isForceActiveFrame0 || (t >= w.start && t <= w.end));
+          el.classList.toggle('future', !isForceActiveFrame0 && t < w.start);
         });
       };
     </script>
@@ -1357,7 +1398,7 @@ async function main() {
   await page.goto('file://' + path.resolve('index_8bit.html'), { waitUntil: 'networkidle0' });
   await page.evaluateHandle('document.fonts.ready');
 
-  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Ultra-Ágil v20.2 (${duracionExactaVideo.toFixed(2)}s)...`);
+  console.log(`🎬 Grabando ${totalFrames} fotogramas en Motor Ultra-Ágil v20.3 (${duracionExactaVideo.toFixed(2)}s)...`);
   for (let i = 0; i < totalFrames; i++) {
     const currentTime = i / fps;
     await page.evaluate((frameIdx, t) => window.setFrameData(frameIdx, t), i, currentTime);
@@ -1370,13 +1411,13 @@ async function main() {
     browser.process().kill('SIGKILL');
   }
 
-  console.log('🔊 Ensamblando MP4 final v20.2...');
+  console.log('🔊 Ensamblando MP4 final v20.3...');
   execSync(
     `ffmpeg -y -framerate ${fps} -i frames/frame_%05d.jpg -i audio.wav -map 0:v:0 -map 1:a:0 -c:v libx264 -crf 24 -preset veryfast -pix_fmt yuv420p -c:a aac -b:a 192k -ar 44100 -ac 2 -t ${duracionExactaVideo.toFixed(3)} output.mp4`,
     { stdio: 'inherit' }
   );
 
-  console.log('✅ ¡Vídeo Pixel-Art Studio v20.2 generado con éxito!');
+  console.log('✅ ¡Vídeo Pixel-Art Studio v20.3 generado con éxito!');
   process.exit(0);
 }
 
