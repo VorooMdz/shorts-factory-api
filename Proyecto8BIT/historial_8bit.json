@@ -274,5 +274,22 @@
     "programado_para_madrid": "2026-11-11 21:00",
     "youtube_video_id": "jxmt2cjxIVE",
     "fecha_publicacion": "2026-11-10T11:03:16.839Z"
+  },
+  {
+    "id_concepto": "mars_climate_orbiter_conversion_bug_1999",
+    "subrama": "Bugs Letales y Errores de Ingeniería",
+    "titulo": "El error de primaria que destruyó una sonda de 300 millones de la NASA",
+    "keywords_concepto": [
+      "Mars Climate Orbiter",
+      "error de conversión",
+      "NASA",
+      "Lockheed Martin",
+      "bug espacial",
+      "sistema métrico",
+      "ingeniería aeroespacial"
+    ],
+    "programado_para_madrid": "2026-11-12 14:00",
+    "youtube_video_id": "jhOWoE7_eaM",
+    "fecha_publicacion": "2026-11-10T13:48:54.012Z"
   }
 ]
