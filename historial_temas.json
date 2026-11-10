@@ -517,5 +517,20 @@
     "paleta_color": "Magenta Vibrante",
     "programado_para_madrid": "10/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-09T11:03:53.862Z"
+  },
+  {
+    "id_concepto": "puerta_en_la_cara_cialdini",
+    "subrama": "Psicología de Negociación",
+    "titulo": "¿Cómo conseguir que nadie te diga que no? 🚪",
+    "keywords_concepto": [
+      "puerta en la cara",
+      "robert cialdini",
+      "reciprocidad",
+      "persuasion",
+      "negociacion"
+    ],
+    "paleta_color": "Cian Eléctrico",
+    "programado_para_madrid": "10/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-10T07:14:35.625Z"
   }
 ]
