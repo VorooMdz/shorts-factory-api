@@ -532,5 +532,20 @@
     "paleta_color": "Cian Eléctrico",
     "programado_para_madrid": "10/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-10T07:14:35.625Z"
+  },
+  {
+    "id_concepto": "problema_dos_cuerdas_maier",
+    "subrama": "Creatividad e Insight",
+    "titulo": "¿De dónde vienen tus ideas más brillantes? 💡",
+    "keywords_concepto": [
+      "insight inconsciente",
+      "problema de las dos cuerdas",
+      "Norman Maier",
+      "fijación funcional",
+      "efecto Eureka"
+    ],
+    "paleta_color": "Amarillo Dorado",
+    "programado_para_madrid": "10/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-10T09:18:39.536Z"
   }
 ]
