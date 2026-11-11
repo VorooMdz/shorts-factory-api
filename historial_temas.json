@@ -562,5 +562,20 @@
     "paleta_color": "Violeta Eléctrico",
     "programado_para_madrid": "11/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-10T11:03:41.326Z"
+  },
+  {
+    "id_concepto": "sonrisa_duchenne_ojos",
+    "subrama": "Lenguaje Corporal",
+    "titulo": "¿Cómo saber si una sonrisa es falsa en un segundo? 👀",
+    "keywords_concepto": [
+      "sonrisa de Duchenne",
+      "lenguaje corporal",
+      "microexpresiones",
+      "músculo orbicular",
+      "detección de mentiras"
+    ],
+    "paleta_color": "Naranja Fuego",
+    "programado_para_madrid": "11/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-11T07:12:06.213Z"
   }
 ]
