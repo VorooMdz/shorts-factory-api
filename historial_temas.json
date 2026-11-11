@@ -577,5 +577,20 @@
     "paleta_color": "Naranja Fuego",
     "programado_para_madrid": "11/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-11T07:12:06.213Z"
+  },
+  {
+    "id_concepto": "contabilidad_mental_thaler",
+    "subrama": "Economía Conductual",
+    "titulo": "¿Por qué tu cerebro gasta dinero de forma absurda? 🧠",
+    "keywords_concepto": [
+      "contabilidad mental",
+      "richard thaler",
+      "sesgo financiero",
+      "decision making",
+      "dinero"
+    ],
+    "paleta_color": "Rojo Carmesí",
+    "programado_para_madrid": "11/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-11T09:03:36.060Z"
   }
 ]
