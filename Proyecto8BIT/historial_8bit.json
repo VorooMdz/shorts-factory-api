@@ -325,5 +325,22 @@
     "programado_para_madrid": "2026-11-12 21:00",
     "youtube_video_id": "HBvPwil0FAQ",
     "fecha_publicacion": "2026-11-10T17:26:46.717Z"
+  },
+  {
+    "id_concepto": "pacman_pantalla_muerte_nivel_256_1980",
+    "subrama": "Secretos Ocultos y Leyendas del Gaming",
+    "titulo": "El Fin del Mundo de Pac-Man: La Pantalla Dividida del Nivel 256",
+    "keywords_concepto": [
+      "Pac-Man",
+      "kill screen",
+      "nivel 256",
+      "Zilog Z80",
+      "integer overflow",
+      "arcade clasico",
+      "glitch historico"
+    ],
+    "programado_para_madrid": "2026-11-13 14:00",
+    "youtube_video_id": "cF5BDETAmOE",
+    "fecha_publicacion": "2026-11-11T13:42:38.236Z"
   }
 ]
