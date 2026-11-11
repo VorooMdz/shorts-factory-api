@@ -592,5 +592,20 @@
     "paleta_color": "Rojo Carmesí",
     "programado_para_madrid": "11/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-11T09:03:36.060Z"
+  },
+  {
+    "id_concepto": "efecto_puerta_radvansky",
+    "subrama": "Memoria y Olvido",
+    "titulo": "¿Por qué olvidas a qué ibas al cruzar una puerta? 🚪",
+    "keywords_concepto": [
+      "efecto puerta",
+      "limite de evento",
+      "memoria de trabajo",
+      "olvido cotidiano",
+      "psicologia cognitiva"
+    ],
+    "paleta_color": "Verde Neón",
+    "programado_para_madrid": "12/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-11T11:07:30.199Z"
   }
 ]
