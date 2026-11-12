@@ -637,5 +637,20 @@
     "paleta_color": "Cian Eléctrico",
     "programado_para_madrid": "12/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-12T09:03:38.764Z"
+  },
+  {
+    "id_concepto": "efecto_catedral",
+    "subrama": "Psicología Ambiental",
+    "titulo": "¿Por qué la altura del techo cambia cómo piensas? 🏛️",
+    "keywords_concepto": [
+      "efecto catedral",
+      "arquitectura cognitiva",
+      "psicología del espacio",
+      "creatividad ambiental",
+      "enfoque perceptual"
+    ],
+    "paleta_color": "Amarillo Dorado",
+    "programado_para_madrid": "13/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-12T11:45:35.222Z"
   }
 ]
