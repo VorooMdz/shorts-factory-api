@@ -622,5 +622,20 @@
     "paleta_color": "Magenta Vibrante",
     "programado_para_madrid": "12/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-12T07:07:09.215Z"
+  },
+  {
+    "id_concepto": "sesgo_anclaje_ruleta_tversky_kahneman",
+    "subrama": "Sesgos Cognitivos",
+    "titulo": "¿Por qué un número al azar controla tu mente? 🎲",
+    "keywords_concepto": [
+      "efecto anclaje",
+      "anchoring bias",
+      "kahneman tversky",
+      "sesgo de estimacion",
+      "psicologia de precios"
+    ],
+    "paleta_color": "Cian Eléctrico",
+    "programado_para_madrid": "12/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-12T09:03:38.764Z"
   }
 ]
