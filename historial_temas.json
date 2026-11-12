@@ -607,5 +607,20 @@
     "paleta_color": "Verde Neón",
     "programado_para_madrid": "12/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-11T11:07:30.199Z"
+  },
+  {
+    "id_concepto": "indefension_aprendida_seligman",
+    "subrama": "Psicología del Aprendizaje",
+    "titulo": "¿Por qué te rindes antes de intentarlo? 🧠",
+    "keywords_concepto": [
+      "indefensión aprendida",
+      "Martin Seligman",
+      "condicionamiento",
+      "bloqueo mental",
+      "rendición"
+    ],
+    "paleta_color": "Magenta Vibrante",
+    "programado_para_madrid": "12/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-12T07:07:09.215Z"
   }
 ]
