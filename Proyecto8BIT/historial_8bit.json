@@ -376,5 +376,21 @@
     "programado_para_madrid": "2026-11-13 21:00",
     "youtube_video_id": "WAc-kKTuC9E",
     "fecha_publicacion": "2026-11-12T13:22:48.245Z"
+  },
+  {
+    "id_concepto": "stuxnet_sabotaje_nuclear_natanz_2010",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "Stuxnet: La Primera Ciberarma Física de la Historia",
+    "keywords_concepto": [
+      "stuxnet",
+      "ciberarma",
+      "natanz",
+      "siemens plc",
+      "ciberespionaje",
+      "centrifugadoras nucleares"
+    ],
+    "programado_para_madrid": "2026-11-14 14:00",
+    "youtube_video_id": "qIqijINQtNo",
+    "fecha_publicacion": "2026-11-12T15:06:36.988Z"
   }
 ]
