@@ -667,5 +667,20 @@
     "paleta_color": "Violeta Eléctrico",
     "programado_para_madrid": "13/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-13T09:08:45.424Z"
+  },
+  {
+    "id_concepto": "intentional_binding_compresion_tiempo",
+    "subrama": "Neurociencia del Tiempo",
+    "titulo": "¿Por qué tu cerebro encoge el tiempo si tú tienes el control? ⏱️ 🧠",
+    "keywords_concepto": [
+      "intentional binding",
+      "patrick haggard",
+      "percepcion temporal",
+      "ilusion de agencia",
+      "neurociencia cognitiva"
+    ],
+    "paleta_color": "Naranja Fuego",
+    "programado_para_madrid": "13/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-13T11:03:47.445Z"
   }
 ]
