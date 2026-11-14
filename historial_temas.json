@@ -682,5 +682,20 @@
     "paleta_color": "Naranja Fuego",
     "programado_para_madrid": "13/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-13T11:03:47.445Z"
+  },
+  {
+    "id_concepto": "principio_detector_humo_evolutivo",
+    "subrama": "Instintos Evolutivos",
+    "titulo": "¿Por qué te asustas con una simple manguera? 🐍",
+    "keywords_concepto": [
+      "principio del detector de humo",
+      "deteccion de amenazas",
+      "falso positivo evolutivo",
+      "sesgo de supervivencia",
+      "miedo a serpientes"
+    ],
+    "paleta_color": "Rojo Carmesí",
+    "programado_para_madrid": "14/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-14T07:23:12.819Z"
   }
 ]
