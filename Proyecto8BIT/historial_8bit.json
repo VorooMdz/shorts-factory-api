@@ -440,5 +440,21 @@
     "programado_para_madrid": "2026-11-15 14:00",
     "youtube_video_id": "Z0R96UAOCPE",
     "fecha_publicacion": "2026-11-14T08:07:48.147Z"
+  },
+  {
+    "id_concepto": "gusano_morris_arpanet_1988",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "El Gusano Morris: El Primer Ciberataque Masivo de la Historia",
+    "keywords_concepto": [
+      "Gusano Morris",
+      "ARPANET",
+      "primer malware de la historia",
+      "Robert Tappan Morris",
+      "ciberseguridad",
+      "Pentágono"
+    ],
+    "programado_para_madrid": "2026-11-15 18:00",
+    "youtube_video_id": "YK3JCyg68H8",
+    "fecha_publicacion": "2026-11-14T13:13:29.561Z"
   }
 ]
