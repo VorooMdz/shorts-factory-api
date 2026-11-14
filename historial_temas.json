@@ -712,5 +712,19 @@
     "paleta_color": "Verde Neón",
     "programado_para_madrid": "14/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-14T07:26:18.706Z"
+  },
+  {
+    "id_concepto": "efecto_mcgurk",
+    "subrama": "Percepción e Ilusiones",
+    "titulo": "¿Tus ojos pueden cambiar lo que escuchas? 👂",
+    "keywords_concepto": [
+      "efecto mcgurk",
+      "ilusión auditiva",
+      "percepción multisensorial",
+      "integración visual auditiva"
+    ],
+    "paleta_color": "Magenta Vibrante",
+    "programado_para_madrid": "14/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-14T08:02:08.609Z"
   }
 ]
