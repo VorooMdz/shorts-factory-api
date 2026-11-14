@@ -726,5 +726,20 @@
     "paleta_color": "Magenta Vibrante",
     "programado_para_madrid": "14/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-14T08:02:08.609Z"
+  },
+  {
+    "id_concepto": "efecto_dotacion_thaler_kahneman",
+    "subrama": "Sesgos Cognitivos",
+    "titulo": "¿Por qué crees que tus cosas valen el doble? ☕ 🧠",
+    "keywords_concepto": [
+      "efecto de dotación",
+      "aversión a la pérdida",
+      "Richard Thaler",
+      "sesgo cognitivo",
+      "psicología del valor"
+    ],
+    "paleta_color": "Cian Eléctrico",
+    "programado_para_madrid": "15/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-14T08:09:24.902Z"
   }
 ]
