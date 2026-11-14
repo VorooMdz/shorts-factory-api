@@ -756,5 +756,20 @@
     "paleta_color": "Amarillo Dorado",
     "programado_para_madrid": "15/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-14T09:04:40.053Z"
+  },
+  {
+    "id_concepto": "efecto_nocebo_anticipacion",
+    "subrama": "Dolor y Placebo",
+    "titulo": "¿Por qué leer los efectos secundarios te hace sentir enfermo? 💊",
+    "keywords_concepto": [
+      "efecto nocebo",
+      "dolor anticipado",
+      "psicosomático",
+      "prospecto médico",
+      "placebo negativo"
+    ],
+    "paleta_color": "Violeta Eléctrico",
+    "programado_para_madrid": "15/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-14T11:35:29.341Z"
   }
 ]
