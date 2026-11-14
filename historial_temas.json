@@ -697,5 +697,20 @@
     "paleta_color": "Rojo Carmesí",
     "programado_para_madrid": "14/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-14T07:23:12.819Z"
+  },
+  {
+    "id_concepto": "efecto_marco_kahneman_tversky",
+    "subrama": "Sesgos Cognitivos",
+    "titulo": "¿Por qué pagas más por la misma comida sin saberlo? 🥩",
+    "keywords_concepto": [
+      "efecto marco",
+      "framing effect",
+      "kahneman tversky",
+      "atajo mental",
+      "toma de decisiones"
+    ],
+    "paleta_color": "Verde Neón",
+    "programado_para_madrid": "14/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-14T07:26:18.706Z"
   }
 ]
