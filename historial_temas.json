@@ -801,5 +801,21 @@
     "paleta_color": "Rojo Carmesí",
     "programado_para_madrid": "16/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-15T10:30:33.488Z"
+  },
+  {
+    "id_concepto": "secuestro_amigdalino",
+    "subrama": "Química y Dopamina",
+    "titulo": "¿Por qué tu cerebro se apaga cuando te enfadas? 🧠",
+    "keywords_concepto": [
+      "secuestro amigdalino",
+      "amígdala",
+      "corteza prefrontal",
+      "ira",
+      "adrenalina",
+      "neurociencia del enfado"
+    ],
+    "paleta_color": "Verde Neón",
+    "programado_para_madrid": "16/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-15T11:28:28.945Z"
   }
 ]
