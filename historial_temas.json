@@ -786,5 +786,20 @@
     "paleta_color": "Naranja Fuego",
     "programado_para_madrid": "16/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-15T07:04:22.860Z"
+  },
+  {
+    "id_concepto": "sesgo_del_balbuceo",
+    "subrama": "Psicología del Poder",
+    "titulo": "Por qué siempre ascienden al que más habla 🗣️",
+    "keywords_concepto": [
+      "sesgo del balbuceo",
+      "babble effect",
+      "liderazgo",
+      "dinámica de grupos",
+      "psicología social"
+    ],
+    "paleta_color": "Rojo Carmesí",
+    "programado_para_madrid": "16/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-15T10:30:33.488Z"
   }
 ]
