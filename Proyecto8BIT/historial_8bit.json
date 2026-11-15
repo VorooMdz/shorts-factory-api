@@ -490,5 +490,20 @@
     "programado_para_madrid": "2026-11-16 14:00",
     "youtube_video_id": "nUqQ0lS3llQ",
     "fecha_publicacion": "2026-11-14T17:08:56.564Z"
+  },
+  {
+    "id_concepto": "sql_slammer_gusano_internet_2003",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "El gusano de 376 bytes que apagó Internet",
+    "keywords_concepto": [
+      "sql slammer",
+      "ciberseguridad",
+      "gusano informatico",
+      "hacking",
+      "historia hacker"
+    ],
+    "programado_para_madrid": "2026-11-16 18:00",
+    "youtube_video_id": "hRKRyhk3KAg",
+    "fecha_publicacion": "2026-11-15T13:23:27.993Z"
   }
 ]
