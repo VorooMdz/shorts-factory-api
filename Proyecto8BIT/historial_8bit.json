@@ -505,5 +505,21 @@
     "programado_para_madrid": "2026-11-16 18:00",
     "youtube_video_id": "hRKRyhk3KAg",
     "fecha_publicacion": "2026-11-15T13:23:27.993Z"
+  },
+  {
+    "id_concepto": "knight_capital_bug_algoritmo_2012",
+    "subrama": "Bugs Letales y Errores de Ingeniería",
+    "titulo": "El Error de Código de 440 Millones: Knight Capital",
+    "keywords_concepto": [
+      "Knight Capital",
+      "Wall Street",
+      "trading de alta frecuencia",
+      "bug de software",
+      "error financiero",
+      "código zombi"
+    ],
+    "programado_para_madrid": "2026-11-16 21:00",
+    "youtube_video_id": "rQx8qVk3QQY",
+    "fecha_publicacion": "2026-11-15T15:19:21.603Z"
   }
 ]
