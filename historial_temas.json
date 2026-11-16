@@ -847,5 +847,20 @@
     "paleta_color": "Cian Eléctrico",
     "programado_para_madrid": "17/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-16T09:04:36.061Z"
+  },
+  {
+    "id_concepto": "efecto_pratfall",
+    "subrama": "Psicología del Poder",
+    "titulo": "Por qué cometer un error te hace más atractivo ☕ 🧠",
+    "keywords_concepto": [
+      "efecto pratfall",
+      "psicologia social",
+      "atractivo",
+      "errores",
+      "elliot aronson"
+    ],
+    "paleta_color": "Amarillo Dorado",
+    "programado_para_madrid": "17/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-16T11:10:54.557Z"
   }
 ]
