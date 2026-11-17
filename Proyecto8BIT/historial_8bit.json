@@ -584,5 +584,21 @@
     "programado_para_madrid": "2026-11-18 14:00",
     "youtube_video_id": "gmEzKYqtoX0",
     "fecha_publicacion": "2026-11-16T17:07:28.054Z"
+  },
+  {
+    "id_concepto": "patriot_bug_redondeo_dhahran_1991",
+    "subrama": "Bugs Letales y Errores de Ingeniería",
+    "titulo": "El error de redondeo que costó 28 vidas: El bug del misil Patriot",
+    "keywords_concepto": [
+      "bug misil patriot",
+      "error de redondeo binario",
+      "dhahran 1991",
+      "fallo de software militar",
+      "precisión coma flotante",
+      "bugs letales historia"
+    ],
+    "programado_para_madrid": "2026-11-18 18:00",
+    "youtube_video_id": "qnfuc7qh0DE",
+    "fecha_publicacion": "2026-11-17T13:15:00.389Z"
   }
 ]
