@@ -892,5 +892,20 @@
     "paleta_color": "Naranja Fuego",
     "programado_para_madrid": "18/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-17T09:03:45.977Z"
+  },
+  {
+    "id_concepto": "efecto_primacia_solomon_asch",
+    "subrama": "Primeras Impresiones",
+    "titulo": "¿Por qué la primera palabra lo cambia todo? 🧠",
+    "keywords_concepto": [
+      "efecto primacía",
+      "Solomon Asch",
+      "primeras impresiones",
+      "sesgo cognitivo",
+      "orden de palabras"
+    ],
+    "paleta_color": "Rojo Carmesí",
+    "programado_para_madrid": "18/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-17T11:15:58.626Z"
   }
 ]
