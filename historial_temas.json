@@ -937,5 +937,19 @@
     "paleta_color": "Magenta Vibrante",
     "programado_para_madrid": "19/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-18T09:13:03.837Z"
+  },
+  {
+    "id_concepto": "friccion_habito_palomitas_cine",
+    "subrama": "Psicología de Hábitos",
+    "titulo": "¿Por qué comerías comida rancia sin darte cuenta? 🍿",
+    "keywords_concepto": [
+      "fricción ambiental",
+      "bucle del hábito",
+      "automatismo contextual",
+      "experimento palomitas rancias"
+    ],
+    "paleta_color": "Cian Eléctrico",
+    "programado_para_madrid": "19/11/2026 a las 21:00",
+    "fecha_publicacion": "2026-11-18T12:03:16.454Z"
   }
 ]
