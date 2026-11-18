@@ -922,5 +922,20 @@
     "paleta_color": "Verde Neón",
     "programado_para_madrid": "19/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-18T09:08:42.376Z"
+  },
+  {
+    "id_concepto": "paralisis_hipnagogica_vigilia",
+    "subrama": "Neurobiología del Sueño",
+    "titulo": "¿Por qué no puedes moverte justo al dormirte? 👁️",
+    "keywords_concepto": [
+      "parálisis hipnagógica",
+      "alucinaciones hipnagógicas",
+      "sueño REM",
+      "atonía muscular",
+      "neurobiología del sueño"
+    ],
+    "paleta_color": "Magenta Vibrante",
+    "programado_para_madrid": "19/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-18T09:13:03.837Z"
   }
 ]
