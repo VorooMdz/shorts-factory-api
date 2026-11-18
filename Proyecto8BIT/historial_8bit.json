@@ -649,5 +649,20 @@
     "programado_para_madrid": "2026-11-19 18:00",
     "youtube_video_id": "yvTYQJBDgIs",
     "fecha_publicacion": "2026-11-18T13:40:33.235Z"
+  },
+  {
+    "id_concepto": "buckshot_yankee_pendrive_pentagono_2008",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "El Pendrive que Hackeó el Pentágono: Operación Buckshot Yankee",
+    "keywords_concepto": [
+      "Agent.btz",
+      "Buckshot Yankee",
+      "Pentágono ciberataque",
+      "ciberespionaje militar",
+      "malware USB"
+    ],
+    "programado_para_madrid": "2026-11-19 21:00",
+    "youtube_video_id": "8kWiChgy18w",
+    "fecha_publicacion": "2026-11-18T16:09:45.719Z"
   }
 ]
