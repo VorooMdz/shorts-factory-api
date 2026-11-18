@@ -907,5 +907,20 @@
     "paleta_color": "Rojo Carmesí",
     "programado_para_madrid": "18/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-17T11:15:58.626Z"
+  },
+  {
+    "id_concepto": "experimento_milgram_obediencia",
+    "subrama": "Psicología Social",
+    "titulo": "¿Por qué serías capaz de electrocutar a un inocente? ⚡ 🧠",
+    "keywords_concepto": [
+      "obediencia a la autoridad",
+      "experimento milgram",
+      "presion social",
+      "conformidad",
+      "psicologia oscura"
+    ],
+    "paleta_color": "Verde Neón",
+    "programado_para_madrid": "19/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-18T09:08:42.376Z"
   }
 ]
