@@ -966,5 +966,20 @@
     "paleta_color": "Amarillo Dorado",
     "programado_para_madrid": "20/11/2026 a las 14:00",
     "fecha_publicacion": "2026-11-19T07:33:21.688Z"
+  },
+  {
+    "id_concepto": "experimento_conformidad_asch",
+    "subrama": "Psicología Social",
+    "titulo": "¿Por qué tu cerebro miente solo por encajar? 👥",
+    "keywords_concepto": [
+      "experimento de Asch",
+      "conformidad social",
+      "presión de grupo",
+      "psicología social",
+      "influencia normativa"
+    ],
+    "paleta_color": "Violeta Eléctrico",
+    "programado_para_madrid": "20/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-19T09:56:05.436Z"
   }
 ]
