@@ -729,5 +729,20 @@
     "programado_para_madrid": "2026-11-21 14:00",
     "youtube_video_id": "FeKtk16o2wI",
     "fecha_publicacion": "2026-11-20T08:15:36.045Z"
+  },
+  {
+    "id_concepto": "dan_kaminsky_fallo_dns_2008",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "El fallo del DNS que casi destruye Internet",
+    "keywords_concepto": [
+      "dan kaminsky",
+      "fallo dns 2008",
+      "cache poisoning",
+      "ciberseguridad",
+      "hacking etico"
+    ],
+    "programado_para_madrid": "2026-11-21 18:00",
+    "youtube_video_id": "dL3UgDi59Cw",
+    "fecha_publicacion": "2026-11-20T15:57:41.317Z"
   }
 ]
