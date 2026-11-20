@@ -996,5 +996,20 @@
     "paleta_color": "Naranja Fuego",
     "programado_para_madrid": "20/11/2026 a las 21:00",
     "fecha_publicacion": "2026-11-19T11:08:20.086Z"
+  },
+  {
+    "id_concepto": "efecto_pigmalion_rosenthal",
+    "subrama": "Psicología del Aprendizaje",
+    "titulo": "El experimento que hizo más inteligentes a unos niños por mentir 🧠",
+    "keywords_concepto": [
+      "efecto pigmalion",
+      "profecia autocumplida",
+      "aprendizaje",
+      "psicologia educativa",
+      "expectativas"
+    ],
+    "paleta_color": "Rojo Carmesí",
+    "programado_para_madrid": "21/11/2026 a las 14:00",
+    "fecha_publicacion": "2026-11-20T14:29:42.023Z"
   }
 ]
