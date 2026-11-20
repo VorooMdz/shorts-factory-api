@@ -713,5 +713,21 @@
     "programado_para_madrid": "2026-11-20 21:00",
     "youtube_video_id": "8idSfkMHhZw",
     "fecha_publicacion": "2026-11-20T08:11:05.922Z"
+  },
+  {
+    "id_concepto": "att_apagon_red_telefonica_1990",
+    "subrama": "Bugs Letales y Errores de Ingeniería",
+    "titulo": "El Bug de una Sola Línea que Apagó la Red de AT&T",
+    "keywords_concepto": [
+      "AT&T 1990 bug",
+      "caída de red AT&T",
+      "error de código lenguaje C",
+      "fallo de telecomunicaciones",
+      "bugs letales",
+      "ingeniería de software"
+    ],
+    "programado_para_madrid": "2026-11-21 14:00",
+    "youtube_video_id": "FeKtk16o2wI",
+    "fecha_publicacion": "2026-11-20T08:15:36.045Z"
   }
 ]
