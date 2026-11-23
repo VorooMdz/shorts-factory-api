@@ -1026,5 +1026,20 @@
     "paleta_color": "Verde Neón",
     "programado_para_madrid": "21/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-21T14:07:31.063Z"
+  },
+  {
+    "id_concepto": "miembro_fantasma_caja_espejo",
+    "subrama": "Neuropsicología Clínica",
+    "titulo": "¿Por qué duele un brazo que ya no existe? 🪞 🧠",
+    "keywords_concepto": [
+      "miembro fantasma",
+      "caja de espejos",
+      "ramachandran",
+      "plasticidad cerebral",
+      "percepcion"
+    ],
+    "paleta_color": "Magenta Vibrante",
+    "programado_para_madrid": "23/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-23T15:43:59.824Z"
   }
 ]
