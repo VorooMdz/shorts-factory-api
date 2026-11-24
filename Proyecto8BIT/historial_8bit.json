@@ -759,5 +759,21 @@
     "programado_para_madrid": "2026-11-23 18:00",
     "youtube_video_id": "4wXeT2VVunI",
     "fecha_publicacion": "2026-11-23T16:14:37.707Z"
+  },
+  {
+    "id_concepto": "uss_yorktown_division_por_cero_1997",
+    "subrama": "Bugs Letales y Errores de Ingeniería",
+    "titulo": "El Crucero de Guerra que Colapsó por Dividir por Cero",
+    "keywords_concepto": [
+      "USS Yorktown",
+      "división por cero",
+      "bug militar",
+      "Smart Ship",
+      "Windows NT",
+      "fallo de software"
+    ],
+    "programado_para_madrid": "2026-11-24 18:00",
+    "youtube_video_id": "JbfUk_-bhq8",
+    "fecha_publicacion": "2026-11-24T16:06:53.867Z"
   }
 ]
