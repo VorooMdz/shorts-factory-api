@@ -1041,5 +1041,20 @@
     "paleta_color": "Magenta Vibrante",
     "programado_para_madrid": "23/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-23T15:43:59.824Z"
+  },
+  {
+    "id_concepto": "efecto_halo_poder",
+    "subrama": "Psicología del Poder",
+    "titulo": "¿Por qué creemos que la gente guapa es más inteligente? ✨ 🧠",
+    "keywords_concepto": [
+      "efecto halo",
+      "sesgo cognitivo",
+      "belleza y poder",
+      "psicologia social",
+      "percepcion de competencia"
+    ],
+    "paleta_color": "Cian Eléctrico",
+    "programado_para_madrid": "24/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-24T16:07:40.836Z"
   }
 ]
