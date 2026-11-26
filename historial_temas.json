@@ -1056,5 +1056,20 @@
     "paleta_color": "Cian Eléctrico",
     "programado_para_madrid": "24/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-24T16:07:40.836Z"
+  },
+  {
+    "id_concepto": "efecto_verdad_ilusoria",
+    "subrama": "Memoria y Olvido",
+    "titulo": "¿Por qué tu cerebro cree mentiras si las escucha muchas veces? 🧠",
+    "keywords_concepto": [
+      "efecto de la verdad ilusoria",
+      "falsos recuerdos",
+      "sesgo cognitivo",
+      "memoria",
+      "repeticion"
+    ],
+    "paleta_color": "Amarillo Dorado",
+    "programado_para_madrid": "26/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-26T14:03:38.179Z"
   }
 ]
