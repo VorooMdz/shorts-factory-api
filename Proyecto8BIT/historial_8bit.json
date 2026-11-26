@@ -793,5 +793,22 @@
     "programado_para_madrid": "2026-11-25 18:00",
     "youtube_video_id": "3inZML-uiGM",
     "fecha_publicacion": "2026-11-25T15:20:11.085Z"
+  },
+  {
+    "id_concepto": "solarwinds_alerta_2fa_fireeye_2020",
+    "subrama": "Ciberespionaje y Jaque Mate al Sistema",
+    "titulo": "El SMS de Seguridad que Destapó el Ciberataque SolarWinds",
+    "keywords_concepto": [
+      "SolarWinds",
+      "FireEye",
+      "SUNBURST",
+      "ciberespionaje",
+      "autenticacion en dos pasos",
+      "hackers",
+      "Pentagono"
+    ],
+    "programado_para_madrid": "2026-11-26 21:00",
+    "youtube_video_id": "Pe4wXaL4fD8",
+    "fecha_publicacion": "2026-11-26T17:09:35.840Z"
   }
 ]
