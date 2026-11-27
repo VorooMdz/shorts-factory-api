@@ -810,5 +810,21 @@
     "programado_para_madrid": "2026-11-26 21:00",
     "youtube_video_id": "Pe4wXaL4fD8",
     "fecha_publicacion": "2026-11-26T17:09:35.840Z"
+  },
+  {
+    "id_concepto": "apagon_noreste_eeuu_race_condition_2003",
+    "subrama": "Bugs Letales y Errores de Ingeniería",
+    "titulo": "El Bug de Carrera que Apagó a Cincuenta Millones de Personas",
+    "keywords_concepto": [
+      "apagón de 2003",
+      "race condition",
+      "bug software",
+      "FirstEnergy",
+      "XA21",
+      "fallo ingeniería"
+    ],
+    "programado_para_madrid": "2026-11-27 18:00",
+    "youtube_video_id": "I_C_wqXuIxk",
+    "fecha_publicacion": "2026-11-27T15:07:34.343Z"
   }
 ]
