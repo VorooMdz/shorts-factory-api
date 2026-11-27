@@ -1071,5 +1071,20 @@
     "paleta_color": "Amarillo Dorado",
     "programado_para_madrid": "26/11/2026 a las 18:00",
     "fecha_publicacion": "2026-11-26T14:03:38.179Z"
+  },
+  {
+    "id_concepto": "paradoja_del_poder_galleta",
+    "subrama": "Psicología del Poder",
+    "titulo": "¿Por qué tener poder te vuelve grosero sin darte cuenta? 🍪",
+    "keywords_concepto": [
+      "paradoja del poder",
+      "dacher keltner",
+      "experimento galleta",
+      "empatia",
+      "desinhibicion"
+    ],
+    "paleta_color": "Violeta Eléctrico",
+    "programado_para_madrid": "27/11/2026 a las 18:00",
+    "fecha_publicacion": "2026-11-27T14:17:22.058Z"
   }
 ]
